@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useReducer } from 'react';
+import { createContext, useContext, useCallback, useEffect, useReducer } from 'react';
+import { setLogoutCallback } from '../api/apiClient';
 import apiServices from '../api/services/apiServices';
 
 const AuthContext = createContext();
@@ -120,7 +121,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const forceLogout = async () => {
+  const forceLogout = useCallback(async () => {
     try {
       await apiServices.auth.logout();
       dispatch({ type: 'AUTH_LOGOUT' });
@@ -128,7 +129,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Force logout error:', error);
       dispatch({ type: 'AUTH_LOGOUT' });
     }
-  };
+  }, []);
 
   const updateUser = (userData) => {
     dispatch({
@@ -143,7 +144,18 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     initializeAuth();
-  }, []);
+    
+    // Register logout callback with apiClient so it can trigger logout on 401/403
+    setLogoutCallback(async () => {
+      console.log('🔄 Logout callback triggered from apiClient');
+      await forceLogout();
+    });
+    
+    // Cleanup: unregister callback on unmount
+    return () => {
+      setLogoutCallback(null);
+    };
+  }, [forceLogout]);
 
   const value = {
     user: state.user,

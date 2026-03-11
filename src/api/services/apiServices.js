@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DeviceInfo from 'react-native-device-info';
 import apiClient from '../apiClient';
 import ENDPOINTS from '../endpoints';
+import { clearSession } from '../../utils/sessionManager';
 
 export const apiServices = {
   // Authentication Services
@@ -73,18 +74,8 @@ export const apiServices = {
 
     logout: async () => {
       try {
-        // Clear AsyncStorage
-        await AsyncStorage.removeItem('authToken');
-        await AsyncStorage.removeItem('userData');
-        await AsyncStorage.removeItem('userId');
-        await AsyncStorage.removeItem('userName');
-        await AsyncStorage.removeItem('userPhone');
-        await AsyncStorage.removeItem('userRole');
-        await AsyncStorage.removeItem('userRoleId');
-        await AsyncStorage.removeItem('lineId');
-        await AsyncStorage.removeItem('branchId');
-        await AsyncStorage.removeItem('userDevice');
-
+        // Clear all session data using centralized session manager
+        await clearSession();
         return { success: true };
       } catch (error) {
         console.error('Logout error:', error);

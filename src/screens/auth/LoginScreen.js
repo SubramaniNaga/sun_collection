@@ -17,11 +17,45 @@ const LoginScreen = ({ navigation }) => {
 
   const { login, loading } = useAuthContext();
 
+  const handlePhoneChange = (text) => {
+    // Remove any non-numeric characters
+    const numericValue = text.replace(/[^0-9]/g, '');
+    
+    // Enforce that first digit must be above 5 (6, 7, 8, or 9)
+    if (numericValue.length > 0) {
+      const firstDigit = parseInt(numericValue[0]);
+      if (firstDigit <= 5) {
+        return; // Don't allow if first digit is 0-5
+      }
+    }
+    
+    // Limit to 11 digits
+    if (numericValue.length <= 11) {
+      setPhone(numericValue);
+      // Clear phone error when user starts typing
+      if (errors.phone) {
+        setErrors({ ...errors, phone: null });
+      }
+    }
+  };
+
   const handleLogin = async () => {
     const newErrors = {};
 
-    if (!phone) newErrors.phone = 'Phone number is required';
-    if (!password) newErrors.password = 'Password is required';
+    if (!phone) {
+      newErrors.phone = 'Phone number is required';
+    } else if (phone.length < 10 || phone.length > 11) {
+      newErrors.phone = 'Phone number must be 10 or 11 digits';
+    } else {
+      const firstDigit = parseInt(phone[0]);
+      if (firstDigit <= 5) {
+        newErrors.phone = 'Phone number must start with 6, 7, 8, or 9';
+      }
+    }
+    
+    if (!password) {
+      newErrors.password = 'Password is required';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -57,10 +91,11 @@ const LoginScreen = ({ navigation }) => {
           <Input
             label="Phone Number"
             value={phone}
-            onChangeText={setPhone}
-            placeholder="Enter your phone number"
+            onChangeText={handlePhoneChange}
+            placeholder="Enter mobile number (10-11 digits)"
             keyboardType="phone-pad"
             autoCapitalize="none"
+            maxLength={11}
             error={errors.phone}
           />
 

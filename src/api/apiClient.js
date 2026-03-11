@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { ErrorHandler } from '../utils/errorHandler';
+import { clearSession } from '../utils/sessionManager';
 
 const API_BASE_URL = __DEV__ 
   ? 'http://65.0.100.65:6005/api/v1' 
@@ -19,6 +20,39 @@ let loadingContext = null;
 
 export const setLoadingContext = (context) => {
   loadingContext = context;
+};
+
+// Logout callback registry - allows AuthContext to register its logout function
+let logoutCallback = null;
+
+/**
+ * Register a logout callback function that will be called on 401/403 errors
+ * @param {Function} callback - Function to call when logout is needed
+ */
+export const setLogoutCallback = (callback) => {
+  logoutCallback = callback;
+};
+
+/**
+ * Handle unauthorized access (401/403) - clears session and triggers logout
+ */
+const handleUnauthorized = async () => {
+  try {
+    console.log('🚫 Unauthorized access detected. Logging out user...');
+    
+    // Clear all session data
+    await clearSession();
+    
+    // Trigger logout callback if registered (from AuthContext)
+    if (logoutCallback && typeof logoutCallback === 'function') {
+      console.log('🔄 Triggering logout callback...');
+      logoutCallback();
+    } else {
+      console.warn('⚠️ No logout callback registered. Session cleared but logout not triggered.');
+    }
+  } catch (error) {
+    console.error('❌ Error during unauthorized handling:', error);
+  }
 };
 
 
@@ -65,32 +99,12 @@ apiClient.interceptors.response.use(
       loadingContext.stopLoading();
     }
 
-    // Handle authentication errors globally
+    // Handle authentication errors globally (401 Unauthorized, 403 Forbidden)
     if (error.response?.status === 401 || error.response?.status === 403) {
-      try {
-        // Clear all auth-related storage
-        await AsyncStorage.multiRemove([
-          'authToken', 
-          'refreshToken', 
-          'userData',
-          'userId',
-          'userName', 
-          'userPhone',
-          'userRole',
-          'userRoleId',
-          'lineId',
-          'branchId',
-          'userDevice'
-        ]);
-        
-        // Force navigation to login screen by reloading app
-        // This will trigger AuthContext to re-initialize and redirect to login
-        if (typeof window !== 'undefined' && window.location) {
-          window.location.reload();
-        }
-      } catch (removeError) {
-        console.error('Error removing auth data:', removeError);
-      }
+      console.log(`🔐 Authentication error (${error.response?.status}) detected. Initiating logout...`);
+      
+      // Handle unauthorized access - clear session and trigger logout
+      await handleUnauthorized();
     }
     
     // Apply centralized error handling
