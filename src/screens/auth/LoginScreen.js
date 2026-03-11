@@ -29,8 +29,8 @@ const LoginScreen = ({ navigation }) => {
       }
     }
     
-    // Limit to 11 digits
-    if (numericValue.length <= 11) {
+    // Limit to 10 digits
+    if (numericValue.length <= 10) {
       setPhone(numericValue);
       // Clear phone error when user starts typing
       if (errors.phone) {
@@ -44,8 +44,8 @@ const LoginScreen = ({ navigation }) => {
 
     if (!phone) {
       newErrors.phone = 'Phone number is required';
-    } else if (phone.length < 10 || phone.length > 11) {
-      newErrors.phone = 'Phone number must be 10 or 11 digits';
+    } else if (phone.length !== 10) {
+      newErrors.phone = 'Phone number must be exactly 10 digits';
     } else {
       const firstDigit = parseInt(phone[0]);
       if (firstDigit <= 5) {
@@ -92,10 +92,10 @@ const LoginScreen = ({ navigation }) => {
             label="Phone Number"
             value={phone}
             onChangeText={handlePhoneChange}
-            placeholder="Enter mobile number (10-11 digits)"
+            placeholder="Enter 10-digit mobile number"
             keyboardType="phone-pad"
             autoCapitalize="none"
-            maxLength={11}
+            maxLength={10}
             error={errors.phone}
           />
 

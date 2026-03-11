@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DeviceInfo from 'react-native-device-info';
+import { clearSession } from '../../utils/sessionManager';
 import apiClient from '../apiClient';
 import ENDPOINTS from '../endpoints';
-import { clearSession } from '../../utils/sessionManager';
 
 export const apiServices = {
   // Authentication Services
