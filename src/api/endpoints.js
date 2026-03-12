@@ -21,6 +21,7 @@ export const ENDPOINTS = {
   COLLECTION: {
     LIST: '/collection',
     UPDATE_AMOUNT: (id) => `/collection/amount/${id}`,
+    HISTORY: '/collection/history',
   },
   LOAN: {
     LIST: '/loan',

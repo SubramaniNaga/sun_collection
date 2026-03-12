@@ -1,10 +1,25 @@
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import CollectionHistory from '../../models/CollectionHistory';
+
+const LIMIT = 10;
+
+// Format date as YYYY-MM-DD for API
+const formatDateForAPI = (date) => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const CollectionHistoryScreen = ({ navigation }) => {
   // State for date filters
@@ -14,26 +29,27 @@ const CollectionHistoryScreen = ({ navigation }) => {
 
   // State for collection data
   const [collectionHistory, setCollectionHistory] = useState([]);
-  const [filteredHistory, setFilteredHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Stats from API
+  const [stats, setStats] = useState({
+    total_count: 0,
+    total_amount: 0,
+    cash_count: 0,
+    non_cash_count: 0,
+  });
 
-  // Summary calculations
-  const totalReceipts = filteredHistory.length;
-  const totalAmount = filteredHistory.reduce((sum, item) => sum + (item.amount || 0), 0);
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    hasNextPage: false,
+    totalPages: 1,
+  });
 
-  // Mock data for demonstration
-  const mockCollectionData = [
-    { id: 1, receiptNumber: 'R001', customerName: 'John Doe', date: '2024-03-15', amount: 1500 },
-    { id: 2, receiptNumber: 'R002', customerName: 'Jane Smith', date: '2024-03-14', amount: 2300 },
-    { id: 3, receiptNumber: 'R003', customerName: 'Bob Johnson', date: '2024-03-13', amount: 800 },
-    { id: 4, receiptNumber: 'R004', customerName: 'Alice Brown', date: '2024-03-12', amount: 3200 },
-    { id: 5, receiptNumber: 'R005', customerName: 'Charlie Wilson', date: '2024-03-11', amount: 1900 },
-  ];
-
-  // Initialize with mock data
-  useEffect(() => {
-    setCollectionHistory(mockCollectionData);
-    setFilteredHistory(mockCollectionData);
-  }, []);
+  // Payment type filter state (null = all, 'cash' = cash, 'online' = online)
+  const [selectedPaymentType, setSelectedPaymentType] = useState(null);
 
   // Validation function
   const validateDates = () => {
@@ -75,35 +91,204 @@ const CollectionHistoryScreen = ({ navigation }) => {
     // Clear any existing errors when a valid date is selected
     setErrors({});
   };
-  useEffect(() => {
-    if (startDate && endDate) {
-      if (validateDates()) {
-        const filtered = collectionHistory.filter(item => {
-          const itemDate = new Date(item.date);
-          const start = new Date(startDate);
-          const end = new Date(endDate);
 
-          return itemDate >= start && itemDate <= end;
-        });
-
-        setFilteredHistory(filtered);
-      }
+  // Fetch collection history from API
+  const fetchCollectionHistory = useCallback(async (page = 1, append = false) => {
+    if (!validateDates()) {
+      return;
     }
-  }, [startDate, endDate]); // Trigger when dates change
+
+    try {
+      if (page === 1) {
+        setLoading(true);
+        setError(null);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const fromDate = formatDateForAPI(startDate);
+      const toDate = formatDateForAPI(endDate);
+
+      const response = await apiServices.collection.getCollectionHistory({
+        from_date: fromDate,
+        to_date: toDate,
+        page,
+        limit: LIMIT,
+      });
+
+      const data = response?.data || {};
+      const collections = Array.isArray(data?.collections) ? data.collections : [];
+      const pag = response?.pagination || {};
+      const statsData = data?.stats || {};
+
+      // Convert to CollectionHistory model instances
+      const historyModels = CollectionHistory.fromApiResponseArray(collections);
+
+      if (append) {
+        setCollectionHistory((prev) => [...prev, ...historyModels]);
+      } else {
+        setCollectionHistory(historyModels);
+      }
+
+      setStats({
+        total_count: statsData.total_count || 0,
+        total_amount: statsData.total_amount || 0,
+        cash_count: statsData.cash_count || 0,
+        non_cash_count: statsData.non_cash_count || 0,
+      });
+
+      setPagination({
+        currentPage: pag.currentPage ?? page,
+        hasNextPage: Boolean(pag.hasNextPage),
+        totalPages: pag.totalPages ?? 1,
+      });
+    } catch (err) {
+      console.error('Failed to fetch collection history:', err);
+      if (page === 1) {
+        setError('Failed to load collection history. Please try again.');
+        setCollectionHistory([]);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [startDate, endDate]);
+
+  // Load data when dates change
+  useEffect(() => {
+    if (startDate && endDate && validateDates()) {
+      fetchCollectionHistory(1, false);
+    }
+  }, [startDate, endDate, fetchCollectionHistory]);
+
+  // Filter collection history by payment type
+  const filteredCollectionHistory = collectionHistory.filter((item) => {
+    if (selectedPaymentType === null) return true; // Show all
+    
+    const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
+    const paymentType = history.paymentType?.toLowerCase();
+    
+    if (selectedPaymentType === 'cash') {
+      return paymentType === 'cash';
+    } else if (selectedPaymentType === 'online') {
+      return paymentType === 'online' || paymentType === 'non_cash';
+    }
+    
+    return true;
+  });
+
+  // Calculate filtered stats
+  const filteredStats = {
+    total_count: filteredCollectionHistory.length,
+    total_amount: filteredCollectionHistory.reduce((sum, item) => {
+      const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
+      return sum + (parseFloat(history.amountPaid) || 0);
+    }, 0),
+    cash_count: filteredCollectionHistory.filter((item) => {
+      const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
+      return history.paymentType?.toLowerCase() === 'cash';
+    }).length,
+    non_cash_count: filteredCollectionHistory.filter((item) => {
+      const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
+      const paymentType = history.paymentType?.toLowerCase();
+      return paymentType === 'online' || paymentType === 'non_cash';
+    }).length,
+  };
+
+  // Handle payment type tab change
+  const handlePaymentTypeChange = (type) => {
+    setSelectedPaymentType(type);
+  };
+
+  // Load more function
+  const loadMore = useCallback(() => {
+    if (loadingMore || !pagination.hasNextPage) return;
+    const nextPage = pagination.currentPage + 1;
+    fetchCollectionHistory(nextPage, true);
+  }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchCollectionHistory]);
 
   // Format currency
   const formatCurrency = (amount) => {
-    return `₹${amount.toLocaleString('en-IN')}`;
+    if (amount == null || amount === '') return '₹0';
+    const num = parseFloat(amount);
+    return isNaN(num) ? '₹0' : `₹${num.toLocaleString('en-IN')}`;
   };
 
   // Format date
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    if (!dateString) return '—';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const renderHistoryItem = ({ item }) => {
+    const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
+    return (
+      <View style={styles.historyItem}>
+        <View style={styles.itemHeader}>
+          <Text style={styles.receiptNumber}>{history.getReceiptNumber()}</Text>
+          <Text style={styles.itemAmount}>{history.getFormattedAmountPaid()}</Text>
+        </View>
+
+        <View style={styles.itemDetailsRow}>
+          <View style={styles.itemDetailsLeft}>
+            <Text style={styles.customerName}>{history.customerName || '—'}</Text>
+            <Text style={styles.customerInfo}>
+              {history.customerNo ? `${history.customerNo} · ` : ''}
+              {history.getPaymentTypeLabel()}
+            </Text>
+          </View>
+          <Text style={styles.itemDate}>{history.getFormattedPaymentDate()}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+        <Text style={styles.loadingMoreText}>Loading more...</Text>
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading collection history...</Text>
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      );
+    }
+    const filterText = selectedPaymentType === null 
+      ? 'in selected date range' 
+      : selectedPaymentType === 'cash' 
+        ? 'for Cash payments in selected date range' 
+        : 'for Online payments in selected date range';
+    
+    return (
+      <View style={styles.noDataContainer}>
+        <Text style={styles.noDataText}>No collections found {filterText}</Text>
+      </View>
+    );
   };
 
   return (
@@ -116,75 +301,150 @@ const CollectionHistoryScreen = ({ navigation }) => {
         onBackPress={() => navigation.goBack()}
       />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Date Filter Section */}
-        <View style={styles.filterSection}>
-          <View style={styles.dateRow}>
-            <View style={styles.datePickerContainer}>
-              <DatePicker
-                label="Start Date"
-                value={startDate}
-                onValueChange={handleStartDateChange}
-                error={errors.startDate}
-              />
-            </View>
-
-            <View style={styles.datePickerContainer}>
-              <DatePicker
-                label="End Date"
-                value={endDate}
-                onValueChange={handleEndDateChange}
-                error={errors.endDate}
-                minimumDate={startDate ? new Date(startDate) : undefined}
-                maximumDate={new Date()}
-              />
-            </View>
-          </View>
-
-          {errors.dateRange && (
-            <Text style={styles.errorText}>{errors.dateRange}</Text>
-          )}
-        </View>
-
-        {/* Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Receipts</Text>
-              <Text style={styles.summaryValue}>{totalReceipts}</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Amount</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(totalAmount)}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Collection History List */}
-        <View style={styles.listSection}>
-          <Text style={styles.sectionTitle}>Collection History</Text>
-
-          {filteredHistory.length > 0 ? (
-            filteredHistory.map((item) => (
-              <View key={item.id} style={styles.historyItem}>
-                <View style={styles.itemHeader}>
-                  <Text style={styles.receiptNumber}>{item.receiptNumber}</Text>
-                  <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
+      <FlatList
+        data={filteredCollectionHistory}
+        keyExtractor={(item) => String(item?.id ?? Math.random())}
+        renderItem={renderHistoryItem}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
+        ListHeaderComponent={
+          <>
+            {/* Date Filter Section */}
+            <View style={styles.filterSection}>
+              <View style={styles.dateRow}>
+                <View style={styles.datePickerContainer}>
+                  <DatePicker
+                    label="Start Date"
+                    value={startDate}
+                    onValueChange={handleStartDateChange}
+                    error={errors.startDate}
+                    maximumDate={new Date()}
+                  />
                 </View>
 
-                <View style={styles.itemDetailsRow}>
-                  <Text style={styles.customerName}>{item.customerName}</Text>
-                  <Text style={styles.itemDate}>{formatDate(item.date)}</Text>
+                <View style={styles.datePickerContainer}>
+                  <DatePicker
+                    label="End Date"
+                    value={endDate}
+                    onValueChange={handleEndDateChange}
+                    error={errors.endDate}
+                    minimumDate={startDate ? new Date(startDate) : undefined}
+                    maximumDate={new Date()}
+                  />
                 </View>
               </View>
-            ))
-          ) : (
-            <View style={styles.noDataContainer}>
-              <Text style={styles.noDataText}>No collections found in selected date range</Text>
+
+              {errors.dateRange && (
+                <Text style={styles.errorText}>{errors.dateRange}</Text>
+              )}
             </View>
-          )}
-        </View>
-      </ScrollView>
+
+            {/* Summary Card */}
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>
+                    {selectedPaymentType === null ? 'Total Receipts' : selectedPaymentType === 'cash' ? 'Cash Receipts' : 'Online Receipts'}
+                  </Text>
+                  <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total Amount</Text>
+                  <Text style={styles.summaryValue}>{formatCurrency(filteredStats.total_amount)}</Text>
+                </View>
+              </View>
+              {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Cash</Text>
+                    <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
+                  </View>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Non-Cash</Text>
+                    <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Payment Type Tabs */}
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  selectedPaymentType === null && styles.tabActive,
+                ]}
+                onPress={() => handlePaymentTypeChange(null)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    selectedPaymentType === null && styles.tabTextActive,
+                  ]}
+                >
+                  All
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  selectedPaymentType === 'cash' && styles.tabActive,
+                ]}
+                onPress={() => handlePaymentTypeChange('cash')}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="cash-outline"
+                  size={18}
+                  color={selectedPaymentType === 'cash' ? COLORS.white : COLORS.text.secondary}
+                  style={styles.tabIcon}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    selectedPaymentType === 'cash' && styles.tabTextActive,
+                  ]}
+                >
+                  Cash
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  selectedPaymentType === 'online' && styles.tabActive,
+                ]}
+                onPress={() => handlePaymentTypeChange('online')}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="card-outline"
+                  size={18}
+                  color={selectedPaymentType === 'online' ? COLORS.white : COLORS.text.secondary}
+                  style={styles.tabIcon}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    selectedPaymentType === 'online' && styles.tabTextActive,
+                  ]}
+                >
+                  Online
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Collection History List Header */}
+            <View style={styles.listSection}>
+              <Text style={styles.sectionTitle}>Collection History</Text>
+            </View>
+          </>
+        }
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}
+      />
     </SafeAreaView>
   );
 };
@@ -195,8 +455,35 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   content: {
-    flex: 1,
     padding: SIZES.padding * 0.5,
+    paddingBottom: SIZES.padding * 2,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SIZES.padding * 3,
+  },
+  loadingText: {
+    fontSize: SIZES.body2,
+    color: COLORS.text.secondary,
+    marginTop: SIZES.margin,
+  },
+  loadingMoreText: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+    marginTop: SIZES.base,
+    textAlign: 'center',
+  },
+  footerLoader: {
+    paddingVertical: SIZES.margin,
+    alignItems: 'center',
+  },
+  listContainer: {
+    paddingTop: SIZES.base,
+  },
+  listContainerEmpty: {
+    flex: 1,
   },
   filterSection: {
     backgroundColor: COLORS.white,
@@ -253,19 +540,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text.primary,
   },
+  summarySubValue: {
+    fontSize: SIZES.body1,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
   listSection: {
     backgroundColor: COLORS.white,
     padding: SIZES.padding,
+    paddingBottom: SIZES.base,
     borderRadius: SIZES.radius,
     borderWidth: 1,
     borderColor: COLORS.border,
+    marginBottom: SIZES.margin / 3,
   },
   historyItem: {
     padding: SIZES.padding,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    marginBottom: 0,
     paddingVertical: SIZES.padding / 1.5,
+    marginBottom: SIZES.base / 2,
   },
   itemHeader: {
     flexDirection: 'row',
@@ -277,6 +571,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  itemDetailsLeft: {
+    flex: 1,
+    marginRight: SIZES.base,
+  },
+  customerInfo: {
+    fontSize: SIZES.body4,
+    color: COLORS.text.tertiary,
+    marginTop: SIZES.base / 4,
   },
   receiptNumber: {
     fontSize: SIZES.body2,
@@ -305,6 +608,40 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     color: COLORS.text.secondary,
     textAlign: 'center',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    padding: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.margin / 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: SIZES.base / 2,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SIZES.base,
+    paddingHorizontal: SIZES.base,
+    borderRadius: SIZES.radius * 0.75,
+    backgroundColor: COLORS.lightGray,
+  },
+  tabActive: {
+    backgroundColor: COLORS.primary,
+  },
+  tabIcon: {
+    marginRight: SIZES.base / 2,
+  },
+  tabText: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  tabTextActive: {
+    color: COLORS.white,
   },
 });
 

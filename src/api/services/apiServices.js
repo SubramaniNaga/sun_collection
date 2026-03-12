@@ -339,6 +339,37 @@ export const apiServices = {
         throw error;
       }
     },
+
+    getCollectionHistory: async (params = {}) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const {
+          from_date = '',
+          to_date = '',
+          page = 1,
+          limit = 10,
+        } = params;
+        const requestParams = {
+          ...(from_date && { from_date }),
+          ...(to_date && { to_date }),
+          page,
+          limit,
+        };
+        console.log('📋 API: getCollectionHistory - GET', ENDPOINTS.COLLECTION.HISTORY, '| params:', JSON.stringify(requestParams, null, 2));
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.HISTORY, {
+          params: requestParams,
+        });
+        const data = response.data?.data || {};
+        console.log('📋 API: getCollectionHistory - Response: collections length:', Array.isArray(data?.collections) ? data.collections.length : 'N/A', '| stats:', JSON.stringify(data?.stats ?? {}), '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
+        return response.data;
+      } catch (error) {
+        console.error('Get collection history error:', error);
+        throw error;
+      }
+    },
   },
 
   // App Services
