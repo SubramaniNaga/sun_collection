@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
@@ -13,6 +12,7 @@ import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const CustomerWithLoanScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -45,14 +45,42 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     { label: 'Education Loan', value: '3' },
   ];
 
+  // Handle phone input change (same as LoginScreen)
+  const handlePhoneChange = (text) => {
+    // Remove any non-numeric characters
+    const numericValue = text.replace(/[^0-9]/g, '');
+    
+    // Enforce that first digit must be above 5 (6, 7, 8, or 9)
+    if (numericValue.length > 0) {
+      const firstDigit = parseInt(numericValue[0]);
+      if (firstDigit <= 5) {
+        return; // Don't allow if first digit is 0-5
+      }
+    }
+    
+    // Limit to 10 digits
+    if (numericValue.length <= 10) {
+      setCustomerPhone(numericValue);
+      // Clear phone error when user starts typing
+      if (errors.customerPhone) {
+        setErrors({ ...errors, customerPhone: null });
+      }
+    }
+  };
+
   // Validation
   const validateForm = () => {
     const newErrors = {};
 
-    if (!customerPhone.trim()) {
+    if (!customerPhone) {
       newErrors.customerPhone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(customerPhone)) {
-      newErrors.customerPhone = 'Phone number must be 10 digits';
+    } else if (customerPhone.length !== 10) {
+      newErrors.customerPhone = 'Phone number must be exactly 10 digits';
+    } else {
+      const firstDigit = parseInt(customerPhone[0]);
+      if (firstDigit <= 5) {
+        newErrors.customerPhone = 'Phone number must start with 6, 7, 8, or 9';
+      }
     }
     if (!customerName.trim()) newErrors.customerName = 'Customer name is required';
     if (!customerAddress.trim()) newErrors.customerAddress = 'Address is required';
@@ -280,9 +308,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           <Input
             label="Customer Phone"
             value={customerPhone}
-            onChangeText={setCustomerPhone}
-            placeholder="Enter 10-digit phone number"
+            onChangeText={handlePhoneChange}
+            placeholder="Enter 10-digit mobile number"
             keyboardType="phone-pad"
+            autoCapitalize="none"
             maxLength={10}
             error={errors.customerPhone}
             required
