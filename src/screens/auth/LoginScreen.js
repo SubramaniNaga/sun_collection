@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
-import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
@@ -97,14 +96,14 @@ const LoginScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
       
-      <Header title="Login" />
-      
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
         <View style={styles.card}>
-        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.title}>Welcome to</Text>
+        <Text style={styles.title}>SUN MICROFINANCE</Text>
+        SUN MICROFINANCE
         <Text style={styles.subtitle}>Sign in to continue</Text>
 
           <Input
