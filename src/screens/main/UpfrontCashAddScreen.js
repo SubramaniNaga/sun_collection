@@ -11,8 +11,10 @@ import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
+import { useLanguage } from '../../store/LanguageContext';
 
 const UpfrontCashAddScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const { user } = useAuthContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -35,29 +37,29 @@ const UpfrontCashAddScreen = ({ navigation }) => {
   });
 
   const purposeOptions = [
-    { label: 'Field Collection Float', value: 'field_collection_float' },
-    { label: 'Customer Refund Handling', value: 'customer_refund_handling' },
-    { label: 'Petty Expenses', value: 'petty_expenses' },
-    { label: 'Emergency Requirement', value: 'emergency_requirement' },
-    { label: 'Other', value: 'other' },
+    { label: t('upfrontCash.fieldCollectionFloat'), value: 'field_collection_float' },
+    { label: t('upfrontCash.customerRefundHandling'), value: 'customer_refund_handling' },
+    { label: t('upfrontCash.pettyExpenses'), value: 'petty_expenses' },
+    { label: t('upfrontCash.emergencyRequirement'), value: 'emergency_requirement' },
+    { label: t('common.other'), value: 'other' },
   ];
 
   const cashReceivedFromOptions = [
-    { label: 'Manager', value: 'manager' },
-    { label: 'Accountant', value: 'accountant' },
-    { label: 'Branch Head', value: 'branch_head' },
+    { label: t('upfrontCash.manager'), value: 'manager' },
+    { label: t('upfrontCash.accountant'), value: 'accountant' },
+    { label: t('upfrontCash.branchHead'), value: 'branch_head' },
   ];
 
   const approvedByOptions = [
-    { label: 'John Manager', value: 'john_manager' },
-    { label: 'Sarah Accountant', value: 'sarah_accountant' },
-    { label: 'Mike Branch Head', value: 'mike_branch_head' },
+    { label: t('upfrontCash.johnManager'), value: 'john_manager' },
+    { label: t('upfrontCash.sarahAccountant'), value: 'sarah_accountant' },
+    { label: t('upfrontCash.mikeBranchHead'), value: 'mike_branch_head' },
   ];
 
   const headerData = {
-    agentName: user?.name || 'Agent Name',
+    agentName: user?.name || t('upfrontCash.agentName'),
     agentId: user?.id || 'AG001',
-    branchName: user?.branch || 'Main Branch',
+    branchName: user?.branch || t('upfrontCash.mainBranch'),
     currentDate: new Date().toLocaleDateString('en-IN'),
   };
 
@@ -85,12 +87,12 @@ const UpfrontCashAddScreen = ({ navigation }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.amountTaken) newErrors.amountTaken = 'Amount is required';
-    else if (parseFloat(formData.amountTaken) <= 0) newErrors.amountTaken = 'Amount must be greater than 0';
-    if (!formData.purpose) newErrors.purpose = 'Purpose is required';
-    if (!formData.cashReceivedFrom) newErrors.cashReceivedFrom = 'Cash received from is required';
-    if (!formData.approvedBy) newErrors.approvedBy = 'Approved by is required';
-    if (!formData.agentSignature) newErrors.agentSignature = 'Agent signature is required';
+    if (!formData.amountTaken) newErrors.amountTaken = t('upfrontCash.amountRequired');
+    else if (parseFloat(formData.amountTaken) <= 0) newErrors.amountTaken = t('upfrontCash.amountGreaterThanZero');
+    if (!formData.purpose) newErrors.purpose = t('upfrontCash.purposeRequired');
+    if (!formData.cashReceivedFrom) newErrors.cashReceivedFrom = t('upfrontCash.cashReceivedFromRequired');
+    if (!formData.approvedBy) newErrors.approvedBy = t('upfrontCash.approvedByRequired');
+    if (!formData.agentSignature) newErrors.agentSignature = t('upfrontCash.agentSignatureRequired');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -115,7 +117,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
       return;
     }
     setIsSubmitting(true);
@@ -143,13 +145,13 @@ const UpfrontCashAddScreen = ({ navigation }) => {
       };
       console.log('Upfront Cash Entry Payload:', payload);
       Alert.alert(
-        'Success',
-        `Upfront Cash Entry created successfully!\nEntry ID: ${entryId}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        t('common.success'),
+        t('upfrontCash.entryCreatedSuccessfully', { entryId }),
+        [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       console.error('Submit error:', error);
-      Alert.alert('Error', 'Failed to submit upfront cash entry. Please try again.');
+      Alert.alert(t('common.error'), t('upfrontCash.failedToSubmitEntry'));
     } finally {
       setIsSubmitting(false);
     }
@@ -158,70 +160,70 @@ const UpfrontCashAddScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.primary} />
-      <Header title="Add Up-front Cash" showBackButton={true} onBackPress={() => navigation.goBack()} />
+      <Header title={t('upfrontCash.addUpfrontCash')} showBackButton={true} onBackPress={() => navigation.goBack()} />
       <View style={styles.mainContent}>
         <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             <Card style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Agent Information</Text>
+              <Text style={styles.sectionTitle}>{t('upfrontCash.agentInformation')}</Text>
               <View style={styles.headerGrid}>
                 <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>Agent Name</Text>
+                  <Text style={styles.headerLabel}>{t('upfrontCash.agentName')}</Text>
                   <FormInput value={headerData.agentName} editable={false} style={styles.readonlyInput} />
                 </View>
                 <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>Agent ID</Text>
+                  <Text style={styles.headerLabel}>{t('upfrontCash.agentId')}</Text>
                   <FormInput value={headerData.agentId} editable={false} style={styles.readonlyInput} />
                 </View>
                 <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>Branch Name</Text>
+                  <Text style={styles.headerLabel}>{t('upfrontCash.branchName')}</Text>
                   <FormInput value={headerData.branchName} editable={false} style={styles.readonlyInput} />
                 </View>
                 <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>Date</Text>
+                  <Text style={styles.headerLabel}>{t('common.date')}</Text>
                   <FormInput value={headerData.currentDate} editable={false} style={styles.readonlyInput} />
                 </View>
               </View>
             </Card>
 
             <Card style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Upfront Cash Details</Text>
-              <FormInput label="Amount Taken (₹)" value={formData.amountTaken} onChangeText={(v) => handleInputChange('amountTaken', v)} placeholder="Enter amount" keyboardType="numeric" error={errors.amountTaken} />
-              <FormPicker label="Purpose" value={formData.purpose} onValueChange={(v) => handleInputChange('purpose', v)} items={purposeOptions} placeholder="Select purpose" error={errors.purpose} />
-              <FormPicker label="Cash Received From" value={formData.cashReceivedFrom} onValueChange={(v) => handleInputChange('cashReceivedFrom', v)} items={cashReceivedFromOptions} placeholder="Select person" error={errors.cashReceivedFrom} />
-              <FormPicker label="Approved By" value={formData.approvedBy} onValueChange={(v) => handleInputChange('approvedBy', v)} items={approvedByOptions} placeholder="Select approver" error={errors.approvedBy} />
-              <FormInput label="Remarks" value={formData.remarks} onChangeText={(v) => handleInputChange('remarks', v)} placeholder="Enter remarks (optional)" multiline numberOfLines={3} />
+              <Text style={styles.sectionTitle}>{t('upfrontCash.upfrontCashDetails')}</Text>
+              <FormInput label={t('upfrontCash.amountTaken')} value={formData.amountTaken} onChangeText={(v) => handleInputChange('amountTaken', v)} placeholder={t('upfrontCash.enterAmount')} keyboardType="numeric" error={errors.amountTaken} />
+              <FormPicker label={t('upfrontCash.purpose')} value={formData.purpose} onValueChange={(v) => handleInputChange('purpose', v)} items={purposeOptions} placeholder={t('upfrontCash.selectPurpose')} error={errors.purpose} />
+              <FormPicker label={t('upfrontCash.cashReceivedFrom')} value={formData.cashReceivedFrom} onValueChange={(v) => handleInputChange('cashReceivedFrom', v)} items={cashReceivedFromOptions} placeholder={t('upfrontCash.selectPerson')} error={errors.cashReceivedFrom} />
+              <FormPicker label={t('upfrontCash.approvedBy')} value={formData.approvedBy} onValueChange={(v) => handleInputChange('approvedBy', v)} items={approvedByOptions} placeholder={t('upfrontCash.selectApprover')} error={errors.approvedBy} />
+              <FormInput label={t('common.remarks')} value={formData.remarks} onChangeText={(v) => handleInputChange('remarks', v)} placeholder={t('upfrontCash.enterRemarksOptional')} multiline numberOfLines={3} />
             </Card>
 
             <Card style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Acknowledgement</Text>
-              <TouchableOpacity style={[styles.signatureBox, errors.agentSignature && styles.signatureBoxError]} onPress={() => { Alert.alert('Signature', 'Signature pad will be implemented here'); handleInputChange('agentSignature', 'mock_signature_data'); }}>
+              <Text style={styles.sectionTitle}>{t('upfrontCash.acknowledgement')}</Text>
+              <TouchableOpacity style={[styles.signatureBox, errors.agentSignature && styles.signatureBoxError]} onPress={() => { Alert.alert(t('upfrontCash.signature'), t('upfrontCash.signaturePadImplementation')); handleInputChange('agentSignature', 'mock_signature_data'); }}>
                 {formData.agentSignature ? (
                   <View style={styles.signatureContent}>
                     <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                    <Text style={styles.signatureText}>Agent Signature Added</Text>
+                    <Text style={styles.signatureText}>{t('upfrontCash.agentSignatureAdded')}</Text>
                   </View>
                 ) : (
                   <View style={styles.signaturePlaceholder}>
                     <Ionicons name="create-outline" size={24} color={COLORS.text.tertiary} />
-                    <Text style={styles.signaturePlaceholderText}>Tap to add Agent Signature</Text>
+                    <Text style={styles.signaturePlaceholderText}>{t('upfrontCash.tapToAddAgentSignature')}</Text>
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.signatureBox} onPress={() => { Alert.alert('Signature', 'Manager signature pad will be implemented here'); handleInputChange('managerSignature', 'mock_manager_signature'); }}>
+              <TouchableOpacity style={styles.signatureBox} onPress={() => { Alert.alert(t('upfrontCash.signature'), t('upfrontCash.managerSignaturePadImplementation')); handleInputChange('managerSignature', 'mock_manager_signature'); }}>
                 {formData.managerSignature ? (
                   <View style={styles.signatureContent}>
                     <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                    <Text style={styles.signatureText}>Manager Signature Added</Text>
+                    <Text style={styles.signatureText}>{t('upfrontCash.managerSignatureAdded')}</Text>
                   </View>
                 ) : (
                   <View style={styles.signaturePlaceholder}>
                     <Ionicons name="create-outline" size={24} color={COLORS.text.tertiary} />
-                    <Text style={styles.signaturePlaceholderText}>Tap to add Manager Signature (Optional)</Text>
+                    <Text style={styles.signaturePlaceholderText}>{t('upfrontCash.tapToAddManagerSignatureOptional')}</Text>
                   </View>
                 )}
               </TouchableOpacity>
-              {errors.agentSignature && <Text style={styles.errorText}>Agent signature is required</Text>}
+              {errors.agentSignature && <Text style={styles.errorText}>{t('upfrontCash.agentSignatureRequired')}</Text>}
             </Card>
 
             <View style={styles.bottomPadding} />
@@ -229,7 +231,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
         </KeyboardAvoidingView>
       </View>
       <View style={styles.bottomSection}>
-        <Button title="Submit Upfront Cash Entry" onPress={handleSubmit} loading={isSubmitting} disabled={isSubmitting} style={styles.submitButton} size="large" />
+        <Button title={t('upfrontCash.submitUpfrontCashEntry')} onPress={handleSubmit} loading={isSubmitting} disabled={isSubmitting} style={styles.submitButton} size="large" />
       </View>
     </SafeAreaView>
   );

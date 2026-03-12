@@ -12,11 +12,13 @@ import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
 const CustomerWithLoanScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   
   // New vs Existing
@@ -69,11 +71,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const response = await apiServices.customer.searchCustomer(q, lineId);
       const data = response?.data ?? response;
       setSearchResult(data || null);
-      if (!data) setSearchError('No customer found');
+      if (!data) setSearchError(t('customer.noCustomerFound'));
     } catch (err) {
       console.error('Customer search error:', err);
       setSearchResult(null);
-      setSearchError(err.response?.data?.message || err.message || 'Search failed');
+      setSearchError(err.response?.data?.message || err.message || t('customer.searchFailed'));
     } finally {
       setSearchLoading(false);
     }
@@ -124,28 +126,28 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     const newErrors = {};
 
     if (!customerPhone) {
-      newErrors.customerPhone = 'Phone number is required';
+      newErrors.customerPhone = t('customer.phoneRequired');
     } else if (customerPhone.length !== 10) {
-      newErrors.customerPhone = 'Phone number must be exactly 10 digits';
+      newErrors.customerPhone = t('customer.phoneInvalid');
     } else {
       const firstDigit = parseInt(customerPhone[0]);
       if (firstDigit <= 5) {
-        newErrors.customerPhone = 'Phone number must start with 6, 7, 8, or 9';
+        newErrors.customerPhone = t('customer.phoneInvalidStart');
       }
     }
-    if (!customerName.trim()) newErrors.customerName = 'Customer name is required';
-    if (!customerAddress.trim()) newErrors.customerAddress = 'Address is required';
+    if (!customerName.trim()) newErrors.customerName = t('customer.nameRequired');
+    if (!customerAddress.trim()) newErrors.customerAddress = t('customer.addressRequired');
     if (!loanAmount.trim() || parseFloat(loanAmount) <= 0) {
-      newErrors.loanAmount = 'Valid loan amount is required';
+      newErrors.loanAmount = t('customer.loanAmountRequired');
     }
-    if (!loanTypeId) newErrors.loanTypeId = 'Loan type is required';
+    if (!loanTypeId) newErrors.loanTypeId = t('customer.loanTypeRequired');
     if (!loanPeriod.trim() || parseInt(loanPeriod) <= 0) {
-      newErrors.loanPeriod = 'Valid loan period is required';
+      newErrors.loanPeriod = t('customer.loanPeriodRequired');
     }
-    if (!customerNo.trim()) newErrors.customerNo = 'Customer number is required';
-    if (!aadharImage) newErrors.aadharImage = 'Aadhar image is required';
-    if (!customerPhoto) newErrors.customerPhoto = 'Customer photo is required';
-    if (!addressProof) newErrors.addressProof = 'Address proof is required';
+    if (!customerNo.trim()) newErrors.customerNo = t('customer.customerNoRequired');
+    if (!aadharImage) newErrors.aadharImage = t('customer.imageRequired');
+    if (!customerPhoto) newErrors.customerPhoto = t('customer.imageRequired');
+    if (!addressProof) newErrors.addressProof = t('customer.imageRequired');
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -169,7 +171,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       return { latitude: lat, longitude: lng };
     } catch (error) {
       console.error('Location capture error:', error);
-      Alert.alert('Error', 'Failed to capture location');
+      Alert.alert(t('common.error'), t('customer.locationRequired'));
       throw error;
     } finally {
       setIsCapturingLocation(false);
@@ -182,7 +184,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       if (source === 'camera') {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
         if (!permissionResult.granted) {
-          Alert.alert('Permission Required', 'Camera permission is required');
+          Alert.alert(t('common.error'), t('customer.imageRequired'));
           return;
         }
         const image = await pickFromCamera([3, 2]);
@@ -194,7 +196,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permissionResult.granted) {
-          Alert.alert('Permission Required', 'Gallery permission is required');
+          Alert.alert(t('common.error'), t('customer.imageRequired'));
           return;
         }
         const image = await pickFromLibrary([3, 2]);
@@ -206,7 +208,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Image pick error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || `Failed to ${source === 'camera' ? 'capture' : 'pick'} image. Please try again.`);
+      Alert.alert(t('common.error'), error?.message || t('customer.imageRequired'));
     }
   };
 
@@ -221,7 +223,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const storedLineId = await AsyncStorage.getItem('lineId');
       
       if (!storedBranchId || !storedLineId) {
-        Alert.alert('Error', 'Branch and Line information not found. Please login again.');
+        Alert.alert(t('common.error'), t('errors.unauthorized'));
         setLoading(false);
         return;
       }
@@ -290,15 +292,15 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const message = response?.message || 'Customer and loan created successfully!';
       
       if (success) {
-        Alert.alert('Success', message);
+        Alert.alert(t('common.success'), message || t('success.customerCreated'));
         navigation.goBack();
       } else {
-        Alert.alert('Error', response?.message || message || 'Failed to create customer with loan');
+        Alert.alert(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
       }
     } catch (error) {
       console.error('Create customer with loan error:', error);
-      const errMsg = error.response?.data?.message || error.message || 'Failed to create customer with loan. Please try again.';
-      Alert.alert('Error', errMsg);
+      const errMsg = error.response?.data?.message || error.message || t('errors.somethingWentWrong');
+      Alert.alert(t('common.error'), errMsg);
     } finally {
       setLoading(false);
     }
@@ -336,14 +338,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
             onPress={() => handleImagePick(imageType, 'camera')}
           >
             <Ionicons name="camera" size={30} color={COLORS.primary} />
-            <Text style={styles.imageOptionText}>Camera</Text>
+            <Text style={styles.imageOptionText}>{t('customer.takePhoto')}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.imageOptionButton} 
             onPress={() => handleImagePick(imageType, 'gallery')}
           >
             <Ionicons name="image-outline" size={30} color={COLORS.primary} />
-            <Text style={styles.imageOptionText}>Gallery</Text>
+            <Text style={styles.imageOptionText}>{t('customer.chooseFromLibrary')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -354,11 +356,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
       
       <Header 
-        title="Create Customer with Loan" 
+        title={t('customer.createCustomerWithLoan')} 
         showBackButton={true}
         onBackPress={() => navigation.goBack()} 
       />
@@ -372,7 +374,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           <View style={[styles.radioCircle, customerType === 'New' && styles.radioCircleActive]}>
             {customerType === 'New' && <View style={styles.radioCircleInner} />}
           </View>
-          <Text style={[styles.radioLabel, customerType === 'New' && styles.radioLabelActive]}>New</Text>
+          <Text style={[styles.radioLabel, customerType === 'New' && styles.radioLabelActive]}>{t('customer.newCustomer')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.radioOption, customerType === 'Existing' && styles.radioOptionActive]}
@@ -381,7 +383,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           <View style={[styles.radioCircle, customerType === 'Existing' && styles.radioCircleActive]}>
             {customerType === 'Existing' && <View style={styles.radioCircleInner} />}
           </View>
-          <Text style={[styles.radioLabel, customerType === 'Existing' && styles.radioLabelActive]}>Existing</Text>
+          <Text style={[styles.radioLabel, customerType === 'Existing' && styles.radioLabelActive]}>{t('customer.existingCustomer')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -398,10 +400,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           {customerType === 'New' && (
             <>
           <Input
-            label="Customer Mobile Number"
+            label={t('customer.customerPhone')}
             value={customerPhone}
             onChangeText={handlePhoneChange}
-            placeholder="Enter 10-digit mobile number"
+            placeholder={t('auth.enterPhone')}
             keyboardType="phone-pad"
             autoCapitalize="none"
             maxLength={10}
@@ -410,19 +412,19 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           />
 
           <Input
-            label="Customer Name"
+            label={t('customer.customerName')}
             value={customerName}
             onChangeText={setCustomerName}
-            placeholder="Enter customer name"
+            placeholder={t('customer.customerName')}
             error={errors.customerName}
             required
           />
 
           <Input
-            label="Customer Address"
+            label={t('customer.customerAddress')}
             value={customerAddress}
             onChangeText={setCustomerAddress}
-            placeholder="Enter customer address"
+            placeholder={t('customer.customerAddress')}
             multiline
             numberOfLines={3}
             error={errors.customerAddress}
@@ -430,58 +432,58 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           />
 
           <Input
-            label="Loan Amount"
+            label={t('customer.loanAmount')}
             value={loanAmount}
             onChangeText={setLoanAmount}
-            placeholder="Enter loan amount"
+            placeholder={t('customer.enterLoanAmount')}
             keyboardType="numeric"
             error={errors.loanAmount}
             required
           />
 
           <FormPicker
-            label="Loan Type"
+            label={t('customer.loanType')}
             value={loanTypeId}
             onValueChange={setLoanTypeId}
-            items={loanTypeOptions}
-            placeholder="Select loan type"
+            items={loanTypeOptions.map(opt => ({ ...opt, label: opt.value === '1' ? t('customer.monthly') : t('customer.weekly') }))}
+            placeholder={t('customer.selectLoanType')}
             error={errors.loanTypeId}
           />
 
           <Input
-            label="Loan Period (months)"
+            label={`${t('customer.loanPeriod')} (${t('loan.months')})`}
             value={loanPeriod}
             onChangeText={setLoanPeriod}
-            placeholder="Enter loan period in months"
+            placeholder={t('customer.enterLoanPeriod')}
             keyboardType="numeric"
             error={errors.loanPeriod}
             required
           />
 
           <Input
-            label="Customer Number"
+            label={t('customer.customerNo')}
             value={customerNo}
             onChangeText={setCustomerNo}
-            placeholder="Enter customer number"
+            placeholder={t('customer.customerNo')}
             error={errors.customerNo}
             required
           />
 
 
-          {renderImageSection('Aadhar Image', aadharImage, 'aadhar')}
-          {renderImageSection('Customer Photo', customerPhoto, 'customer')}
-          {renderImageSection('Address Proof', addressProof, 'address')}
+          {renderImageSection(t('customer.aadharImage'), aadharImage, 'aadhar')}
+          {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer')}
+          {renderImageSection(t('customer.addressProof'), addressProof, 'address')}
             </>
           )}
 
           {customerType === 'Existing' && (
             <View style={styles.existingSection}>
-              <Text style={styles.existingSearchLabel}>Search by customer mobile or customer number</Text>
+              <Text style={styles.existingSearchLabel}>{t('customer.searchCustomer')}</Text>
               <View style={styles.searchInputWrap}>
                 <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Enter mobile or customer number"
+                  placeholder={t('customer.enterPhoneToSearch')}
                   placeholderTextColor={COLORS.text.tertiary}
                   value={existingSearch}
                   onChangeText={setExistingSearch}
@@ -494,17 +496,17 @@ const CustomerWithLoanScreen = ({ navigation }) => {
               {searchResult && !searchLoading && (
                 <View style={styles.existingResultCard}>
                   <Text style={styles.existingResultName}>{searchResult.customer_name ?? '—'}</Text>
-                  <Text style={styles.existingResultMeta}>No. {searchResult.customer_no ?? '—'} · {searchResult.customer_phone ?? '—'}</Text>
+                  <Text style={styles.existingResultMeta}>{t('customer.no')} {searchResult.customer_no ?? '—'} · {searchResult.customer_phone ?? '—'}</Text>
                   {searchResult.customer_address ? <Text style={styles.existingResultAddress} numberOfLines={2}>{searchResult.customer_address}</Text> : null}
                   {hasOpenLoans ? (
                     <View style={styles.openLoansBadge}>
                       <Ionicons name="information-circle" size={20} color={COLORS.warning} />
-                      <Text style={styles.openLoansText}>Customer has {openLoans.length} open loan(s). Cannot add new loan until existing loans are closed.</Text>
+                      <Text style={styles.openLoansText}>{t('customer.customerHasOpenLoans')}</Text>
                     </View>
                   ) : (
                     <View style={styles.canSubmitBadge}>
                       <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                      <Text style={styles.canSubmitText}>No open loans. You can submit a new loan for this customer (submit API will be added later).</Text>
+                      <Text style={styles.canSubmitText}>{t('customer.noOpenLoansCanSubmit')}</Text>
                     </View>
                   )}
                 </View>
@@ -514,9 +516,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         </ScrollView>
         
         {customerType === 'New' && (
-        <View style={[styles.fixedBottomContainer]}>
+        <View style={[styles.fixedBottomContainer, { paddingBottom: insets.bottom }]}>
           <Button
-            title="Create Customer with Loan"
+            title={t('customer.customerWithLoan')}
             onPress={handleSubmit}
             loading={loading}
             style={styles.submitButton}

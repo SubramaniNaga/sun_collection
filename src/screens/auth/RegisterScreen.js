@@ -6,8 +6,10 @@ import Input from '../../components/common/Input';
 import ScreenWrapper from '../../components/layout/ScreenWrapper';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
+import { useLanguage } from '../../store/LanguageContext';
 
 const RegisterScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,12 +30,12 @@ const RegisterScreen = ({ navigation }) => {
   const handleRegister = async () => {
     const newErrors = {};
     
-    if (!formData.name) newErrors.name = 'Name is required';
-    if (!formData.email) newErrors.email = 'Email is required';
-    if (!formData.password) newErrors.password = 'Password is required';
-    if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
+    if (!formData.name) newErrors.name = t('auth.nameRequired');
+    if (!formData.email) newErrors.email = t('auth.emailRequired');
+    if (!formData.password) newErrors.password = t('auth.passwordRequired');
+    if (!formData.confirmPassword) newErrors.confirmPassword = t('auth.confirmPasswordRequired');
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      newErrors.confirmPassword = t('auth.passwordsDoNotMatch');
     }
     
     if (Object.keys(newErrors).length > 0) {
@@ -57,41 +59,41 @@ const RegisterScreen = ({ navigation }) => {
     <ScreenWrapper scrollable>
       <View style={styles.container}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to get started</Text>
+          <Text style={styles.title}>{t('auth.createAccount')}</Text>
+          <Text style={styles.subtitle}>{t('auth.signUpToGetStarted')}</Text>
           
           <Input
-            label="Full Name"
+            label={t('auth.fullName')}
             value={formData.name}
             onChangeText={(value) => handleInputChange('name', value)}
-            placeholder="Enter your full name"
+            placeholder={t('auth.enterFullName')}
             error={errors.name}
           />
           
           <Input
-            label="Email"
+            label={t('common.email')}
             value={formData.email}
             onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="Enter your email"
+            placeholder={t('auth.enterPassword')}
             keyboardType="email-address"
             autoCapitalize="none"
             error={errors.email}
           />
           
           <Input
-            label="Password"
+            label={t('auth.password')}
             value={formData.password}
             onChangeText={(value) => handleInputChange('password', value)}
-            placeholder="Enter your password"
+            placeholder={t('auth.enterPassword')}
             secureTextEntry
             error={errors.password}
           />
           
           <Input
-            label="Confirm Password"
+            label={t('auth.confirmPassword')}
             value={formData.confirmPassword}
             onChangeText={(value) => handleInputChange('confirmPassword', value)}
-            placeholder="Confirm your password"
+            placeholder={t('auth.enterConfirmPassword')}
             secureTextEntry
             error={errors.confirmPassword}
           />
@@ -101,14 +103,14 @@ const RegisterScreen = ({ navigation }) => {
           )}
           
           <Button
-            title="Sign Up"
+            title={t('auth.signUp')}
             onPress={handleRegister}
             loading={loading}
             style={styles.registerButton}
           />
           
           <Button
-            title="Already have an account? Sign In"
+            title={t('auth.alreadyHaveAccount')}
             onPress={() => navigation.navigate('Login')}
             variant="ghost"
             style={styles.loginButton}

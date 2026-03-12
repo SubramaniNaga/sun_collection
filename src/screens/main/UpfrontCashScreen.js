@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Card from '../../components/common/Card';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 
 const formatAmount = (val) => {
   if (val == null || val === '') return '—';
@@ -35,6 +36,7 @@ const purposeLabel = (value) => {
 };
 
 const UpfrontCashScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState([]);
   const [floatSummary, setFloatSummary] = useState({
@@ -92,15 +94,15 @@ const UpfrontCashScreen = ({ navigation }) => {
         </View>
       </View>
       <View style={styles.cardRow}>
-        <Text style={styles.label}>Amount</Text>
+        <Text style={styles.label}>{t('common.amount')}</Text>
         <Text style={styles.value}>{formatAmount(item.amountTaken)}</Text>
       </View>
       <View style={styles.cardRow}>
-        <Text style={styles.label}>Purpose</Text>
+        <Text style={styles.label}>{t('upfrontCash.purpose')}</Text>
         <Text style={styles.value}>{purposeLabel(item.purpose)}</Text>
       </View>
       <View style={styles.cardRow}>
-        <Text style={styles.label}>Date</Text>
+        <Text style={styles.label}>{t('common.date')}</Text>
         <Text style={styles.value}>{formatDate(item.date)}</Text>
       </View>
     </Card>
@@ -108,22 +110,22 @@ const UpfrontCashScreen = ({ navigation }) => {
 
   const renderFloatSummary = () => (
     <Card style={styles.summaryCard}>
-      <Text style={styles.sectionTitle}>Float Summary</Text>
+      <Text style={styles.sectionTitle}>{t('upfrontCash.floatSummary')}</Text>
       <View style={styles.summaryGrid}>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Previous Float</Text>
+          <Text style={styles.summaryLabel}>{t('upfrontCash.previousFloat')}</Text>
           <Text style={styles.summaryValue}>{formatAmount(floatSummary.previousFloatBalance)}</Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Upfront Taken</Text>
+          <Text style={styles.summaryLabel}>{t('upfrontCash.totalUpfrontCash')}</Text>
           <Text style={styles.summaryValue}>{formatAmount(floatSummary.totalUpfrontCashTaken)}</Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Settled</Text>
+          <Text style={styles.summaryLabel}>{t('upfrontCash.settled')}</Text>
           <Text style={styles.summaryValue}>{formatAmount(floatSummary.totalSettled)}</Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Outstanding</Text>
+          <Text style={styles.summaryLabel}>{t('upfrontCash.outstanding')}</Text>
           <Text style={[styles.summaryValue, styles.outstanding]}>{formatAmount(floatSummary.currentOutstandingFloat)}</Text>
         </View>
       </View>
@@ -135,15 +137,15 @@ const UpfrontCashScreen = ({ navigation }) => {
       return (
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       );
     }
     return (
       <View style={styles.emptyState}>
         <Ionicons name="wallet-outline" size={48} color={COLORS.text.tertiary} />
-        <Text style={styles.emptyStateText}>No upfront cash entries</Text>
-        <Text style={styles.emptyStateSubText}>Tap + to add an entry</Text>
+        <Text style={styles.emptyStateText}>{t('upfrontCash.noUpfrontCash')}</Text>
+        <Text style={styles.emptyStateSubText}>{t('upfrontCash.tapToAdd')}</Text>
       </View>
     );
   };
@@ -152,7 +154,7 @@ const UpfrontCashScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
       <Header
-        title="Up-front Cash"
+        title={t('upfrontCash.title')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
         rightComponent={

@@ -4,8 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../../components/common/Card';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
+import { useLanguage } from '../../store/LanguageContext';
 
 const SettingsScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { logout } = useAuthContext();
   const [notifications, setNotifications] = useState(true);
@@ -15,36 +17,36 @@ const SettingsScreen = ({ navigation }) => {
 
   const settingsSections = [
     {
-      title: 'Preferences',
+      title: t('settings.preferences'),
       items: [
         {
           id: 'notifications',
-          title: 'Push Notifications',
-          subtitle: 'Receive notifications about collections',
+          title: t('settings.pushNotifications'),
+          subtitle: t('settings.receiveCollectionNotifications'),
           type: 'toggle',
           value: notifications,
           onToggle: setNotifications,
         },
         {
           id: 'dark-mode',
-          title: 'Dark Mode',
-          subtitle: 'Use dark theme',
+          title: t('settings.darkMode'),
+          subtitle: t('settings.useDarkTheme'),
           type: 'toggle',
           value: darkMode,
           onToggle: setDarkMode,
         },
         {
           id: 'biometric',
-          title: 'Biometric Login',
-          subtitle: 'Use fingerprint or face recognition',
+          title: t('settings.biometricLogin'),
+          subtitle: t('settings.useFingerprintFace'),
           type: 'toggle',
           value: biometric,
           onToggle: setBiometric,
         },
         {
           id: 'auto-sync',
-          title: 'Auto Sync',
-          subtitle: 'Automatically sync data',
+          title: t('settings.autoSync'),
+          subtitle: t('settings.automaticallySyncData'),
           type: 'toggle',
           value: autoSync,
           onToggle: setAutoSync,
@@ -52,78 +54,78 @@ const SettingsScreen = ({ navigation }) => {
       ],
     },
     {
-      title: 'Data & Storage',
+      title: t('settings.dataStorage'),
       items: [
         {
           id: 'sync-now',
-          title: 'Sync Now',
-          subtitle: 'Manually sync all data',
+          title: t('settings.syncNow'),
+          subtitle: t('settings.manuallySyncData'),
           type: 'button',
           onPress: () => console.log('Sync data'),
         },
         {
           id: 'clear-cache',
-          title: 'Clear Cache',
-          subtitle: 'Clear temporary data',
+          title: t('settings.clearCache'),
+          subtitle: t('settings.clearTemporaryData'),
           type: 'button',
           onPress: () => console.log('Clear cache'),
         },
         {
           id: 'export-data',
-          title: 'Export Data',
-          subtitle: 'Export your data',
+          title: t('settings.exportData'),
+          subtitle: t('settings.exportYourData'),
           type: 'button',
           onPress: () => console.log('Export data'),
         },
       ],
     },
     {
-      title: 'Support',
+      title: t('settings.support'),
       items: [
         {
           id: 'help',
-          title: 'Help Center',
-          subtitle: 'Get help and support',
+          title: t('settings.helpCenter'),
+          subtitle: t('settings.getHelpSupport'),
           type: 'button',
           onPress: () => console.log('Open help center'),
         },
         {
           id: 'contact',
-          title: 'Contact Support',
-          subtitle: 'Get in touch with our team',
+          title: t('settings.contactSupport'),
+          subtitle: t('settings.getInTouch'),
           type: 'button',
           onPress: () => console.log('Contact support'),
         },
         {
           id: 'about',
-          title: 'About',
-          subtitle: 'App version and information',
+          title: t('settings.about'),
+          subtitle: t('settings.appVersionInfo'),
           type: 'button',
           onPress: () => console.log('Show about'),
         },
       ],
     },
     {
-      title: 'Account',
+      title: t('settings.account'),
       items: [
         {
           id: 'privacy',
-          title: 'Privacy Policy',
-          subtitle: 'View our privacy policy',
+          title: t('settings.privacyPolicy'),
+          subtitle: t('settings.viewPrivacyPolicy'),
           type: 'button',
           onPress: () => console.log('Open privacy policy'),
         },
         {
           id: 'terms',
-          title: 'Terms of Service',
-          subtitle: 'View terms and conditions',
+          title: t('settings.termsOfService'),
+          subtitle: t('settings.viewTermsConditions'),
           type: 'button',
           onPress: () => console.log('Open terms'),
         },
         {
           id: 'logout',
-          title: 'Logout',
-          subtitle: 'Sign out of your account',
+          title: t('settings.logout'),
+          subtitle: t('settings.signOutAccount'),
           type: 'destructive',
           onPress: logout,
         },
@@ -185,9 +187,9 @@ const SettingsScreen = ({ navigation }) => {
           </View>
         ))}
         <Card style={styles.versionCard}>
-          <Text style={styles.versionTitle}>Collection Agent App</Text>
-          <Text style={styles.versionNumber}>Version 1.0.0</Text>
-          <Text style={styles.versionBuild}>Build 2024.03.01</Text>
+          <Text style={styles.versionTitle}>{t('settings.collectionAgentApp')}</Text>
+          <Text style={styles.versionNumber}>{t('settings.version')} 1.0.0</Text>
+          <Text style={styles.versionBuild}>{t('settings.build')} 2024.03.01</Text>
         </Card>
       </ScrollView>
     </View>

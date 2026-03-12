@@ -5,8 +5,10 @@ import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 
 const SplashScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [checkingVersion, setCheckingVersion] = useState(false);
 
@@ -22,11 +24,11 @@ const SplashScreen = ({ navigation }) => {
       // Step 2: Check maintenance mode first
       if (versionData.isMaintaince) {
         Alert.alert(
-          'Maintenance Mode',
-          versionData.maitainnaceMessage || 'Maintenance in progress',
+          t('auth.maintenanceMode'),
+          versionData.maitainnaceMessage || t('auth.maintenanceInProgress'),
           [
             {
-              text: 'Retry',
+              text: t('common.retry'),
               onPress: () => performAppChecks(),
             }
           ]
@@ -50,20 +52,20 @@ const SplashScreen = ({ navigation }) => {
           : 'https://play.google.com/store/apps';
 
         Alert.alert(
-          'Update Required',
-          `A new version (${apiVersion}) is available. Current version: ${currentVersion}`,
+          t('auth.updateRequired'),
+          t('auth.newVersionAvailable', { version: apiVersion, currentVersion }),
           forceUpdate ? [
             {
-              text: 'Update Now',
+              text: t('auth.updateNow'),
               onPress: () => Linking.openURL(storeUrl),
             }
           ] : [
             {
-              text: 'Update Now',
+              text: t('auth.updateNow'),
               onPress: () => Linking.openURL(storeUrl),
             },
             {
-              text: 'Skip',
+              text: t('auth.skip'),
               onPress: () => navigateToMain(),
               style: 'cancel',
             }
@@ -112,9 +114,9 @@ const SplashScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" backgroundColor={COLORS.primary} />
         <View style={styles.content}>
-          <Text style={styles.title}>Sun Collection</Text>
+          <Text style={styles.title}>{t('auth.sunCollection')}</Text>
           <Text style={styles.subtitle}>
-            {checkingVersion ? 'Checking for updates...' : 'Loading...'}
+            {checkingVersion ? t('auth.checkingUpdates') : t('common.loading')}
           </Text>
         </View>
       </SafeAreaView>

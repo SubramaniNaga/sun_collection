@@ -17,6 +17,7 @@ import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import NIPLoan from '../../models/NIPLoan';
+import { useLanguage } from '../../store/LanguageContext';
 
 const LIMIT = 20;
 
@@ -90,6 +91,7 @@ const NIPListSkeleton = () => (
 );
 
 const NIPScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [nipList, setNipList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -181,18 +183,18 @@ const NIPScreen = ({ navigation }) => {
     Linking.openURL(phoneUrl)
       .then((supported) => {
         if (!supported) {
-          Alert.alert('Error', 'Phone dialer not available');
+          Alert.alert(t('common.error'), t('collection.call'));
         }
       })
       .catch((err) => {
         console.error('Error opening phone dialer:', err);
-        Alert.alert('Error', 'Could not open phone dialer');
+        Alert.alert(t('common.error'), t('collection.call'));
       });
   };
 
   const handleMapPress = (latitude, longitude) => {
     if (!latitude || !longitude) {
-      Alert.alert('Error', 'Location coordinates not available');
+      Alert.alert(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -200,7 +202,7 @@ const NIPScreen = ({ navigation }) => {
     const lng = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert('Error', 'Invalid location coordinates');
+      Alert.alert(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -219,7 +221,7 @@ const NIPScreen = ({ navigation }) => {
         console.error('Error opening Google Maps:', err);
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
+          Alert.alert(t('common.error'), t('collection.map'));
         });
       });
   };
@@ -265,30 +267,30 @@ const NIPScreen = ({ navigation }) => {
      
       <View style={styles.nipCardRow}>
         <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.nipCardLabel}>Loan amount</Text>
+        <Text style={styles.nipCardLabel}>{t('loan.loanAmount')}</Text>
         <Text style={styles.nipCardValueAmount}>{formatAmount(item?.loanAmount)}</Text>
       </View>
       {item?.approvedAmount != null && item?.approvedAmount !== '' && (
         <View style={styles.nipCardRow}>
           <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-          <Text style={styles.nipCardLabel}>Approved</Text>
+          <Text style={styles.nipCardLabel}>{t('loan.approved')}</Text>
           <Text style={styles.nipCardValue}>{formatAmount(item?.approvedAmount)}</Text>
         </View>
       )}
       {item?.balanceAmount != null && item?.balanceAmount !== '' && (
         <View style={styles.nipCardRow}>
           <Ionicons name="wallet-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-          <Text style={styles.nipCardLabel}>Balance</Text>
+          <Text style={styles.nipCardLabel}>{t('loan.balance')}</Text>
           <Text style={styles.nipCardValue}>{formatAmount(item?.balanceAmount)}</Text>
         </View>
       )}
       <View style={styles.nipCardRow}>
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.nipCardLabel}>Branch</Text>
+        <Text style={styles.nipCardLabel}>{t('loan.branch')}</Text>
         <Text style={styles.nipCardValue} numberOfLines={1}>{item?.branchName ?? '—'}</Text>
       </View>
       <View style={styles.nipCardFooter}>
-        <Text style={styles.nipCardDate}>Requested {formatDate(item?.requestedDate)}</Text>
+        <Text style={styles.nipCardDate}>{t('loan.requested')} {formatDate(item?.requestedDate)}</Text>
         <View style={styles.nipCardFooterIcons}>
           {item?.addressLatitude && item?.addressLongitude && (
             <TouchableOpacity
@@ -332,7 +334,7 @@ const NIPScreen = ({ navigation }) => {
       return (
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading NIP loans...</Text>
+          <Text style={styles.loadingText}>{t('nip.loadingNIP')}</Text>
         </View>
       );
     }
@@ -342,7 +344,7 @@ const NIPScreen = ({ navigation }) => {
           <Ionicons name="alert-circle-outline" size={48} color={COLORS.text.tertiary} />
           <Text style={styles.emptyStateText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => fetchNIPLoans(1, false)}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -351,12 +353,12 @@ const NIPScreen = ({ navigation }) => {
       <View style={styles.emptyState}>
         <Ionicons name="document-text-outline" size={48} color={COLORS.text.tertiary} />
         <Text style={styles.emptyStateText}>
-          {searchQuery.trim() ? 'No matching NIP loans' : 'No NIP loans found'}
+          {searchQuery.trim() ? t('nip.noNIPLoans') : t('nip.noNIPLoans')}
         </Text>
         <Text style={styles.emptyStateSubText}>
           {searchQuery.trim()
-            ? 'Try a different search'
-            : 'NIP loans will appear here when available'}
+            ? t('common.search')
+            : t('nip.noNIPLoans')}
         </Text>
       </View>
     );
@@ -367,7 +369,7 @@ const NIPScreen = ({ navigation }) => {
       <StatusBar style="light" backgroundColor={COLORS.primary} />
       
       <Header 
-        title="NIP" 
+        title={t('nip.title')} 
         showBackButton={true}
         onBackPress={() => navigation.goBack()} 
       />
@@ -377,7 +379,7 @@ const NIPScreen = ({ navigation }) => {
           <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by name, phone, ID..."
+            placeholder={t('nip.searchPlaceholder')}
             placeholderTextColor={COLORS.text.secondary}
             value={searchQuery}
             onChangeText={setSearchQuery}

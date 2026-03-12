@@ -18,8 +18,10 @@ import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import CustomImagePicker from '../../components/common/ImagePicker';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 
 const ExpenseAddScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     title: '',
     category: '',
@@ -43,15 +45,15 @@ const ExpenseAddScreen = ({ navigation }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.title.trim()) newErrors.title = 'Expense title is required';
-    if (!formData.category) newErrors.category = 'Category is required';
+    if (!formData.title.trim()) newErrors.title = t('expenses.typeRequired');
+    if (!formData.category) newErrors.category = t('expenses.typeRequired');
     if (!formData.amount) {
-      newErrors.amount = 'Amount is required';
+      newErrors.amount = t('expenses.amountRequired');
     } else if (parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Amount must be greater than 0';
+      newErrors.amount = t('validation.invalidAmount');
     }
-    if (!formData.date) newErrors.date = 'Date is required';
-    if (!selectedImage) newErrors.image = 'Receipt image is required';
+    if (!formData.date) newErrors.date = t('expenses.dateRequired');
+    if (!selectedImage) newErrors.image = t('customer.imageRequired');
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -66,8 +68,8 @@ const ExpenseAddScreen = ({ navigation }) => {
       };
       console.log('Expense Payload:', payload);
 
-      Alert.alert('Success', 'Expense uploaded successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
+      Alert.alert(t('common.success'), t('success.saved'), [
+        { text: t('common.ok'), onPress: () => navigation.goBack() }
       ]);
     }
   };
@@ -84,7 +86,7 @@ const ExpenseAddScreen = ({ navigation }) => {
       <StatusBar style="dark" />
 
       <Header
-        title="Add Expense"
+        title={t('expenses.addExpense')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
@@ -99,24 +101,24 @@ const ExpenseAddScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
         >
           <FormInput
-            label="Expense Title"
+            label={t('expenses.expenseType')}
             value={formData.title}
             onChangeText={(value) => handleInputChange('title', value)}
-            placeholder="Enter expense title"
+            placeholder={t('expenses.expenseType')}
             error={errors.title}
           />
 
           <FormPicker
-            label="Category"
+            label={t('expenses.expenseType')}
             value={formData.category}
             onValueChange={(value) => handleInputChange('category', value)}
             items={categories}
-            placeholder="Select category"
+            placeholder={t('expenses.expenseType')}
             error={errors.category}
           />
 
           <FormInput
-            label="Amount"
+            label={t('expenses.expenseAmount')}
             value={formData.amount}
             onChangeText={(value) => handleInputChange('amount', value)}
             placeholder="0.00"
@@ -125,17 +127,17 @@ const ExpenseAddScreen = ({ navigation }) => {
           />
 
           <DatePicker
-            label="Date"
+            label={t('expenses.expenseDate')}
             value={formData.date}
             onValueChange={(value) => handleInputChange('date', value)}
             error={errors.date}
           />
 
           <FormInput
-            label="Description / Notes"
+            label={t('expenses.description')}
             value={formData.description}
             onChangeText={(value) => handleInputChange('description', value)}
-            placeholder="Enter description (optional)"
+            placeholder={t('expenses.description')}
             multiline
             numberOfLines={4}
           />
@@ -151,7 +153,7 @@ const ExpenseAddScreen = ({ navigation }) => {
       <View style={styles.bottomSection}>
         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
           <Ionicons name="cloud-upload-outline" size={20} color={COLORS.white} style={{ marginRight: SIZES.base }} />
-          <Text style={styles.submitButtonText}>Submit</Text>
+          <Text style={styles.submitButtonText}>{t('common.submit')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 
 const LIMIT = 10;
 
@@ -34,6 +35,7 @@ const LoanListSkeleton = () => (
 );
 
 const LoanCustomerListScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [loanList, setLoanList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
     } catch (err) {
       console.error('Fetch loans error:', err);
       if (page === 1) {
-        setError('Failed to load loans. Please try again.');
+        setError(t('loan.failedToLoad'));
         setLoanList([]);
       }
     } finally {
@@ -126,18 +128,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
     Linking.openURL(phoneUrl)
       .then((supported) => {
         if (!supported) {
-          Alert.alert('Error', 'Phone dialer not available');
+          Alert.alert(t('common.error'), t('collection.call'));
         }
       })
       .catch((err) => {
         console.error('Error opening phone dialer:', err);
-        Alert.alert('Error', 'Could not open phone dialer');
+        Alert.alert(t('common.error'), t('collection.call'));
       });
   };
 
   const handleMapPress = (latitude, longitude) => {
     if (!latitude || !longitude) {
-      Alert.alert('Error', 'Location coordinates not available');
+      Alert.alert(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -145,7 +147,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
     const lng = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert('Error', 'Invalid location coordinates');
+      Alert.alert(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -167,7 +169,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
         // Fallback to web version
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
+          Alert.alert(t('common.error'), t('collection.map'));
         });
       });
   };
@@ -225,28 +227,28 @@ const LoanCustomerListScreen = ({ navigation }) => {
      
       <View style={styles.loanCardRow}>
         <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>Loan amount</Text>
+        <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
         <Text style={styles.loanCardValueAmount}>{formatAmount(item?.loan_amount)}</Text>
       </View>
       {item?.approved_amount != null && item?.approved_amount !== '' && (
         <View style={styles.loanCardRow}>
           <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-          <Text style={styles.loanCardLabel}>Approved</Text>
+          <Text style={styles.loanCardLabel}>{t('loan.approved')}</Text>
           <Text style={styles.loanCardValue}>{formatAmount(item?.approved_amount)}</Text>
         </View>
       )}
       <View style={styles.loanCardRow}>
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>Balance Amount</Text>
+        <Text style={styles.loanCardLabel}>{t('loan.balanceAmount')}</Text>
         <Text style={styles.loanCardValue} numberOfLines={1}>{item?.balance_amount ?? '—'}</Text>
       </View>
       <View style={styles.loanCardRow}>
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>Loan Period</Text>
+        <Text style={styles.loanCardLabel}>{t('loan.loanPeriod')}</Text>
         <Text style={styles.loanCardValue} numberOfLines={1}>{item?.loan_period != null ? `${item?.loan_period}/${item?.loan_period_type}` : '—'}</Text>
       </View>
         <View style={styles.loanCardFooter}>
-        <Text style={styles.loanCardDate}>Requested {formatDate(item?.requested_date)}</Text>
+        <Text style={styles.loanCardDate}>{t('loan.requested')} {formatDate(item?.requested_date)}</Text>
         <View style={styles.loanCardFooterIcons}>
           {item?.address_latitude && item?.address_longitude && (
             <TouchableOpacity
@@ -290,7 +292,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
       return (
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading loans...</Text>
+          <Text style={styles.loadingText}>{t('loan.loadingLoans')}</Text>
         </View>
       );
     }
@@ -300,7 +302,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
           <Ionicons name="alert-circle-outline" size={48} color={COLORS.text.tertiary} />
           <Text style={styles.emptyStateText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => fetchLoans(1, false)}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -309,12 +311,10 @@ const LoanCustomerListScreen = ({ navigation }) => {
       <View style={styles.emptyState}>
         <Ionicons name="document-text-outline" size={48} color={COLORS.text.tertiary} />
         <Text style={styles.emptyStateText}>
-          {searchQuery.trim() ? 'No matching loans' : 'No loans found'}
+          {t('loan.noLoans')}
         </Text>
         <Text style={styles.emptyStateSubText}>
-          {searchQuery.trim()
-            ? 'Try a different search'
-            : 'Loans will appear here when available'}
+          {t('common.search')}
         </Text>
       </View>
     );
@@ -325,7 +325,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
 
       <Header
-        title="Loan Management"
+        title={t('loan.loanManagement')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
         rightComponent={
@@ -344,7 +344,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
           <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by name, phone, ID..."
+            placeholder={t('loan.searchPlaceholder')}
             placeholderTextColor={COLORS.text.secondary}
             value={searchQuery}
             onChangeText={setSearchQuery}

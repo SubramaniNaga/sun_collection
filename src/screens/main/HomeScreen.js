@@ -4,9 +4,11 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
 
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification drawer
@@ -18,37 +20,37 @@ const HomeScreen = ({ navigation }) => {
   const menuItems = [
     {
       id: 'collection',
-      title: 'Collection',
+      title: t('home.collection'),
       icon: 'cash-outline',
       onPress: () => navigation.navigate('Collection'),
     },
     {
       id: 'loan',
-      title: 'Loan Management',
+      title: t('home.loanManagement'),
       icon: 'document-text-outline',
       onPress: () => navigation.navigate('Loan'),
     },
     {
       id: 'expenses',
-      title: 'Expenses',
+      title: t('home.expenses'),
       icon: 'card-outline',
       onPress: () => navigation.navigate('Expenses'),
     },
     {
       id: 'upfront-cash',
-      title: 'Up-front Cash',
+      title: t('home.upfrontCash'),
       icon: 'wallet-outline',
       onPress: () => navigation.navigate('UpfrontCash'),
     },
     {
       id: 'collection-history',
-      title: 'Collection History',
+      title: t('home.collectionHistory'),
       icon: 'bar-chart-outline',
       onPress: () => navigation.navigate('CollectionHistory'),
     },
     {
       id: 'nip',
-      title: 'NIP',
+      title: t('home.nip'),
       icon: 'link-outline',
       onPress: () => navigation.navigate('NIP'),
     },
@@ -59,7 +61,7 @@ const HomeScreen = ({ navigation }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
       
       <Header 
-        title="Home" 
+        title={t('home.title')} 
         showMenuButton={true}
         onMenuPress={() => navigation.openDrawer()}
         rightComponent={

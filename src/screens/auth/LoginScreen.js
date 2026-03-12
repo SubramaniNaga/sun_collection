@@ -7,6 +7,7 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
+import { useLanguage } from '../../store/LanguageContext';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
@@ -15,6 +16,7 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const { login, loading } = useAuthContext();
+  const { t } = useLanguage();
 
   const handlePhoneChange = (text) => {
     // Remove any non-numeric characters
@@ -42,18 +44,18 @@ const LoginScreen = ({ navigation }) => {
     const newErrors = {};
 
     if (!phone) {
-      newErrors.phone = 'Phone number is required';
+      newErrors.phone = t('auth.phoneRequired');
     } else if (phone.length !== 10) {
-      newErrors.phone = 'Phone number must be exactly 10 digits';
+      newErrors.phone = t('auth.phoneInvalid');
     } else {
       const firstDigit = parseInt(phone[0]);
       if (firstDigit <= 5) {
-        newErrors.phone = 'Phone number must start with 6, 7, 8, or 9';
+        newErrors.phone = t('auth.phoneInvalidStart');
       }
     }
     
     if (!password) {
-      newErrors.password = 'Password is required';
+      newErrors.password = t('auth.passwordRequired');
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -72,7 +74,7 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const getLoginErrorMessage = (error) => {
-    if (!error) return 'Something went wrong. Please try again.';
+    if (!error) return t('auth.loginError');
     if (typeof error.message === 'string' && error.message && !error.message.startsWith('API Error:')) {
       return error.message;
     }
@@ -85,7 +87,7 @@ const LoginScreen = ({ navigation }) => {
         if (parsed?.message) return parsed.message;
       } catch (_) {}
     }
-    return error.message || 'Something went wrong. Please try again.';
+    return error.message || t('auth.loginError');
   };
 
   const togglePasswordVisibility = () => {
@@ -101,16 +103,15 @@ const LoginScreen = ({ navigation }) => {
         style={styles.keyboardContainer}
       >
         <View style={styles.card}>
-        <Text style={styles.title}>Welcome to</Text>
-        <Text style={styles.title}>SUN MICROFINANCE</Text>
-        SUN MICROFINANCE
-        <Text style={styles.subtitle}>Sign in to continue</Text>
+        <Text style={styles.title}>{t('auth.welcome')}</Text>
+        <Text style={styles.title}>{t('auth.sunMicrofinance')}</Text>
+        <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
 
           <Input
-            label="Phone Number"
+            label={t('auth.phoneNumber')}
             value={phone}
             onChangeText={handlePhoneChange}
-            placeholder="Enter 10-digit mobile number"
+            placeholder={t('auth.enterPhone')}
             keyboardType="phone-pad"
             autoCapitalize="none"
             maxLength={10}
@@ -118,10 +119,10 @@ const LoginScreen = ({ navigation }) => {
           />
 
           <Input
-            label="Password"
+            label={t('auth.password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="Enter your password"
+            placeholder={t('auth.enterPassword')}
             secureTextEntry={!showPassword}
             error={errors.password}
             rightIcon={
@@ -143,7 +144,7 @@ const LoginScreen = ({ navigation }) => {
           )}
 
           <Button
-            title="Sign In"
+            title={t('auth.signIn')}
             onPress={handleLogin}
             loading={loading}
             style={styles.loginButton}

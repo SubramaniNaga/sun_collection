@@ -13,8 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 
 const ExpensesScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   // State for expenses list
   const [expenses, setExpenses] = useState([]);
   const [filteredExpenses, setFilteredExpenses] = useState([]);
@@ -22,7 +24,12 @@ const ExpensesScreen = ({ navigation }) => {
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   // Filter options
-  const filterOptions = ['All', 'Pending', 'Process', 'Approved'];
+  const filterOptions = [
+    t('common.all'),
+    t('expenses.pending'),
+    t('expenses.process'),
+    t('expenses.approved'),
+  ];
 
   // Mock expenses data
   const mockExpenses = [
@@ -116,12 +123,19 @@ const ExpensesScreen = ({ navigation }) => {
 
   // Apply filter
   useEffect(() => {
-    if (selectedFilter === 'All') {
+    if (selectedFilter === t('common.all')) {
       setFilteredExpenses(expenses);
     } else {
-      setFilteredExpenses(expenses.filter(expense => expense.status === selectedFilter));
+      // Map filter text back to status value
+      const statusMap = {
+        [t('expenses.pending')]: 'Pending',
+        [t('expenses.process')]: 'Process',
+        [t('expenses.approved')]: 'Approved',
+      };
+      const statusValue = statusMap[selectedFilter] || selectedFilter;
+      setFilteredExpenses(expenses.filter(expense => expense.status === statusValue));
     }
-  }, [selectedFilter, expenses]);
+  }, [selectedFilter, expenses, t]);
 
   // Handle filter selection
   const handleFilterSelect = (filter) => {
@@ -195,7 +209,7 @@ const ExpensesScreen = ({ navigation }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
 
       <Header
-        title="Expenses"
+        title={t('expenses.title')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
         rightComponent={
@@ -212,11 +226,11 @@ const ExpensesScreen = ({ navigation }) => {
         {filteredExpenses.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="receipt-outline" size={64} color={COLORS.text.tertiary} />
-            <Text style={styles.emptyStateText}>No expenses found</Text>
+            <Text style={styles.emptyStateText}>{t('expenses.noExpensesFound')}</Text>
             <Text style={styles.emptyStateSubtext}>
-              {selectedFilter === 'All'
-                ? 'Add your first expense to get started'
-                : `No ${selectedFilter.toLowerCase()} expenses found`
+              {selectedFilter === t('common.all')
+                ? t('expenses.addFirstExpense')
+                : t('expenses.noFilteredExpenses', { filter: selectedFilter })
               }
             </Text>
           </View>
@@ -253,7 +267,7 @@ const ExpensesScreen = ({ navigation }) => {
         >
           <View style={styles.filterModal}>
             <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>Filter Expenses</Text>
+              <Text style={styles.filterModalTitle}>{t('expenses.filterExpenses')}</Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={() => setShowFilterModal(false)}

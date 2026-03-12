@@ -8,8 +8,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
+import { useLanguage } from '../../store/LanguageContext';
 
 const CustomDrawerContent = (props) => {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthContext();
   const { navigation, state } = props;
@@ -17,13 +19,13 @@ const CustomDrawerContent = (props) => {
   const menuItems = [
     {
       id: 'home',
-      label: 'Home',
+      label: t('home.title'),
       icon: 'home-outline',
       onPress: () => navigation.navigate('Home'),
     },
     {
       id: 'profile',
-      label: 'Profile',
+      label: t('profile.title'),
       icon: 'person-outline',
       onPress: () => navigation.navigate('Profile'),
     },
@@ -50,10 +52,10 @@ const CustomDrawerContent = (props) => {
               </Text>
             </View>
           </View>
-          <View style={styles.userInfo}>
+            <View style={styles.userInfo}>
             <View style={styles.userHeader}>
               <Text style={styles.userName}>
-                {user?.name || 'User'}
+                {user?.name || t('profile.user')}
               </Text>
             </View>
             <View style={styles.contactInfo}>
@@ -92,13 +94,13 @@ const CustomDrawerContent = (props) => {
       <View style={styles.logoutSection}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color={COLORS.primary} style={{ marginRight: SIZES.margin }} />
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>{t('settings.logout')}</Text>
         </TouchableOpacity>
       </View>
 
       {/* App Version */}
       <View style={styles.footer}>
-        <Text style={styles.versionText}>Version 1.0.0</Text>
+        <Text style={styles.versionText}>{t('settings.version')} 1.0.0</Text>
       </View>
     </View>
   );

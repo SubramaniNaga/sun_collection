@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Link
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -24,18 +25,19 @@ const formatLoanAmount = (val) => {
   return isNaN(num) ? String(val) : `₹${num.toLocaleString('en-IN')}`;
 };
 
-const getLoanStatusLabel = (loan) => {
-  const approval = loan?.approval_status;
-  const loanStatus = loan?.loan_status;
-  if (approval === '2') return 'Rejected';
-  if (loanStatus === '4') return 'Closed';
-  if (approval === '0') return 'Pending';
-  if (loanStatus === '3') return 'Active';
-  if (loanStatus === '2' || approval === '1') return 'Approved';
-  return 'Pending';
-};
-
 const LoanScreen = ({ navigation, route }) => {
+  const { t } = useLanguage();
+  
+  const getLoanStatusLabel = (loan) => {
+    const approval = loan?.approval_status;
+    const loanStatus = loan?.loan_status;
+    if (approval === '2') return t('loan.rejected');
+    if (loanStatus === '4') return t('loan.closed');
+    if (approval === '0') return t('loan.pending');
+    if (loanStatus === '3') return t('loan.active');
+    if (loanStatus === '2' || approval === '1') return t('loan.approved');
+    return t('loan.pending');
+  };
   const { loan, customerData: paramCustomerData } = route.params || {};
   const customerData = paramCustomerData || (loan ? {
     name: loan?.customer_name ?? '',
@@ -98,14 +100,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Camera permission is required to take photo');
+        Alert.alert(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
       const asset = await pickFromCamera([4, 3]);
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
       console.error('Photo capture error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || 'Failed to capture photo. Please try again.');
+      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
 
@@ -114,14 +116,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Camera permission is required to capture Aadhar card');
+        Alert.alert(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
       const asset = await pickFromCamera([3, 2]);
       if (asset) setAadharCardImage(asset);
     } catch (error) {
       console.error('Aadhar capture error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || 'Failed to capture Aadhar card photo. Please try again.');
+      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
 
@@ -130,14 +132,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Gallery permission is required to select Aadhar card');
+        Alert.alert(t('common.error'), t('customer.galleryPermissionRequired'));
         return;
       }
       const asset = await pickFromLibrary([3, 2]);
       if (asset) setAadharCardImage(asset);
     } catch (error) {
       console.error('Aadhar upload error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || 'Failed to select Aadhar card. Please try again.');
+      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
     }
   };
 
@@ -196,7 +198,7 @@ const LoanScreen = ({ navigation, route }) => {
       setSelectedImage({ uri: fullUrl, title });
       setImageViewerVisible(true);
     } else {
-      Alert.alert('No Image', `${title} is not available`);
+      Alert.alert(t('common.error'), t('customer.imageNotAvailable', { title }));
     }
   };
 
@@ -209,7 +211,7 @@ const LoanScreen = ({ navigation, route }) => {
   // Handle map press for location
   const handleMapPress = (latitude, longitude, title) => {
     if (!latitude || !longitude) {
-      Alert.alert('Error', 'Location coordinates not available');
+      Alert.alert(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -217,7 +219,7 @@ const LoanScreen = ({ navigation, route }) => {
     const lng = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert('Error', 'Invalid location coordinates');
+      Alert.alert(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -237,7 +239,7 @@ const LoanScreen = ({ navigation, route }) => {
         console.error('Error opening Google Maps:', err);
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
+          Alert.alert(t('common.error'), t('collection.couldNotOpenGoogleMaps'));
         });
       });
   };
@@ -256,7 +258,7 @@ const LoanScreen = ({ navigation, route }) => {
       try {
         locationData = await captureLocation();
       } catch (locationError) {
-        Alert.alert('Permission Required', 'Location permission is required for loan renewal. Please enable location access and try again.');
+        Alert.alert(t('common.error'), t('customer.locationRequired'));
         setIsSubmitting(false);
         return;
       }
@@ -277,9 +279,9 @@ const LoanScreen = ({ navigation, route }) => {
       };
 
       console.log('Loan Renewal Payload:', payload);
-      Alert.alert('Success', 'Loan renewal request submitted successfully!');
+      Alert.alert(t('common.success'), t('loan.renewalSubmitted'));
     } catch (error) {
-      Alert.alert('Error', 'Failed to process loan renewal. Please try again.');
+      Alert.alert(t('common.error'), t('loan.failedToProcessRenewal'));
       console.error('Submission error:', error);
     } finally {
       setIsSubmitting(false);
@@ -291,7 +293,7 @@ const LoanScreen = ({ navigation, route }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
 
       <Header
-        title="Loan Details"
+        title={t('loan.loanDetails')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
@@ -309,140 +311,140 @@ const LoanScreen = ({ navigation, route }) => {
           {loan && (
             <View style={styles.loanDetailsCard}>
               <View style={styles.detailRow}>
-              <Text style={styles.loanDetailsTitle}>Loan Details</Text>
+              <Text style={styles.loanDetailsTitle}>{t('loan.loanDetails')}</Text>
               <View style={[styles.loanDetailsBadge, { backgroundColor: loan?.approval_status === '2' ? COLORS.error : loan?.loan_status === '3' ? COLORS.success : COLORS.primary }]}>
                 <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loan)}</Text>
               </View>
 </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Loan ID</Text>
+                <Text style={styles.detailLabel}>{t('loan.loanId')}</Text>
                 <Text style={styles.detailValue}>#{loan?.id ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Customer</Text>
+                <Text style={styles.detailLabel}>{t('customer.customer')}</Text>
                 <Text style={styles.detailValue}>{loan?.customer_name ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Phone</Text>
+                <Text style={styles.detailLabel}>{t('common.phone')}</Text>
                 <Text style={styles.detailValue}>{loan?.customer_phone ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Customer No</Text>
+                <Text style={styles.detailLabel}>{t('customer.customerNo')}</Text>
                 <Text style={styles.detailValue}>{loan?.customer_no ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Branch</Text>
+                <Text style={styles.detailLabel}>{t('loan.branch')}</Text>
                 <Text style={styles.detailValue}>{loan?.branch ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Line</Text>
+                <Text style={styles.detailLabel}>{t('loan.line')}</Text>
                 <Text style={styles.detailValue}>{loan?.line_name ?? '—'}</Text>
               </View>
               {loan?.loantype_id != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Loan Type ID</Text>
+                  <Text style={styles.detailLabel}>{t('loan.loanTypeId')}</Text>
                   <Text style={styles.detailValue}>{loan.loantype_id}</Text>
                 </View>
               )}
 
               {/* Amounts Section */}
-              <Text style={styles.detailSectionTitle}>Amounts</Text>
+              <Text style={styles.detailSectionTitle}>{t('loan.amounts')}</Text>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Loan amount</Text>
+                <Text style={styles.detailLabel}>{t('loan.loanAmount')}</Text>
                 <Text style={styles.detailValueHighlight}>{formatLoanAmount(loan?.loan_amount)}</Text>
               </View>
               {loan?.approved_amount != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Approved amount</Text>
+                  <Text style={styles.detailLabel}>{t('loan.approvedAmount')}</Text>
                   <Text style={styles.detailValue}>{formatLoanAmount(loan?.approved_amount)}</Text>
                 </View>
               )}
               {loan?.balance_amount != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Balance amount</Text>
+                  <Text style={styles.detailLabel}>{t('loan.balanceAmount')}</Text>
                   <Text style={styles.detailValue}>{formatLoanAmount(loan?.balance_amount)}</Text>
                 </View>
               )}
               {loan?.intrest_amount != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Interest amount</Text>
+                  <Text style={styles.detailLabel}>{t('loan.interestAmount')}</Text>
                   <Text style={styles.detailValue}>{formatLoanAmount(loan?.intrest_amount)}</Text>
                 </View>
               )}
               {loan?.processing_fees != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Processing fees</Text>
+                  <Text style={styles.detailLabel}>{t('loan.processingFees')}</Text>
                   <Text style={styles.detailValue}>{formatLoanAmount(loan?.processing_fees)}</Text>
                 </View>
               )}
               {loan?.payment_type != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Payment type</Text>
+                  <Text style={styles.detailLabel}>{t('loan.paymentType')}</Text>
                   <Text style={styles.detailValue}>{loan.payment_type}</Text>
                 </View>
               )}
 
               {/* Dates & Period Section */}
-              <Text style={styles.detailSectionTitle}>Dates & Period</Text>
+              <Text style={styles.detailSectionTitle}>{t('loan.datesAndPeriod')}</Text>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Requested date</Text>
+                <Text style={styles.detailLabel}>{t('loan.requestedDate')}</Text>
                 <Text style={styles.detailValue}>{formatLoanDate(loan?.requested_date)}</Text>
               </View>
               {loan?.approved_date != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Approved date</Text>
+                  <Text style={styles.detailLabel}>{t('loan.approvedDate')}</Text>
                   <Text style={styles.detailValue}>{formatLoanDate(loan.approved_date)}</Text>
                 </View>
               )}
               {loan?.loan_period != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Loan period</Text>
-                  <Text style={styles.detailValue}>{`${loan.loan_period} months`}</Text>
+                  <Text style={styles.detailLabel}>{t('loan.loanPeriod')}</Text>
+                  <Text style={styles.detailValue}>{`${loan.loan_period} ${t('loan.months')}`}</Text>
                 </View>
               )}
               {loan?.loan_closed_on != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Closed date</Text>
+                  <Text style={styles.detailLabel}>{t('loan.closedOn')}</Text>
                   <Text style={styles.detailValue}>{formatLoanDate(loan.loan_closed_on)}</Text>
                 </View>
               )}
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Created</Text>
+                <Text style={styles.detailLabel}>{t('loan.created')}</Text>
                 <Text style={styles.detailValue}>{formatLoanDate(loan?.created_at)}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Updated</Text>
+                <Text style={styles.detailLabel}>{t('loan.updated')}</Text>
                 <Text style={styles.detailValue}>{formatLoanDate(loan?.updated_at)}</Text>
               </View>
 
               {/* Location Section */}
               {(loan?.address_latitude || loan?.address_longitude || loan?.loangiven_latitude || loan?.loangiven_longitude) && (
                 <>
-                  <Text style={styles.detailSectionTitle}>Location</Text>
+                  <Text style={styles.detailSectionTitle}>{t('loan.location')}</Text>
                   {loan?.address_latitude && loan?.address_longitude && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Address Location</Text>
+                      <Text style={styles.detailLabel}>{t('loan.addressLocation')}</Text>
                       <TouchableOpacity
-                        onPress={() => handleMapPress(loan.address_latitude, loan.address_longitude, 'Address Location')}
+                        onPress={() => handleMapPress(loan.address_latitude, loan.address_longitude, t('loan.addressLocation'))}
                         activeOpacity={0.7}
                       >
                         <View style={styles.locationButton}>
                           <Ionicons name="map-outline" size={18} color={COLORS.primary} />
-                          <Text style={styles.locationButtonText}>View on Map</Text>
+                          <Text style={styles.locationButtonText}>{t('loan.viewOnMap')}</Text>
                         </View>
                       </TouchableOpacity>
                     </View>
                   )}
                   {loan?.loangiven_latitude && loan?.loangiven_longitude && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Loan Given Location</Text>
+                      <Text style={styles.detailLabel}>{t('loan.loanGivenLocation')}</Text>
                       <TouchableOpacity
-                        onPress={() => handleMapPress(loan.loangiven_latitude, loan.loangiven_longitude, 'Loan Given Location')}
+                        onPress={() => handleMapPress(loan.loangiven_latitude, loan.loangiven_longitude, t('loan.loanGivenLocation'))}
                         activeOpacity={0.7}
                       >
                         <View style={styles.locationButton}>
                           <Ionicons name="map-outline" size={18} color={COLORS.primary} />
-                          <Text style={styles.locationButtonText}>View on Map</Text>
+                          <Text style={styles.locationButtonText}>{t('loan.viewOnMap')}</Text>
                         </View>
                       </TouchableOpacity>
                     </View>
@@ -452,24 +454,24 @@ const LoanScreen = ({ navigation, route }) => {
 
               {loan?.reject_reason && (
                 <>
-                  <Text style={styles.detailSectionTitle}>Rejection</Text>
+                  <Text style={styles.detailSectionTitle}>{t('loan.rejection')}</Text>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Reason</Text>
+                    <Text style={styles.detailLabel}>{t('loan.reason')}</Text>
                     <Text style={[styles.detailValue, { color: COLORS.error }]}>{loan.reject_reason}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Rejected date</Text>
+                    <Text style={styles.detailLabel}>{t('loan.rejectedDate')}</Text>
                     <Text style={styles.detailValue}>{formatLoanDate(loan?.rejected_date)}</Text>
                   </View>
                 </>
               )}
 
               {/* Images Section */}
-              <Text style={styles.detailSectionTitle}>Documents</Text>
+              <Text style={styles.detailSectionTitle}>{t('loan.documents')}</Text>
               <View style={styles.imagesRow}>
                 <TouchableOpacity
                   style={styles.imageIconContainer}
-                  onPress={() => handleImagePress(loan?.customer_photo, 'Customer Photo')}
+                  onPress={() => handleImagePress(loan?.customer_photo, t('loan.customerPhoto'))}
                   activeOpacity={0.7}
                 >
                   {loan?.customer_photo ? (
@@ -483,12 +485,12 @@ const LoanScreen = ({ navigation, route }) => {
                       <Ionicons name="person-outline" size={32} color={COLORS.text.tertiary} />
                     </View>
                   )}
-                  <Text style={styles.imageIconLabel}>Customer Photo</Text>
+                  <Text style={styles.imageIconLabel}>{t('loan.customerPhoto')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.imageIconContainer}
-                  onPress={() => handleImagePress(loan?.address_proof, 'Address Proof')}
+                  onPress={() => handleImagePress(loan?.address_proof, t('loan.addressProof'))}
                   activeOpacity={0.7}
                 >
                   {loan?.address_proof ? (
@@ -502,12 +504,12 @@ const LoanScreen = ({ navigation, route }) => {
                       <Ionicons name="home-outline" size={32} color={COLORS.text.tertiary} />
                     </View>
                   )}
-                  <Text style={styles.imageIconLabel}>Address Proof</Text>
+                  <Text style={styles.imageIconLabel}>{t('loan.addressProof')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.imageIconContainer}
-                  onPress={() => handleImagePress(loan?.loangiven_photo, 'Loan Given Photo')}
+                  onPress={() => handleImagePress(loan?.loangiven_photo, t('loan.loanGivenPhoto'))}
                   activeOpacity={0.7}
                 >
                   {loan?.loangiven_photo ? (
@@ -521,7 +523,7 @@ const LoanScreen = ({ navigation, route }) => {
                       <Ionicons name="document-text-outline" size={32} color={COLORS.text.tertiary} />
                     </View>
                   )}
-                  <Text style={styles.imageIconLabel}>Loan Given Photo</Text>
+                  <Text style={styles.imageIconLabel}>{t('loan.loanGivenPhoto')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -539,10 +541,10 @@ const LoanScreen = ({ navigation, route }) => {
           {isSubmitting || isCapturingLocation ? (
             <View style={styles.buttonContent}>
               <ActivityIndicator size="small" color={COLORS.white} />
-              <Text style={styles.submitButtonText}>Processing...</Text>
+              <Text style={styles.submitButtonText}>{t('common.processing')}</Text>
             </View>
           ) : (
-            <Text style={styles.submitButtonText}>Process Renewal</Text>
+            <Text style={styles.submitButtonText}>{t('loan.processRenewal')}</Text>
           )}
         </TouchableOpacity>
       </SafeAreaView>
@@ -557,7 +559,7 @@ const LoanScreen = ({ navigation, route }) => {
         <View style={styles.imageViewerContainer}>
           <SafeAreaView style={styles.imageViewerSafeArea}>
             <View style={styles.imageViewerHeader}>
-              <Text style={styles.imageViewerTitle}>{selectedImage?.title || 'Image'}</Text>
+              <Text style={styles.imageViewerTitle}>{selectedImage?.title || t('common.image')}</Text>
               <TouchableOpacity
                 style={styles.imageViewerCloseButton}
                 onPress={closeImageViewer}

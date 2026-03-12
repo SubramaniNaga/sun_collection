@@ -5,6 +5,7 @@ import GlobalLoader from './src/components/common/GlobalLoader';
 import { COLORS } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/store/AuthContext';
+import { LanguageProvider } from './src/store/LanguageContext';
 import { LoadingProvider, useLoading } from './src/store/LoadingContext';
 
 const AppContent = () => {
@@ -30,10 +31,12 @@ const AppContent = () => {
 
 export default function App() {
   return (
-    <LoadingProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </LoadingProvider>
+    <LanguageProvider>
+      <LoadingProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </LoadingProvider>
+    </LanguageProvider>
   );
 }

@@ -8,6 +8,7 @@ import DatePicker from '../../components/common/DatePicker';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import CollectionHistory from '../../models/CollectionHistory';
+import { useLanguage } from '../../store/LanguageContext';
 
 const LIMIT = 10;
 
@@ -22,6 +23,7 @@ const formatDateForAPI = (date) => {
 };
 
 const CollectionHistoryScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   // State for date filters
   const [startDate, setStartDate] = useState(new Date().toISOString());
   const [endDate, setEndDate] = useState(new Date().toISOString());
@@ -66,12 +68,12 @@ const CollectionHistoryScreen = ({ navigation }) => {
 
     // Check if start date is greater than end date
     if (start > end) {
-      newErrors.dateRange = 'Start date cannot be greater than end date';
+      newErrors.dateRange = t('validation.startDateGreater');
     }
     
     // Check if end date is beyond current date
     if (end > today) {
-      newErrors.dateRange = 'End date cannot be beyond current date';
+      newErrors.dateRange = t('validation.endDateBeyond');
     }
 
     setErrors(newErrors);
@@ -145,7 +147,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
     } catch (err) {
       console.error('Failed to fetch collection history:', err);
       if (page === 1) {
-        setError('Failed to load collection history. Please try again.');
+        setError(t('collectionHistory.failedToLoad'));
         setCollectionHistory([]);
       }
     } finally {
@@ -257,7 +259,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={COLORS.primary} />
-        <Text style={styles.loadingMoreText}>Loading more...</Text>
+        <Text style={styles.loadingMoreText}>{t('collectionHistory.loadingMore')}</Text>
       </View>
     );
   };
@@ -267,7 +269,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
       return (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading collection history...</Text>
+          <Text style={styles.loadingText}>{t('collectionHistory.loadingHistory')}</Text>
         </View>
       );
     }
@@ -279,14 +281,14 @@ const CollectionHistoryScreen = ({ navigation }) => {
       );
     }
     const filterText = selectedPaymentType === null 
-      ? 'in selected date range' 
+      ? t('collectionHistory.inSelectedDateRange') 
       : selectedPaymentType === 'cash' 
-        ? 'for Cash payments in selected date range' 
-        : 'for Online payments in selected date range';
+        ? t('collectionHistory.forCashPayments') 
+        : t('collectionHistory.forOnlinePayments');
     
     return (
       <View style={styles.noDataContainer}>
-        <Text style={styles.noDataText}>No collections found {filterText}</Text>
+        <Text style={styles.noDataText}>{t('collectionHistory.noCollectionsFound')} {filterText}</Text>
       </View>
     );
   };
@@ -296,7 +298,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
 
       <Header
-        title="Collection History"
+        title={t('collectionHistory.title')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
@@ -316,7 +318,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
               <View style={styles.dateRow}>
                 <View style={styles.datePickerContainer}>
                   <DatePicker
-                    label="Start Date"
+                    label={t('collection.startDate')}
                     value={startDate}
                     onValueChange={handleStartDateChange}
                     error={errors.startDate}
@@ -326,7 +328,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
 
                 <View style={styles.datePickerContainer}>
                   <DatePicker
-                    label="End Date"
+                    label={t('collection.endDate')}
                     value={endDate}
                     onValueChange={handleEndDateChange}
                     error={errors.endDate}
@@ -346,23 +348,23 @@ const CollectionHistoryScreen = ({ navigation }) => {
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>
-                    {selectedPaymentType === null ? 'Total Receipts' : selectedPaymentType === 'cash' ? 'Cash Receipts' : 'Online Receipts'}
+                    {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
                   </Text>
                   <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
                 </View>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Total Amount</Text>
+                  <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
                   <Text style={styles.summaryValue}>{formatCurrency(filteredStats.total_amount)}</Text>
                 </View>
               </View>
               {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
                 <View style={styles.summaryRow}>
                   <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>Cash</Text>
+                    <Text style={styles.summaryLabel}>{t('collectionHistory.cash')}</Text>
                     <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
                   </View>
                   <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>Non-Cash</Text>
+                    <Text style={styles.summaryLabel}>{t('collectionHistory.nonCash')}</Text>
                     <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
                   </View>
                 </View>
@@ -385,7 +387,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
                     selectedPaymentType === null && styles.tabTextActive,
                   ]}
                 >
-                  All
+                  {t('common.all')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -408,7 +410,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
                     selectedPaymentType === 'cash' && styles.tabTextActive,
                   ]}
                 >
-                  Cash
+                  {t('common.cash')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -431,14 +433,14 @@ const CollectionHistoryScreen = ({ navigation }) => {
                     selectedPaymentType === 'online' && styles.tabTextActive,
                   ]}
                 >
-                  Online
+                  {t('common.online')}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Collection History List Header */}
             <View style={styles.listSection}>
-              <Text style={styles.sectionTitle}>Collection History</Text>
+              <Text style={styles.sectionTitle}>{t('collectionHistory.title')}</Text>
             </View>
           </>
         }

@@ -10,6 +10,7 @@ import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import Collection from '../../models/Collection';
+import { useLanguage } from '../../store/LanguageContext';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -40,6 +41,7 @@ const formatAmount = (val) => {
 };
 
 const CollectionScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const [searchText, setSearchText] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -75,7 +77,7 @@ const CollectionScreen = ({ navigation }) => {
       setCollectionData(collectionModels);
     } catch (err) {
       console.error('Failed to fetch collection data:', err);
-      setError('Failed to load collection data. Please check your connection and try again.');
+      setError(t('collection.failedToLoad'));
       setCollectionData([]);
     } finally {
       setLoading(false);
@@ -214,16 +216,16 @@ const CollectionScreen = ({ navigation }) => {
     const errors = {};
     
     if (!collectedAmount || collectedAmount.trim() === '') {
-      errors.collectedAmount = 'Collected amount is required';
+      errors.collectedAmount = t('collection.collectedAmountRequired');
     } else {
       const amount = parseFloat(collectedAmount);
       if (isNaN(amount) || amount <= 0) {
-        errors.collectedAmount = 'Please enter a valid amount';
+        errors.collectedAmount = t('collection.collectedAmountInvalid');
       } else if (selectedCollection) {
         // Check if collected amount exceeds balance amount
         const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
         if (amount > balanceAmount) {
-          errors.collectedAmount = `Collected amount cannot exceed balance amount (${selectedCollection.getFormattedBalanceAmount()})`;
+          errors.collectedAmount = `${t('collection.collectedAmountExceed')} (${selectedCollection.getFormattedBalanceAmount()})`;
         }
       }
     }
@@ -239,16 +241,16 @@ const CollectionScreen = ({ navigation }) => {
       if (!isEnabled) {
         const userAction = await new Promise((resolve) => {
           Alert.alert(
-            'Location Services Disabled',
-            'Please enable location services (GPS) in your device settings to continue. Make sure GPS/Location is turned ON.',
+            t('collection.locationServicesDisabled'),
+            t('collection.enableLocation'),
             [
               {
-                text: 'Cancel',
+                text: t('common.cancel'),
                 style: 'cancel',
                 onPress: () => resolve('cancel'),
               },
               {
-                text: 'Open Settings',
+                text: t('common.ok'),
                 onPress: () => {
                   if (Platform.OS === 'android') {
                     Linking.openSettings();
@@ -259,7 +261,7 @@ const CollectionScreen = ({ navigation }) => {
                 },
               },
               {
-                text: 'Retry',
+                text: t('common.retry'),
                 onPress: () => resolve('retry'),
               },
             ]
@@ -291,16 +293,16 @@ const CollectionScreen = ({ navigation }) => {
       if (status !== 'granted') {
         const userAction = await new Promise((resolve) => {
           Alert.alert(
-            'Location Permission Required',
-            'Location permission is required to submit the payment. Please grant location permission in app settings.',
+            t('collection.locationPermissionDenied'),
+            t('collection.enableLocation'),
             [
               {
-                text: 'Cancel',
+                text: t('common.cancel'),
                 style: 'cancel',
                 onPress: () => resolve('cancel'),
               },
               {
-                text: 'Open Settings',
+                text: t('common.ok'),
                 onPress: () => {
                   if (Platform.OS === 'android') {
                     Linking.openSettings();
@@ -362,7 +364,7 @@ const CollectionScreen = ({ navigation }) => {
     }
 
     if (!selectedCollection || !selectedCollection.id) {
-      Alert.alert('Error', 'Collection information not available');
+      Alert.alert(t('common.error'), t('collection.noCollections'));
       return;
     }
 
@@ -384,16 +386,16 @@ const CollectionScreen = ({ navigation }) => {
           // Ask user if they want to continue without location
           const shouldContinue = await new Promise((resolve) => {
             Alert.alert(
-              'Location Error',
-              'Failed to get your location. Do you want to continue without location data?',
+              t('collection.locationError'),
+              t('collection.locationError'),
               [
                 {
-                  text: 'Cancel',
+                  text: t('common.cancel'),
                   style: 'cancel',
                   onPress: () => resolve(false),
                 },
                 {
-                  text: 'Continue',
+                  text: t('common.ok'),
                   onPress: () => resolve(true),
                 },
               ]
@@ -429,9 +431,9 @@ const CollectionScreen = ({ navigation }) => {
 
       await apiServices.collection.updateAmount(selectedCollection.id, payload);
       
-      Alert.alert('Success', 'Collection amount updated successfully', [
+      Alert.alert(t('common.success'), t('success.collectionUpdated'), [
         {
-          text: 'OK',
+          text: t('common.ok'),
           onPress: () => {
             setShowPaymentModal(false);
             // Refresh the collection list
@@ -441,7 +443,7 @@ const CollectionScreen = ({ navigation }) => {
       ]);
     } catch (err) {
       console.error('Failed to update collection amount:', err);
-      Alert.alert('Error', err.response?.data?.message || 'Failed to update collection amount. Please try again.');
+      Alert.alert(t('common.error'), err.response?.data?.message || t('errors.somethingWentWrong'));
     } finally {
       setIsSubmitting(false);
     }
@@ -460,7 +462,7 @@ const CollectionScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
       <Header
-        title="Collection"
+        title={t('collection.title')}
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
@@ -471,7 +473,7 @@ const CollectionScreen = ({ navigation }) => {
             <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by phone..."
+              placeholder={t('common.search')}
               placeholderTextColor={COLORS.text.tertiary}
               value={searchText}
               onChangeText={setSearchText}
@@ -500,16 +502,16 @@ const CollectionScreen = ({ navigation }) => {
                 <View style={styles.modalContent}>
                   <View style={styles.modalHeader}>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                      <Text style={styles.modalButton}>Cancel</Text>
+                      <Text style={styles.modalButton}>{t('common.cancel')}</Text>
                     </TouchableOpacity>
-                    <Text style={styles.modalTitle}>Select Date</Text>
+                    <Text style={styles.modalTitle}>{t('collection.selectDate')}</Text>
                     <TouchableOpacity
                       onPress={() => {
                         setShowDatePicker(false);
                         fetchCollectionData(searchText, selectedDate);
                       }}
                     >
-                      <Text style={[styles.modalButton, styles.modalButtonDone]}>Done</Text>
+                      <Text style={[styles.modalButton, styles.modalButtonDone]}>{t('common.ok')}</Text>
                     </TouchableOpacity>
                   </View>
                   <DateTimePicker
@@ -536,18 +538,18 @@ const CollectionScreen = ({ navigation }) => {
         <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
           {loading ? (
             <View style={styles.centerContainer}>
-              <Text style={styles.loadingText}>Loading collection data...</Text>
+              <Text style={styles.loadingText}>{t('collection.loadingCollections')}</Text>
             </View>
           ) : error ? (
             <View style={styles.centerContainer}>
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity style={styles.retryButton} onPress={() => fetchCollectionData('', selectedDate)}>
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : filteredData.length === 0 ? (
             <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>No collections found</Text>
+              <Text style={styles.emptyText}>{t('collection.noCollections')}</Text>
             </View>
           ) : (
             filteredData.map((item) => {
@@ -642,7 +644,7 @@ const CollectionScreen = ({ navigation }) => {
             >
               <SafeAreaView edges={['bottom']}>
                 <View style={styles.paymentModalHeader}>
-                  <Text style={styles.paymentModalTitle}>Collect Payment</Text>
+                  <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
                   <TouchableOpacity onPress={handleClosePaymentModal}>
                     <Ionicons name="close" size={24} color={COLORS.text.secondary} />
                   </TouchableOpacity>
@@ -661,13 +663,13 @@ const CollectionScreen = ({ navigation }) => {
                         {selectedCollection.customerNo} - {selectedCollection.customerName}
                       </Text>
                       <Text style={styles.customerInfoBalance}>
-                        Balance: {selectedCollection.getFormattedBalanceAmount()}
+                        {t('collection.balanceAmount')}: {selectedCollection.getFormattedBalanceAmount()}
                       </Text>
                     </View>
 
                     {/* Payment Mode Radio Buttons */}
                     <View style={styles.paymentModeContainer}>
-                      <Text style={styles.fieldLabel}>Payment Mode</Text>
+                      <Text style={styles.fieldLabel}>{t('collection.paymentMode')}</Text>
                       <View style={styles.radioButtonContainer}>
                         <TouchableOpacity
                           style={styles.radioButton}
@@ -676,7 +678,7 @@ const CollectionScreen = ({ navigation }) => {
                           <View style={styles.radioButtonCircle}>
                             {paymentMode === 'Cash' && <View style={styles.radioButtonInner} />}
                           </View>
-                          <Text style={styles.radioButtonLabel}>Cash</Text>
+                          <Text style={styles.radioButtonLabel}>{t('common.cash')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.radioButton}
@@ -685,20 +687,20 @@ const CollectionScreen = ({ navigation }) => {
                           <View style={styles.radioButtonCircle}>
                             {paymentMode === 'Online' && <View style={styles.radioButtonInner} />}
                           </View>
-                          <Text style={styles.radioButtonLabel}>Online</Text>
+                          <Text style={styles.radioButtonLabel}>{t('common.online')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
 
                     {/* Collected Amount Input */}
                     <View style={styles.inputFieldContainer}>
-                      <Text style={styles.fieldLabel}>Collected Amount *</Text>
+                      <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
                       <TextInput
                         style={[
                           styles.inputField,
                           paymentErrors.collectedAmount && styles.inputFieldError,
                         ]}
-                        placeholder="Enter amount"
+                        placeholder={t('collection.enterAmount')}
                         placeholderTextColor={COLORS.text.tertiary}
                         value={collectedAmount}
                         keyboardType="numeric"
@@ -718,7 +720,7 @@ const CollectionScreen = ({ navigation }) => {
                               // Show error message
                               setPaymentErrors({
                                 ...paymentErrors,
-                                collectedAmount: `Amount cannot exceed balance (${selectedCollection.getFormattedBalanceAmount()})`,
+                                collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
                               });
                               return;
                             }
@@ -740,10 +742,10 @@ const CollectionScreen = ({ navigation }) => {
 
                     {/* Remarks Input */}
                     <View style={styles.inputFieldContainer}>
-                      <Text style={styles.fieldLabel}>Remarks</Text>
+                      <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
                       <TextInput
                         style={[styles.inputField, styles.textArea]}
-                        placeholder="Enter remarks (optional)"
+                        placeholder={t('collection.enterRemarks')}
                         placeholderTextColor={COLORS.text.tertiary}
                         value={remarks}
                         onChangeText={setRemarks}
@@ -759,7 +761,7 @@ const CollectionScreen = ({ navigation }) => {
                       disabled={isSubmitting}
                     >
                       <Text style={styles.submitButtonText}>
-                        {isSubmitting ? 'Submitting...' : 'Submit'}
+                        {isSubmitting ? t('common.loading') : t('common.submit')}
                       </Text>
                     </TouchableOpacity>
                   </ScrollView>

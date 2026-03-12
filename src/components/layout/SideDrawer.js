@@ -3,15 +3,17 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
+import { useLanguage } from '../../store/LanguageContext';
 
 const SideDrawer = ({ isVisible, onClose, navigation }) => {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthContext();
 
   const menuItems = [
     {
       id: 'home',
-      title: 'Home',
+      title: t('home.title'),
       icon: '🏠',
       onPress: () => {
         navigation.navigate('Home');
@@ -20,7 +22,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
     },
     {
       id: 'profile',
-      title: 'Profile',
+      title: t('profile.title'),
       icon: '👤',
       onPress: () => {
         navigation.navigate('Profile');
@@ -29,7 +31,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
     },
     {
       id: 'settings',
-      title: 'Settings',
+      title: t('settings.title'),
       icon: '⚙️',
       onPress: () => {
         navigation.navigate('Settings');
@@ -38,7 +40,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
     },
     {
       id: 'logout',
-      title: 'Logout',
+      title: t('settings.logout'),
       icon: '🚪',
       onPress: async () => {
         await logout();
@@ -67,7 +69,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
                 {user?.firstName} {user?.lastName}
               </Text>
               <Text style={styles.userRole}>
-                {user?.role?.replace('_', ' ') || 'Collection Agent'}
+                {user?.role?.replace('_', ' ') || t('profile.collectionAgent')}
               </Text>
               <Text style={styles.userEmail}>
                 {user?.email}
@@ -98,7 +100,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Collection Agent App v1.0.0
+            {t('settings.collectionAgentApp')} v1.0.0
           </Text>
         </View>
       </View>
