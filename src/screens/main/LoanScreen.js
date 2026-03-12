@@ -1,12 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
+
+const API_BASE_URL = 'http://65.0.100.65:6005';
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const formatLoanDate = (dateStr) => {
   if (!dateStr) return '—';
@@ -56,6 +60,10 @@ const LoanScreen = ({ navigation, route }) => {
 
   // Submit states
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Image viewer states
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
 
   // Location capture function (called on submit)
   const captureLocation = async () => {
@@ -164,6 +172,76 @@ const LoanScreen = ({ navigation, route }) => {
       aadharNumber.trim().length === 12;
   };
 
+  // Get full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    // If it starts with /api, it's already a full path
+    if (imagePath.startsWith('/api')) {
+      return `${API_BASE_URL}${imagePath}`;
+    }
+    // Otherwise, construct full URL (assuming images are in /api/v1/uploads or similar)
+    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `${API_BASE_URL}/api/v1${cleanPath}`;
+  };
+
+  // Handle image icon press
+  const handleImagePress = (imagePath, title) => {
+    const fullUrl = getImageUrl(imagePath);
+    console.log('Full URL:', fullUrl);
+    if (fullUrl) {
+      setSelectedImage({ uri: fullUrl, title });
+      setImageViewerVisible(true);
+    } else {
+      Alert.alert('No Image', `${title} is not available`);
+    }
+  };
+
+  // Close image viewer
+  const closeImageViewer = () => {
+    setImageViewerVisible(false);
+    setSelectedImage(null);
+  };
+
+  // Handle map press for location
+  const handleMapPress = (latitude, longitude, title) => {
+    if (!latitude || !longitude) {
+      Alert.alert('Error', 'Location coordinates not available');
+      return;
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      Alert.alert('Error', 'Invalid location coordinates');
+      return;
+    }
+
+    // Try Google Maps app first, fallback to web
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    const googleMapsAppUrl = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}`;
+    
+    Linking.canOpenURL(googleMapsAppUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(googleMapsAppUrl);
+        } else {
+          return Linking.openURL(googleMapsUrl);
+        }
+      })
+      .catch((err) => {
+        console.error('Error opening Google Maps:', err);
+        Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
+          console.error('Error opening Google Maps web:', fallbackErr);
+          Alert.alert('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
+        });
+      });
+  };
+
   // Handle submission
   const handleSubmit = async () => {
     if (!validateForm()) {
@@ -230,11 +308,12 @@ const LoanScreen = ({ navigation, route }) => {
           {/* Complete Loan Details (when opened from list) */}
           {loan && (
             <View style={styles.loanDetailsCard}>
+              <View style={styles.detailRow}>
               <Text style={styles.loanDetailsTitle}>Loan Details</Text>
               <View style={[styles.loanDetailsBadge, { backgroundColor: loan?.approval_status === '2' ? COLORS.error : loan?.loan_status === '3' ? COLORS.success : COLORS.primary }]}>
                 <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loan)}</Text>
               </View>
-
+</View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Loan ID</Text>
                 <Text style={styles.detailValue}>#{loan?.id ?? '—'}</Text>
@@ -259,46 +338,74 @@ const LoanScreen = ({ navigation, route }) => {
                 <Text style={styles.detailLabel}>Line</Text>
                 <Text style={styles.detailValue}>{loan?.line_name ?? '—'}</Text>
               </View>
+              {loan?.loantype_id != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Loan Type ID</Text>
+                  <Text style={styles.detailValue}>{loan.loantype_id}</Text>
+                </View>
+              )}
 
-              {/* <Text style={styles.detailSectionTitle}>Amounts</Text>
+              {/* Amounts Section */}
+              <Text style={styles.detailSectionTitle}>Amounts</Text>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Loan amount</Text>
-                <Text style={styles.detailValue}>{formatLoanAmount(loan?.loan_amount)}</Text>
+                <Text style={styles.detailValueHighlight}>{formatLoanAmount(loan?.loan_amount)}</Text>
               </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Approved amount</Text>
-                <Text style={styles.detailValue}>{formatLoanAmount(loan?.approved_amount)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Balance amount</Text>
-                <Text style={styles.detailValue}>{formatLoanAmount(loan?.balance_amount)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Interest amount</Text>
-                <Text style={styles.detailValue}>{formatLoanAmount(loan?.intrest_amount)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Processing fees</Text>
-                <Text style={styles.detailValue}>{formatLoanAmount(loan?.processing_fees)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Payment type</Text>
-                <Text style={styles.detailValue}>{loan?.payment_type ?? '—'}</Text>
-              </View> */}
+              {loan?.approved_amount != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Approved amount</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.approved_amount)}</Text>
+                </View>
+              )}
+              {loan?.balance_amount != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Balance amount</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.balance_amount)}</Text>
+                </View>
+              )}
+              {loan?.intrest_amount != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Interest amount</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.intrest_amount)}</Text>
+                </View>
+              )}
+              {loan?.processing_fees != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Processing fees</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.processing_fees)}</Text>
+                </View>
+              )}
+              {loan?.payment_type != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Payment type</Text>
+                  <Text style={styles.detailValue}>{loan.payment_type}</Text>
+                </View>
+              )}
 
-              {/* <Text style={styles.detailSectionTitle}>Dates & Period</Text>
+              {/* Dates & Period Section */}
+              <Text style={styles.detailSectionTitle}>Dates & Period</Text>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Requested date</Text>
                 <Text style={styles.detailValue}>{formatLoanDate(loan?.requested_date)}</Text>
               </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Approved date</Text>
-                <Text style={styles.detailValue}>{formatLoanDate(loan?.approved_date)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Loan period</Text>
-                <Text style={styles.detailValue}>{loan?.loan_period != null ? `${loan.loan_period} months` : '—'}</Text>
-              </View>
+              {loan?.approved_date != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Approved date</Text>
+                  <Text style={styles.detailValue}>{formatLoanDate(loan.approved_date)}</Text>
+                </View>
+              )}
+              {loan?.loan_period != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Loan period</Text>
+                  <Text style={styles.detailValue}>{`${loan.loan_period} months`}</Text>
+                </View>
+              )}
+              {loan?.loan_closed_on != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Closed date</Text>
+                  <Text style={styles.detailValue}>{formatLoanDate(loan.loan_closed_on)}</Text>
+                </View>
+              )}
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Created</Text>
                 <Text style={styles.detailValue}>{formatLoanDate(loan?.created_at)}</Text>
@@ -306,7 +413,42 @@ const LoanScreen = ({ navigation, route }) => {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Updated</Text>
                 <Text style={styles.detailValue}>{formatLoanDate(loan?.updated_at)}</Text>
-              </View> */}
+              </View>
+
+              {/* Location Section */}
+              {(loan?.address_latitude || loan?.address_longitude || loan?.loangiven_latitude || loan?.loangiven_longitude) && (
+                <>
+                  <Text style={styles.detailSectionTitle}>Location</Text>
+                  {loan?.address_latitude && loan?.address_longitude && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Address Location</Text>
+                      <TouchableOpacity
+                        onPress={() => handleMapPress(loan.address_latitude, loan.address_longitude, 'Address Location')}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.locationButton}>
+                          <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+                          <Text style={styles.locationButtonText}>View on Map</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {loan?.loangiven_latitude && loan?.loangiven_longitude && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Loan Given Location</Text>
+                      <TouchableOpacity
+                        onPress={() => handleMapPress(loan.loangiven_latitude, loan.loangiven_longitude, 'Loan Given Location')}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.locationButton}>
+                          <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+                          <Text style={styles.locationButtonText}>View on Map</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              )}
 
               {loan?.reject_reason && (
                 <>
@@ -321,6 +463,67 @@ const LoanScreen = ({ navigation, route }) => {
                   </View>
                 </>
               )}
+
+              {/* Images Section */}
+              <Text style={styles.detailSectionTitle}>Documents</Text>
+              <View style={styles.imagesRow}>
+                <TouchableOpacity
+                  style={styles.imageIconContainer}
+                  onPress={() => handleImagePress(loan?.customer_photo, 'Customer Photo')}
+                  activeOpacity={0.7}
+                >
+                  {loan?.customer_photo ? (
+                    <Image
+                      source={{ uri: getImageUrl(loan.customer_photo) }}
+                      style={styles.imageIcon}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.imageIconPlaceholder}>
+                      <Ionicons name="person-outline" size={32} color={COLORS.text.tertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.imageIconLabel}>Customer Photo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.imageIconContainer}
+                  onPress={() => handleImagePress(loan?.address_proof, 'Address Proof')}
+                  activeOpacity={0.7}
+                >
+                  {loan?.address_proof ? (
+                    <Image
+                      source={{ uri: getImageUrl(loan.address_proof) }}
+                      style={styles.imageIcon}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.imageIconPlaceholder}>
+                      <Ionicons name="home-outline" size={32} color={COLORS.text.tertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.imageIconLabel}>Address Proof</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.imageIconContainer}
+                  onPress={() => handleImagePress(loan?.loangiven_photo, 'Loan Given Photo')}
+                  activeOpacity={0.7}
+                >
+                  {loan?.loangiven_photo ? (
+                    <Image
+                      source={{ uri: getImageUrl(loan.loangiven_photo) }}
+                      style={styles.imageIcon}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.imageIconPlaceholder}>
+                      <Ionicons name="document-text-outline" size={32} color={COLORS.text.tertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.imageIconLabel}>Loan Given Photo</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -343,6 +546,43 @@ const LoanScreen = ({ navigation, route }) => {
           )}
         </TouchableOpacity>
       </SafeAreaView>
+
+      {/* Full Image Viewer Modal */}
+      <Modal
+        visible={imageViewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeImageViewer}
+      >
+        <View style={styles.imageViewerContainer}>
+          <SafeAreaView style={styles.imageViewerSafeArea}>
+            <View style={styles.imageViewerHeader}>
+              <Text style={styles.imageViewerTitle}>{selectedImage?.title || 'Image'}</Text>
+              <TouchableOpacity
+                style={styles.imageViewerCloseButton}
+                onPress={closeImageViewer}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={28} color={COLORS.white} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.imageViewerScrollContent}
+              showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
+              bounces={false}
+            >
+              {selectedImage && (
+                <Image
+                  source={{ uri: selectedImage.uri }}
+                  style={styles.fullImage}
+                  resizeMode="contain"
+                />
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );
@@ -708,6 +948,98 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: COLORS.white,
     fontSize: SIZES.body1,
+    fontWeight: '600',
+  },
+  imagesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SIZES.margin,
+    paddingTop: SIZES.margin,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  imageIconContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: SIZES.base / 2,
+  },
+  imageIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+  },
+  imageIconPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+  },
+  imageIconLabel: {
+    fontSize: SIZES.body4,
+    color: COLORS.text.secondary,
+    marginTop: SIZES.base / 2,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  imageViewerSafeArea: {
+    flex: 1,
+  },
+  imageViewerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding * 0.75,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  imageViewerTitle: {
+    fontSize: SIZES.h4,
+    fontWeight: '600',
+    color: COLORS.white,
+    flex: 1,
+  },
+  imageViewerCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageViewerScrollContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: SCREEN_HEIGHT * 0.7,
+    paddingVertical: SIZES.padding * 2,
+  },
+  fullImage: {
+    width: SCREEN_WIDTH - (SIZES.padding * 2),
+    height: SCREEN_HEIGHT * 0.7,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: SIZES.base,
+    paddingVertical: SIZES.base * 0.5,
+    borderRadius: SIZES.radius,
+    gap: SIZES.base * 0.5,
+  },
+  locationButtonText: {
+    fontSize: SIZES.body4,
+    color: COLORS.primary,
     fontWeight: '600',
   },
 });

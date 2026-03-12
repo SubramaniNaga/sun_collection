@@ -48,7 +48,7 @@ const HomeScreen = ({ navigation }) => {
     },
     {
       id: 'nip',
-      title: 'NIP Services',
+      title: 'NIP',
       icon: 'link-outline',
       onPress: () => navigation.navigate('NIP'),
     },

@@ -3,7 +3,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Linking,
   StyleSheet,
   Text,
   TextInput,
@@ -118,6 +120,58 @@ const LoanCustomerListScreen = ({ navigation }) => {
     navigation.navigate('CustomerWithLoan');
   };
 
+  const handlePhonePress = (phoneNumber) => {
+    if (!phoneNumber) return;
+    const phoneUrl = `tel:${phoneNumber}`;
+    Linking.openURL(phoneUrl)
+      .then((supported) => {
+        if (!supported) {
+          Alert.alert('Error', 'Phone dialer not available');
+        }
+      })
+      .catch((err) => {
+        console.error('Error opening phone dialer:', err);
+        Alert.alert('Error', 'Could not open phone dialer');
+      });
+  };
+
+  const handleMapPress = (latitude, longitude) => {
+    if (!latitude || !longitude) {
+      Alert.alert('Error', 'Location coordinates not available');
+      return;
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      Alert.alert('Error', 'Invalid location coordinates');
+      return;
+    }
+
+    // Try Google Maps app first, fallback to web
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    const googleMapsAppUrl = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}`;
+    
+    // Try to open Google Maps app, fallback to web
+    Linking.canOpenURL(googleMapsAppUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(googleMapsAppUrl);
+        } else {
+          return Linking.openURL(googleMapsUrl);
+        }
+      })
+      .catch((err) => {
+        console.error('Error opening Google Maps:', err);
+        // Fallback to web version
+        Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
+          console.error('Error opening Google Maps web:', fallbackErr);
+          Alert.alert('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
+        });
+      });
+  };
+
   const getStatusLabel = (loan) => {
     const approval = loan?.approval_status;
     const loanStatus = loan?.loan_status;
@@ -183,12 +237,41 @@ const LoanCustomerListScreen = ({ navigation }) => {
       )}
       <View style={styles.loanCardRow}>
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>Branch</Text>
-        <Text style={styles.loanCardValue} numberOfLines={1}>{item?.branch ?? '—'}</Text>
+        <Text style={styles.loanCardLabel}>Balance Amount</Text>
+        <Text style={styles.loanCardValue} numberOfLines={1}>{item?.balance_amount ?? '—'}</Text>
       </View>
-      <View style={styles.loanCardFooter}>
+      <View style={styles.loanCardRow}>
+        <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+        <Text style={styles.loanCardLabel}>Loan Period</Text>
+        <Text style={styles.loanCardValue} numberOfLines={1}>{item?.loan_period != null ? `${item?.loan_period}/${item?.loan_period_type}` : '—'}</Text>
+      </View>
+        <View style={styles.loanCardFooter}>
         <Text style={styles.loanCardDate}>Requested {formatDate(item?.requested_date)}</Text>
-        <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+        <View style={styles.loanCardFooterIcons}>
+          {item?.address_latitude && item?.address_longitude && (
+            <TouchableOpacity
+              style={styles.loanCardIconButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleMapPress(item.address_latitude, item.address_longitude);
+              }}
+            >
+              <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
+          {item?.customer_phone && (
+            <TouchableOpacity
+              style={styles.loanCardIconButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handlePhonePress(item.customer_phone);
+              }}
+            >
+              <Ionicons name="call" size={18} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
+          <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -242,9 +325,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
 
       <Header
-        title="Loan Renewal"
+        title="Loan Management"
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
+        rightComponent={
+          <TouchableOpacity
+            onPress={handleAddPress}
+            style={styles.headerAddButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        }
       />
 
       <View style={styles.searchSection}>
@@ -285,14 +377,6 @@ const LoanCustomerListScreen = ({ navigation }) => {
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
       />
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleAddPress}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={24} color={COLORS.white} />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -337,11 +421,11 @@ const styles = StyleSheet.create({
   },
   customerListContainer: {
     padding: SIZES.padding,
-    paddingBottom: 100,
+    paddingBottom: SIZES.padding,
   },
   customerListContainerEmpty: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: SIZES.padding,
   },
   centerWrap: {
     flex: 1,
@@ -449,6 +533,20 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body4 || 12,
     color: COLORS.text?.tertiary || '#666',
   },
+  loanCardFooterIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.base / 2,
+  },
+  loanCardIconButton: {
+    padding: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+  },
   statusBadge: {
     paddingHorizontal: SIZES.base,
     paddingVertical: SIZES.base * 0.25,
@@ -484,21 +582,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray || '#e9ecef',
     borderRadius: SIZES.radius / 2,
   },
-  fab: {
-    position: 'absolute',
-    bottom: SIZES.padding * 5,
-    right: SIZES.padding * 2,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.primary,
+  headerAddButton: {
+    padding: SIZES.padding / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
 });
 

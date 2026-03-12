@@ -24,6 +24,7 @@ export const ENDPOINTS = {
   },
   LOAN: {
     LIST: '/loan',
+    NIP: '/loan/nip',
   },
 };
 

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearSession } from '../../utils/sessionManager';
 import { getDeviceId } from '../../utils/deviceId';
+import { clearSession } from '../../utils/sessionManager';
 import apiClient from '../apiClient';
 import ENDPOINTS from '../endpoints';
 
@@ -264,6 +264,37 @@ export const apiServices = {
         return response.data;
       } catch (error) {
         console.error('Get loan list error:', error);
+        throw error;
+      }
+    },
+
+    getNIPList: async (params = {}) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        const lineId = await AsyncStorage.getItem('lineId');
+
+        if (!branchId || !lineId) {
+          throw new Error('Branch ID or Line ID not found. Please log in again.');
+        }
+        const {
+          search = '',
+          page = 1,
+          limit = 20,
+        } = params;
+        const requestParams = {
+          branch_id: branchId || 1,
+          line_id: lineId || 1,
+          ...(search && { search }),
+          page,
+          limit,
+        };
+        console.log('🔗 API: getNIPList - GET', ENDPOINTS.LOAN.NIP, '| params:', JSON.stringify(requestParams, null, 2));
+        const response = await apiClient.get(ENDPOINTS.LOAN.NIP, { params: requestParams });
+        const list = response.data?.data ?? response.data;
+        console.log('🔗 API: getNIPList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
+        return response.data;
+      } catch (error) {
+        console.error('Get NIP list error:', error);
         throw error;
       }
     }
