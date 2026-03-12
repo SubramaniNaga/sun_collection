@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SIZES.padding,
-    paddingBottom: SIZES.padding * 2, // Reduced padding since button is fixed
+    paddingBottom: SIZES.padding * 4, // Reduced padding since button is fixed
   },
   loanDetailsCard: {
     backgroundColor: COLORS.white,

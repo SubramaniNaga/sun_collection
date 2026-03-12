@@ -5,7 +5,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Linking,
+  Modal,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +21,15 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 
 const LIMIT = 10;
+const API_BASE_URL = 'http://65.0.100.65:6005';
+
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+  if (imagePath.startsWith('/api')) return `${API_BASE_URL}${imagePath}`;
+  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${API_BASE_URL}/api/v1${cleanPath}`;
+};
 
 // Custom skeleton loader (no package)
 const LoanListSkeleton = () => (
@@ -46,6 +57,8 @@ const LoanCustomerListScreen = ({ navigation }) => {
     hasNextPage: false,
     totalPages: 1,
   });
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [photoModalUri, setPhotoModalUri] = useState(null);
   const fetchLoans = useCallback(async (page = 1, append = false) => {
     try {
       if (page === 1) {
@@ -210,6 +223,14 @@ const LoanCustomerListScreen = ({ navigation }) => {
     return isNaN(num) ? val : `₹${num.toLocaleString('en-IN')}`;
   };
 
+  const openPhotoModal = (imagePath) => {
+    const uri = getImageUrl(imagePath);
+    if (uri) {
+      setPhotoModalUri(uri);
+      setPhotoModalVisible(true);
+    }
+  };
+
   const renderLoanItem = ({ item }) => (
     <TouchableOpacity
       style={styles.loanCard}
@@ -217,6 +238,29 @@ const LoanCustomerListScreen = ({ navigation }) => {
       activeOpacity={0.7}
     >
       <View style={styles.loanCardHeader}>
+        <TouchableOpacity
+          style={styles.loanCardPhotoWrap}
+          onPress={(e) => {
+            e.stopPropagation();
+            openPhotoModal(item?.customer_photo);
+          }}
+          activeOpacity={0.8}
+        >
+          {item?.customer_photo ? (
+            <Image
+              source={{ uri: getImageUrl(item.customer_photo) }}
+              style={styles.loanCardPhoto}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.loanCardPhotoPlaceholder}>
+              <Ionicons name="person" size={20} color={COLORS.text.tertiary} />
+            </View>
+          )}
+        </TouchableOpacity>
+        <Text style={styles.loanCardCustomerNo} numberOfLines={1}>
+          {item?.customer_no ?? '—'}
+        </Text>
         <Text style={styles.loanCardName} numberOfLines={1}>
           {item?.customer_name ?? '—'}
         </Text>
@@ -377,6 +421,36 @@ const LoanCustomerListScreen = ({ navigation }) => {
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
       />
+
+      <Modal
+        visible={photoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.photoModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPhotoModalVisible(false)}
+        >
+          <View style={styles.photoModalContent}>
+            <TouchableOpacity
+              style={styles.photoModalClose}
+              onPress={() => setPhotoModalVisible(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close-circle" size={36} color={COLORS.white} />
+            </TouchableOpacity>
+            {photoModalUri ? (
+              <Image
+                source={{ uri: photoModalUri }}
+                style={styles.photoModalImage}
+                resizeMode="contain"
+              />
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -491,12 +565,59 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  loanCardPhotoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginRight: SIZES.base,
+  },
+  loanCardPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  loanCardPhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loanCardCustomerNo: {
+    fontSize: SIZES.body2,
+    color: COLORS.text.secondary,
+    marginRight: 0,
+    minWidth: 32,
+  },
   loanCardName: {
+    flex: 1,
     fontSize: SIZES.body1,
     fontWeight: '700',
     color: COLORS.text?.primary || COLORS.primary,
+    marginRight: 0,
+    minWidth: 0,
+  },
+  photoModalBackdrop: {
     flex: 1,
-    marginRight: SIZES.base,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+  },
+  photoModalImage: {
+    width: '100%',
+    height: '80%',
   },
   loanCardRow: {
     flexDirection: 'row',

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
@@ -16,6 +17,8 @@ const ProfileScreen = ({ navigation }) => {
   const { user, updateUser } = useAuthContext();
   const { language, changeLanguage, t } = useLanguage();
   const [isEditing, setIsEditing] = useState(false);
+  const [branchId, setBranchId] = useState(null);
+  const [lineId, setLineId] = useState(null);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -38,6 +41,14 @@ const ProfileScreen = ({ navigation }) => {
     });
     setIsEditing(false);
   };
+
+  useEffect(() => {
+    AsyncStorage.getItem('branchId').then(setBranchId);
+    AsyncStorage.getItem('lineId').then(setLineId);
+  }, []);
+
+  const displayBranchId = user?.branch_id ?? user?.branchId ?? branchId ?? 'N/A';
+  const displayLineId = user?.line_id ?? user?.lineId ?? lineId ?? 'N/A';
 
   const handleLanguageChange = (newLanguage) => {
     Alert.alert(
@@ -117,33 +128,52 @@ const ProfileScreen = ({ navigation }) => {
 
       <ScrollView 
         style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}editProfile
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
         <Card style={styles.profileCard}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatar}>
+          <View style={styles.profileTop}>
+            <View style={styles.avatarWrap}>
               <Text style={styles.avatarText}>
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </Text>
             </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
-                {user?.name || t('profile.user')}
-              </Text>
-              <Text style={styles.profileRole}>
+            <Text style={styles.profileName}>
+              {user?.name || t('profile.user')}
+            </Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>
                 {user?.role === '1' ? t('profile.collectionAgent') : user?.role || t('profile.collectionAgent')}
               </Text>
-              <Text style={styles.profileId}>
-                {t('common.phone')}: {user?.phone || 'N/A'}
-              </Text>
-              <Text style={styles.profileId}>
-                {t('profile.id')}: {user?.id || 'N/A'}
-              </Text>
-              <Text style={styles.profileId}>
-                {t('profile.device')}: {user?.device || 'N/A'}
-              </Text>
+            </View>
+          </View>
+          <View style={styles.profileDivider} />
+          <View style={styles.profileDetails}>
+            <View style={styles.detailRow}>
+              <Ionicons name="call-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>{t('common.phone')}</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>{user?.phone || 'N/A'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="id-card-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>{t('profile.id')}</Text>
+              <Text style={styles.detailValue}>{user?.id ?? 'N/A'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="phone-portrait-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>{t('profile.device')}</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>{user?.device || 'N/A'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="business-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>{t('profile.branchId')}</Text>
+              <Text style={styles.detailValue}>{displayBranchId}</Text>
+            </View>
+            <View style={[styles.detailRow, styles.detailRowLast]}>
+              <Ionicons name="git-branch-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>{t('profile.lineId')}</Text>
+              <Text style={styles.detailValue}>{displayLineId}</Text>
             </View>
           </View>
         </Card>
@@ -200,38 +230,6 @@ const ProfileScreen = ({ navigation }) => {
           </Card>
         )}
 
-        {/* Profile Information */}
-        <Card style={styles.infoCard}>
-          <Text style={styles.infoTitle}>{t('profile.profileInformation')}</Text>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{t('profile.email')}</Text>
-            <Text style={styles.infoValue}>{user?.email}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{t('profile.phone')}</Text>
-            <Text style={styles.infoValue}>{user?.phone}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{t('profile.region')}</Text>
-            <Text style={styles.infoValue}>{user?.assignedRegionId || t('profile.notAssigned')}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{t('profile.joiningDate')}</Text>
-            <Text style={styles.infoValue}>{user?.joiningDate || 'N/A'}</Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{t('profile.accountStatus')}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: user?.accountStatus === 'ACTIVE' ? COLORS.primary : COLORS.secondary }]}>
-              <Text style={styles.statusText}>{user?.accountStatus === 'ACTIVE' ? t('profile.active') : t('profile.unknown')}</Text>
-            </View>
-          </View>
-        </Card>
-
         {/* Menu Options */}
         <View style={styles.menuSection}>
           {menuItems.map((item) => (
@@ -263,45 +261,82 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     margin: SIZES.padding,
-    padding: SIZES.padding * 2,
-    marginBottom: SIZES.padding * 2,
+    padding: 0,
+    marginBottom: SIZES.padding * 1.5,
+    overflow: 'hidden',
   },
-  profileHeader: {
-    flexDirection: 'row',
+  profileTop: {
     alignItems: 'center',
+    paddingVertical: SIZES.padding * 1.5,
+    paddingHorizontal: SIZES.padding,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatarWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SIZES.padding * 1.5,
+    marginBottom: SIZES.margin,
   },
   avatarText: {
-    fontSize: SIZES.h1,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '700',
     color: COLORS.white,
   },
-  profileInfo: {
-    flex: 1,
-  },
   profileName: {
-    fontSize: SIZES.h2,
-    fontWeight: 'bold',
+    fontSize: SIZES.h3,
+    fontWeight: '700',
     color: COLORS.text.primary,
-    marginBottom: SIZES.base / 2,
+    marginBottom: SIZES.base,
+    textAlign: 'center',
   },
-  profileRole: {
-    fontSize: SIZES.body2,
-    color: COLORS.text.secondary,
-    marginBottom: SIZES.base / 2,
+  roleBadge: {
+    backgroundColor: COLORS.primary + '18',
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base / 2,
+    borderRadius: SIZES.radius * 2,
+  },
+  roleBadgeText: {
+    fontSize: SIZES.body3,
+    color: COLORS.primary,
+    fontWeight: '600',
     textTransform: 'capitalize',
   },
-  profileId: {
+  profileDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: SIZES.padding,
+  },
+  profileDetails: {
+    paddingVertical: SIZES.margin,
+    paddingHorizontal: SIZES.padding,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SIZES.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  detailRowLast: {
+    borderBottomWidth: 0,
+  },
+  detailIcon: {
+    marginRight: SIZES.base,
+    width: 24,
+  },
+  detailLabel: {
     fontSize: SIZES.body3,
     color: COLORS.text.tertiary,
+    width: 90,
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: SIZES.body2,
+    color: COLORS.text.primary,
+    fontWeight: '500',
+    textAlign: 'right',
   },
   editCard: {
     margin: SIZES.padding,

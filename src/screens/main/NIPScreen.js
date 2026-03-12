@@ -5,7 +5,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Linking,
+  Modal,
   StyleSheet,
   Text,
   TextInput,
@@ -20,14 +22,25 @@ import NIPLoan from '../../models/NIPLoan';
 import { useLanguage } from '../../store/LanguageContext';
 
 const LIMIT = 20;
+const API_BASE_URL = 'http://65.0.100.65:6005';
 
-// Dummy data for fallback
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+  if (imagePath.startsWith('/api')) return `${API_BASE_URL}${imagePath}`;
+  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${API_BASE_URL}/api/v1${cleanPath}`;
+};
+
+// Dummy data for fallback (customer_photo optional; same keys as API when response available)
 const getDummyData = () => [
   {
     id: 1,
+    customer_id: 1,
     customer_name: 'John Doe',
     customer_phone: '9876543210',
     customer_no: '001',
+    customer_photo: null,
     loan_amount: '50000.00',
     approved_amount: '45000.00',
     balance_amount: '30000.00',
@@ -42,9 +55,11 @@ const getDummyData = () => [
   },
   {
     id: 2,
+    customer_id: 2,
     customer_name: 'Jane Smith',
     customer_phone: '9876543211',
     customer_no: '002',
+    customer_photo: null,
     loan_amount: '75000.00',
     approved_amount: '70000.00',
     balance_amount: '50000.00',
@@ -59,9 +74,11 @@ const getDummyData = () => [
   },
   {
     id: 3,
+    customer_id: 3,
     customer_name: 'Robert Johnson',
     customer_phone: '9876543212',
     customer_no: '003',
+    customer_photo: null,
     loan_amount: '100000.00',
     approved_amount: null,
     balance_amount: null,
@@ -102,6 +119,8 @@ const NIPScreen = ({ navigation }) => {
     hasNextPage: false,
     totalPages: 1,
   });
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [photoModalUri, setPhotoModalUri] = useState(null);
 
   const fetchNIPLoans = useCallback(async (page = 1, append = false) => {
     try {
@@ -250,6 +269,17 @@ const NIPScreen = ({ navigation }) => {
     return isNaN(num) ? val : `₹${num.toLocaleString('en-IN')}`;
   };
 
+  const openPhotoModal = (imagePath) => {
+    const uri = getImageUrl(imagePath);
+    if (uri) {
+      setPhotoModalUri(uri);
+      setPhotoModalVisible(true);
+    }
+  };
+
+  // customer_id or customer_no (NIPLoan: customerId, customerNo; raw API: customer_id, customer_no)
+  const getCustomerIdDisplay = (item) => item?.customerId ?? item?.customerNo ?? item?.customer_id ?? item?.customer_no ?? '—';
+
   const renderNIPItem = ({ item }) => (
     <TouchableOpacity
       style={styles.nipCard}
@@ -257,6 +287,29 @@ const NIPScreen = ({ navigation }) => {
       activeOpacity={0.7}
     >
       <View style={styles.nipCardHeader}>
+        <TouchableOpacity
+          style={styles.nipCardPhotoWrap}
+          onPress={(e) => {
+            e.stopPropagation();
+            openPhotoModal(item?.customerPhoto ?? item?.customer_photo);
+          }}
+          activeOpacity={0.8}
+        >
+          {(item?.customerPhoto ?? item?.customer_photo) ? (
+            <Image
+              source={{ uri: getImageUrl(item?.customerPhoto ?? item?.customer_photo) }}
+              style={styles.nipCardPhoto}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.nipCardPhotoPlaceholder}>
+              <Ionicons name="person" size={20} color={COLORS.text.tertiary} />
+            </View>
+          )}
+        </TouchableOpacity>
+        <Text style={styles.nipCardCustomerId} numberOfLines={1}>
+          {getCustomerIdDisplay(item)}
+        </Text>
         <Text style={styles.nipCardName} numberOfLines={1}>
           {item?.customerName ?? '—'}
         </Text>
@@ -418,6 +471,36 @@ const NIPScreen = ({ navigation }) => {
           ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
         />
       )}
+
+      <Modal
+        visible={photoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.photoModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPhotoModalVisible(false)}
+        >
+          <View style={styles.photoModalContent}>
+            <TouchableOpacity
+              style={styles.photoModalClose}
+              onPress={() => setPhotoModalVisible(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close-circle" size={36} color={COLORS.white} />
+            </TouchableOpacity>
+            {photoModalUri ? (
+              <Image
+                source={{ uri: photoModalUri }}
+                style={styles.photoModalImage}
+                resizeMode="contain"
+              />
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -504,13 +587,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SIZES.margin * 0.75,
+    paddingBottom: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  nipCardPhotoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginRight: SIZES.base,
+  },
+  nipCardPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  nipCardPhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nipCardCustomerId: {
+    fontSize: SIZES.body2,
+    color: COLORS.text.secondary,
+    marginRight: 0,
+    minWidth: 20,
   },
   nipCardName: {
-    fontSize: SIZES.h4,
-    fontWeight: '600',
-    color: COLORS.text.primary,
     flex: 1,
+    fontSize: SIZES.body1,
+    fontWeight: '700',
+    color: COLORS.text?.primary || COLORS.primary,
     marginRight: SIZES.base,
+    minWidth: 0,
   },
   statusBadge: {
     paddingHorizontal: SIZES.base,
@@ -612,6 +723,28 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: SIZES.body2,
     fontWeight: '600',
+  },
+  photoModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+  },
+  photoModalImage: {
+    width: '100%',
+    height: '80%',
   },
 });
 
