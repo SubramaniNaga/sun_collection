@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
 import { Alert, Image, Pressable, Text, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
+import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const CustomImagePicker = ({
   image,
@@ -13,44 +14,27 @@ const CustomImagePicker = ({
   const pickImage = async (source) => {
     if (!editable) return;
 
-    let result;
     try {
       if (source === 'camera') {
-        // Request camera permission
         const cameraPermission = await ExpoImagePicker.requestCameraPermissionsAsync();
         if (!cameraPermission.granted) {
           Alert.alert('Permission Required', 'Camera permission is required to take photos.');
           return;
         }
-
-        result = await ExpoImagePicker.launchCameraAsync({
-          mediaTypes: ExpoImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
+        const asset = await pickFromCamera([4, 3]);
+        if (asset) onImageChange(asset);
       } else {
-        // Request media library permission
         const mediaPermission = await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
         if (!mediaPermission.granted) {
           Alert.alert('Permission Required', 'Gallery permission is required to select photos.');
           return;
         }
-
-        result = await ExpoImagePicker.launchImageLibraryAsync({
-          mediaTypes: ExpoImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-      }
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        onImageChange(result.assets[0]);
+        const asset = await pickFromLibrary([4, 3]);
+        if (asset) onImageChange(asset);
       }
     } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      console.error('Image picker error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || 'Failed to pick image. Please try again.');
     }
   };
 

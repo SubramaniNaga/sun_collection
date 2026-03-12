@@ -1,91 +1,94 @@
- import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '—';
+  try { return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  catch { return String(dateStr); }
+};
+
+const formatAmount = (val) => {
+  if (val == null || val === '') return '—';
+  const num = parseFloat(val);
+  return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
+};
+
+const DetailRow = ({ label, value }) => (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <Text style={styles.detailValue} numberOfLines={2}>{value ?? '—'}</Text>
+  </View>
+);
+
 const CollectionDetailsScreen = ({ route, navigation }) => {
-  const { item } = route.params;
+  const item = route.params?.item ?? {};
   const [amountToPay, setAmountToPay] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Mock data for due information
-  const dueData = {
-    paymentFrequency: item.paymentFrequency || 'monthly', // 'monthly' or 'weekly'
-    dueDate: item.dueDate || '20', // day of month or day of week
-    currentDue: item.currentDue || 11, // current due amount
+  const handlePhonePress = () => {
+    if (!item.customer_phone) return;
+    Linking.openURL(`tel:${item.customer_phone}`).catch(() =>
+      Alert.alert('Error', 'Could not open phone dialer')
+    );
   };
 
-  // Get appropriate date display based on payment frequency
-  const getDueDateDisplay = () => {
-    if (dueData.paymentFrequency === 'monthly') {
-      return `${dueData.dueDate}/20`; // showing as "day/month" format
-    } else if (dueData.paymentFrequency === 'weekly') {
-      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      return weekdays[dueData.dueDate % 7] || 'Mon'; // showing weekday
+  const calculateTotal = () => parseFloat(amountToPay) || 0;
+
+  const handleAddPayment = async () => {
+    const total = calculateTotal();
+    if (total <= 0) {
+      Alert.alert('Invalid', 'Please enter an amount greater than 0.');
+      return;
     }
-    return dueData.dueDate;
-  };
-
-  // Mock data for appropriation
-  const appropriationData = {
-    dueAmount: { display: '₹5,000', value: 5000 },
-    arrearAmount: { display: '₹1,200', value: 1200 },
-    expensesAmount: { display: '₹200', value: 200 },
-    penalCharge: { display: '₹100', value: 100 },
-    cashCollectionCharge: { display: '₹50', value: 50 },
-    handlingCharges: { display: '₹30', value: 30 },
-  };
-
-  // State for appropriation input fields
-  const [appropriationInputs, setAppropriationInputs] = useState({
-    dueAmount: '',
-    arrearAmount: '',
-    expensesAmount: '',
-    penalCharge: '',
-    cashCollectionCharge: '',
-    handlingCharges: '',
-  });
-
-  // Handle input change with validation
-  const handleAppropriationChange = (field, value) => {
-    const maxValue = appropriationData[field].value;
-    // Remove ₹ symbol and any non-numeric characters except decimal point
-    const cleanValue = value.replace(/[₹,]/g, '');
-    const numValue = parseFloat(cleanValue) || 0;
-
-    // Validate: don't allow negative values or values greater than max
-    if (numValue < 0 || numValue > maxValue) {
-      return; // Don't update if invalid
+    const collectionId = item.id;
+    if (collectionId == null) {
+      Alert.alert('Error', 'Collection ID not found.');
+      return;
     }
-
-    setAppropriationInputs(prev => ({
-      ...prev,
-      [field]: cleanValue
-    }));
-  };
-
-  // Format input value with ₹ symbol for display
-  const formatInputValue = (value) => {
-    return value ? `₹${value}` : '';
-  };
-
-  const calculateTotal = () => {
-    // Only include amountToPay, all appropriation functionality is commented out
-    return parseFloat(amountToPay) || 0;
-  };
-
-  const handleAddPayment = () => {
-    // Only send amountToPay, appropriation functionality is commented out
-    const paymentData = {
-      item: item,
-      amountToPay: parseFloat(amountToPay) || 0,
-      total: calculateTotal()
-    };
-    
-    console.log('Payment added:', paymentData);
-    // Here you would typically send this data to your API
-    Alert.alert('Success', `Payment of ₹${paymentData.total.toFixed(2)} added successfully!`);
+    try {
+      setSubmitting(true);
+      const response = await apiServices.collection.updateAmount(collectionId, {
+        amount_paid: total,
+      });
+      const success = response?.success !== false && (response?.status === 200 || response?.status === undefined);
+      const data = response?.data ?? response;
+      if (success && data) {
+        const amountPaid = data.amount_paid ?? total;
+        const balanceAmount = data.balance_amount;
+        const collectionWeek = data.collection_week;
+        const paidStr = (amountPaid != null && amountPaid !== '') ? `₹${Number(amountPaid).toLocaleString('en-IN')}` : '—';
+        const balanceStr = (balanceAmount != null && balanceAmount !== '') ? `₹${Number(balanceAmount).toLocaleString('en-IN')}` : '—';
+        const weekStr = collectionWeek != null ? String(collectionWeek) : '—';
+        Alert.alert(
+          'Collection amount updated successfully',
+          `Amount Paid: ${paidStr}\nBalance Amount: ${balanceStr}\nCollection Week: ${weekStr}`,
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                try {
+                  await apiServices.collection.getCollectionList();
+                } catch (_) {}
+                navigation.goBack();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', response?.message || 'Failed to update collection amount.');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to update collection amount.';
+      Alert.alert('Error', msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -104,38 +107,64 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Basic Details Card */}
+          {/* Customer */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Basic Details</Text>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Name</Text>
-              <Text style={styles.detailValue}>{item.name}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Account No</Text>
-              <Text style={styles.detailValue}>{item.accountNo}</Text>
-            </View>
+            <Text style={styles.cardTitle}>Customer</Text>
+            <DetailRow label="Name" value={item.customer_name} />
+            <DetailRow label="Customer No" value={item.customer_no} />
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Phone</Text>
-              <Text style={styles.detailValue}>{item.phone}</Text>
+              <TouchableOpacity onPress={handlePhonePress} style={styles.phoneTouchable}>
+                <Text style={[styles.detailValue, styles.phoneLink]}>{item.customer_phone ?? '—'}</Text>
+                <Ionicons name="call" size={16} color={COLORS.primary} style={styles.phoneIcon} />
+              </TouchableOpacity>
             </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Due</Text>
-              <Text style={styles.detailValue}>{getDueDateDisplay()}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Current Due</Text>
-              <Text style={styles.detailValue}>{dueData.currentDue}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Vehicle No</Text>
-              <Text style={styles.detailValue}>{item.vehicleNo}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Assets</Text>
-              <Text style={styles.detailValue}>{item.assets}</Text>
-            </View>
+            <DetailRow label="Address" value={item.customer_address} />
           </View>
+
+          {/* Collection */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Collection</Text>
+            {/* <DetailRow label="Collection ID" value={item.id != null ? String(item.id) : null} /> */}
+            <DetailRow label="Collection Week" value={item.collection_week != null ? `Week ${item.collection_week}` : null} />
+            <DetailRow label="Collection Date" value={item.collection_date ? formatDate(item.collection_date) : null} />
+            <DetailRow label="Amount Paid" value={formatAmount(item.amount_paid)} />
+            <DetailRow label="Balance Amount" value={formatAmount(item.balance_amount)} />
+            {(item.notes != null && item.notes !== '') && <DetailRow label="Notes" value={item.notes} />}
+          </View>
+
+          {/* Loan */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Loan</Text>
+            <DetailRow label="Loan ID" value={item.loan_id != null ? String(item.loan_id) : null} />
+            <DetailRow label="Loan Amount" value={formatAmount(item.loan_amount)} />
+            <DetailRow label="Approved Amount" value={formatAmount(item.approved_amount)} />
+            <DetailRow label="Loan Period" value={item.loan_period != null ? `${item.loan_period} months` : null} />
+            <DetailRow label="Approval Status" value={item.approval_status != null ? String(item.approval_status) : null} />
+          </View>
+
+          {/* Branch & Line */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Branch & Line</Text>
+            <DetailRow label="Branch" value={item.branch_name} />
+            {/* <DetailRow label="Branch ID" value={item.branch_id != null ? String(item.branch_id) : null} /> */}
+            <DetailRow label="Line" value={item.line_name} />
+            {/* <DetailRow label="Line ID" value={item.line_id != null ? String(item.line_id) : null} /> */}
+            <DetailRow label="Employee" value={item.employeename} />
+            {/* <DetailRow label="Employee ID" value={item.employee_id != null ? String(item.employee_id) : null} /> */}
+            {/* <DetailRow label="Customer ID" value={item.customer_id != null ? String(item.customer_id) : null} /> */}
+            <DetailRow label="Locality" value={item.locality} />
+          </View>
+
+          {/* Timestamps */}
+          {/* <View style={styles.card}>
+            <Text style={styles.cardTitle}>Reference</Text>
+            <DetailRow label="Created At" value={item.created_at ? formatDate(item.created_at) : null} />
+            <View style={[styles.detailRow, styles.detailRowLast]}>
+              <Text style={styles.detailLabel}>Updated At</Text>
+              <Text style={styles.detailValue} numberOfLines={2}>{item.updated_at ? formatDate(item.updated_at) : '—'}</Text>
+            </View>
+          </View> */}
 
           {/* Amount to Pay Card */}
           <View style={styles.card}>
@@ -167,8 +196,8 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
             <Text style={styles.totalLabel}>Total Amount</Text>
             <Text style={styles.totalValue}>₹{calculateTotal().toFixed(2)}</Text>
           </View>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddPayment}>
-            <Text style={styles.addButtonText}>Add Payment</Text>
+          <TouchableOpacity style={styles.addButton} onPress={handleAddPayment} disabled={submitting}>
+            <Text style={styles.addButtonText}>{submitting ? 'Adding...' : 'Add Payment'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -236,6 +265,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SIZES.base,
   },
+  detailRowLast: {
+    marginBottom: 0,
+  },
   detailLabel: {
     fontSize: SIZES.body2,
     color: COLORS.text.secondary,
@@ -247,6 +279,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
+  },
+  phoneTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  phoneLink: {
+    color: COLORS.primary,
+    marginRight: SIZES.base / 2,
+  },
+  phoneIcon: {
+    marginLeft: 2,
   },
   statusBadge: {
     paddingHorizontal: SIZES.base,

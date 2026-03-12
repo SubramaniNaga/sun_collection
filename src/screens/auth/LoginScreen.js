@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Header from '../../components/common/Header';
@@ -66,8 +66,27 @@ const LoginScreen = ({ navigation }) => {
       await login({ phone, password });
       // Navigation will be handled automatically by AuthContext state change
     } catch (error) {
-      setErrors({ general: error.message });
+      const message = getLoginErrorMessage(error);
+      setErrors({ general: message });
+      Alert.alert('Error', message);
     }
+  };
+
+  const getLoginErrorMessage = (error) => {
+    if (!error) return 'Something went wrong. Please try again.';
+    if (typeof error.message === 'string' && error.message && !error.message.startsWith('API Error:')) {
+      return error.message;
+    }
+    if (error.response?.data?.message) {
+      return error.response.data.message;
+    }
+    if (typeof error.message === 'string') {
+      try {
+        const parsed = JSON.parse(error.message.replace(/^API Error:\s*/, ''));
+        if (parsed?.message) return parsed.message;
+      } catch (_) {}
+    }
+    return error.message || 'Something went wrong. Please try again.';
   };
 
   const togglePasswordVisibility = () => {

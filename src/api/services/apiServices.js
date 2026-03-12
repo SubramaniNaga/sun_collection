@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import DeviceInfo from 'react-native-device-info';
 import { clearSession } from '../../utils/sessionManager';
+import { getDeviceId } from '../../utils/deviceId';
 import apiClient from '../apiClient';
 import ENDPOINTS from '../endpoints';
 
@@ -9,18 +9,15 @@ export const apiServices = {
   auth: {
     login: async (credentials) => {
       try {
-        // Get device ID for API call
-        const deviceId = await DeviceInfo.getUniqueId();
-
-        // Extract just the ID string if needed
-        const deviceString = deviceId._j || deviceId; // Use _j property or fallback to full object
+        // Get device ID for API call (Expo-compatible)
+        const deviceString = await getDeviceId();
 
         // Prepare request payload
         const requestPayload = {
           phone: credentials.phone,
           password: credentials.password,
-          // device_id: deviceString
-          device_id: "12345678"
+          device_id: deviceString
+          // device_id: "12345678"
         };
 
         console.log('🔑 AUTH LOGIN - Request Payload:', JSON.stringify(requestPayload, null, 2));
@@ -41,14 +38,20 @@ export const apiServices = {
           await AsyncStorage.setItem('authToken', token);
           await AsyncStorage.setItem('userData', JSON.stringify(data));
 
+          // Temporary: if branch_id or line_id is null/string, store 1 for both
+          const rawBranchId = data.branch_id;
+          const rawLineId = data.line_id;
+          const branchId = (rawBranchId != null && typeof rawBranchId === 'number') ? String(rawBranchId) : '1';
+          const lineId = (rawLineId != null && typeof rawLineId === 'number') ? String(rawLineId) : '1';
+
           // Store additional fields individually for easy access in API calls
           await AsyncStorage.setItem('userId', data.id?.toString() || '');
           await AsyncStorage.setItem('userName', data.name || '');
           await AsyncStorage.setItem('userPhone', data.phone || '');
           await AsyncStorage.setItem('userRole', data.role || '');
           await AsyncStorage.setItem('userRoleId', data.roleid?.toString() || '');
-          await AsyncStorage.setItem('lineId', data.line_id?.toString() || '');
-          await AsyncStorage.setItem('branchId', data.branch_id?.toString() || '');
+          await AsyncStorage.setItem('lineId', lineId);
+          await AsyncStorage.setItem('branchId', branchId);
           await AsyncStorage.setItem('userDevice', data.device || '');
 
           console.log('🔑 AUTH LOGIN - All auth data stored successfully');
@@ -113,7 +116,9 @@ export const apiServices = {
 
     refreshToken: async () => {
       try {
+        console.log('🔐 API: refreshToken - POST', ENDPOINTS.AUTH.REFRESH_TOKEN);
         const response = await apiClient.post(ENDPOINTS.AUTH.REFRESH_TOKEN);
+        console.log('🔐 API: refreshToken - Response success');
         const { token } = response.data;
 
         if (token) {
@@ -132,6 +137,7 @@ export const apiServices = {
   customer: {
     createCustomer: async (formData) => {
       try {
+        console.log('👤 API: createCustomer - POST', ENDPOINTS.CUSTOMER.CREATE, '| FormData keys:', [...formData.entries()].map(([k]) => k));
         const response = await apiClient.post(ENDPOINTS.CUSTOMER.CREATE, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -162,10 +168,9 @@ export const apiServices = {
           formDataWithParams.append('branch_id', branchId);
         }
 
+        console.log('👤 API: createCustomerWithLoan - POST', ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, '| lineId:', lineId, '| branchId:', branchId);
         const response = await apiClient.post(ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, formDataWithParams, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
         return response.data;
       } catch (error) {
@@ -176,7 +181,9 @@ export const apiServices = {
 
     getCustomers: async () => {
       try {
+        console.log('👤 API: getCustomers - GET', ENDPOINTS.CUSTOMER.LIST);
         const response = await apiClient.get(ENDPOINTS.CUSTOMER.LIST);
+        console.log('👤 API: getCustomers - Response count:', response.data?.length ?? response.data?.data?.length ?? 'N/A');
         return response.data;
       } catch (error) {
         console.error('Get customers error:', error);
@@ -186,7 +193,9 @@ export const apiServices = {
 
     getCustomerById: async (customerId) => {
       try {
+        console.log('👤 API: getCustomerById - GET', ENDPOINTS.CUSTOMER.DETAILS(customerId), '| customerId:', customerId);
         const response = await apiClient.get(ENDPOINTS.CUSTOMER.DETAILS(customerId));
+        console.log('👤 API: getCustomerById - Response received');
         return response.data;
       } catch (error) {
         console.error('Get customer by ID error:', error);
@@ -196,6 +205,7 @@ export const apiServices = {
 
     updateCustomer: async (customerId, formData) => {
       try {
+        console.log('👤 API: updateCustomer - PUT', ENDPOINTS.CUSTOMER.UPDATE(customerId), '| customerId:', customerId);
         const response = await apiClient.put(ENDPOINTS.CUSTOMER.UPDATE(customerId), formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -210,7 +220,9 @@ export const apiServices = {
 
     deleteCustomer: async (customerId) => {
       try {
+        console.log('👤 API: deleteCustomer - DELETE', ENDPOINTS.CUSTOMER.DELETE(customerId), '| customerId:', customerId);
         const response = await apiClient.delete(ENDPOINTS.CUSTOMER.DELETE(customerId));
+        console.log('👤 API: deleteCustomer - Response received');
         return response.data;
       } catch (error) {
         console.error('Delete customer error:', error);
@@ -219,37 +231,92 @@ export const apiServices = {
     }
   },
 
+  // Loan Services
+  loan: {
+    getLoanList: async (params = {}) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        const lineId = await AsyncStorage.getItem('lineId');
+
+        if (!branchId || !lineId) {
+          throw new Error('Branch ID or Line ID not found. Please log in again.');
+        }
+        const {
+          customer_id = '',
+          approval_status = '',
+          loan_status = '',
+          page = 1,
+          limit = 10,
+        } = params;
+        const requestParams = {
+          branch_id: branchId || 1,
+          line_id: lineId || 1,
+          customer_id: customer_id || '',
+          approval_status: approval_status || '',
+          loan_status: loan_status || '',
+          page,
+          limit,
+        };
+        console.log('💰 API: getLoanList - GET', ENDPOINTS.LOAN.LIST, '| params:', JSON.stringify(requestParams, null, 2));
+        const response = await apiClient.get(ENDPOINTS.LOAN.LIST, { params: requestParams });
+        const list = response.data?.data ?? response.data;
+        console.log('💰 API: getLoanList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
+        return response.data;
+      } catch (error) {
+        console.error('Get loan list error:', error);
+        throw error;
+      }
+    }
+  },
+
   // Collection Services
   collection: {
-    getCollectionList: async (branchId, lineId) => {
+    getCollectionList: async (params = {}) => {
       try {
-        // Get line_id and branch_id from AsyncStorage if not provided
-        const storedLineId = branchId || await AsyncStorage.getItem('lineId');
-        const storedBranchId = branchId || await AsyncStorage.getItem('branchId');
-
-        // Use stored values or defaults (1) if not available
-        const finalLineId = storedLineId || '1';
-        const finalBranchId = storedBranchId || '1';
-
+        const branchId = await AsyncStorage.getItem('branchId');
+        console.log('💰 API: getCollectionList - branchId:', branchId);
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const { customer_phone = '', collection_date = '' } = params;
+        const requestParams = {
+          branch_id: branchId,
+          ...(customer_phone && { customer_phone }),
+          ...(collection_date && { collection_date }),
+        };
+        console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.COLLECTION.LIST, {
-          params: {
-            branch_id: finalBranchId,
-            line_id: finalLineId,
-          },
+          params: requestParams,
         });
+        const list = response.data?.response ?? response.data?.data ?? response.data;
+        console.log('📋 API: getCollectionList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| full:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
         console.error('Get collection list error:', error);
         throw error;
       }
-    }
+    },
+
+    updateAmount: async (collectionId, payload) => {
+      try {
+        const url = ENDPOINTS.COLLECTION.UPDATE_AMOUNT(collectionId);
+        console.log('📋 API: updateCollectionAmount - PATCH', url, '| payload:', JSON.stringify(payload, null, 2));
+        const response = await apiClient.patch(url, payload);
+        return response.data;
+      } catch (error) {
+        console.error('Update collection amount error:', error);
+        throw error;
+      }
+    },
   },
 
   // App Services
   app: {
     getVersion: async () => {
       try {
+        console.log('📱 API: getVersion - GET', ENDPOINTS.APP.VERSION);
         const response = await apiClient.get(ENDPOINTS.APP.VERSION);
+        console.log('📱 API: getVersion - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
         console.error('App version check error:', error);
@@ -263,5 +330,6 @@ export const apiServices = {
 export const authService = apiServices.auth;
 export const customerService = apiServices.customer;
 export const collectionService = apiServices.collection;
+export const loanService = apiServices.loan;
 
 export default apiServices;

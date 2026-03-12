@@ -1,16 +1,44 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
+
+const formatLoanDate = (dateStr) => {
+  if (!dateStr) return '—';
+  try { return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric'}); }
+  catch { return dateStr; }
+};
+
+const formatLoanAmount = (val) => {
+  if (val == null || val === '') return '—';
+  const num = parseFloat(val);
+  return isNaN(num) ? String(val) : `₹${num.toLocaleString('en-IN')}`;
+};
+
+const getLoanStatusLabel = (loan) => {
+  const approval = loan?.approval_status;
+  const loanStatus = loan?.loan_status;
+  if (approval === '2') return 'Rejected';
+  if (loanStatus === '4') return 'Closed';
+  if (approval === '0') return 'Pending';
+  if (loanStatus === '3') return 'Active';
+  if (loanStatus === '2' || approval === '1') return 'Approved';
+  return 'Pending';
+};
 
 const LoanScreen = ({ navigation, route }) => {
-  // Get customer data from navigation params
-  const { customerData } = route.params || {};
+  const { loan, customerData: paramCustomerData } = route.params || {};
+  const customerData = paramCustomerData || (loan ? {
+    name: loan?.customer_name ?? '',
+    phone: loan?.customer_phone ?? '',
+    loanId: String(loan?.id ?? ''),
+    initialAmount: loan?.loan_amount ?? '',
+  } : {});
 
   // Renewal states
   const [initialLoanAmount, setInitialLoanAmount] = useState(customerData.initialAmount || '');
@@ -61,24 +89,15 @@ const LoanScreen = ({ navigation, route }) => {
   const handlePhotoCapture = async () => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Camera permission is required to take photo');
         return;
       }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setCustomerPhoto(result.assets[0]);
-      }
+      const asset = await pickFromCamera([4, 3]);
+      if (asset) setCustomerPhoto(asset);
     } catch (error) {
-      Alert.alert('Error', 'Failed to capture photo');
+      console.error('Photo capture error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || 'Failed to capture photo. Please try again.');
     }
   };
 
@@ -86,24 +105,15 @@ const LoanScreen = ({ navigation, route }) => {
   const handleAadharPhotoCapture = async () => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Camera permission is required to capture Aadhar card');
         return;
       }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [3, 2],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAadharCardImage(result.assets[0]);
-      }
+      const asset = await pickFromCamera([3, 2]);
+      if (asset) setAadharCardImage(asset);
     } catch (error) {
-      Alert.alert('Error', 'Failed to capture Aadhar card photo');
+      console.error('Aadhar capture error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || 'Failed to capture Aadhar card photo. Please try again.');
     }
   };
 
@@ -111,24 +121,15 @@ const LoanScreen = ({ navigation, route }) => {
   const handleAadharUpload = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Gallery permission is required to select Aadhar card');
         return;
       }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [3, 2],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAadharCardImage(result.assets[0]);
-      }
+      const asset = await pickFromLibrary([3, 2]);
+      if (asset) setAadharCardImage(asset);
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload Aadhar card');
+      console.error('Aadhar upload error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || 'Failed to select Aadhar card. Please try again.');
     }
   };
 
@@ -212,7 +213,7 @@ const LoanScreen = ({ navigation, route }) => {
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
 
       <Header
-        title="Loan Renewal"
+        title="Loan Details"
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
@@ -226,161 +227,102 @@ const LoanScreen = ({ navigation, route }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Customer Info Display */}
-          {customerData.name && (
-            <View style={styles.customerInfoCard}>
-              <View style={styles.customerInfoHeader}>
-                <Text style={styles.customerInfoTitle}>Customer Information</Text>
+          {/* Complete Loan Details (when opened from list) */}
+          {loan && (
+            <View style={styles.loanDetailsCard}>
+              <Text style={styles.loanDetailsTitle}>Loan Details</Text>
+              <View style={[styles.loanDetailsBadge, { backgroundColor: loan?.approval_status === '2' ? COLORS.error : loan?.loan_status === '3' ? COLORS.success : COLORS.primary }]}>
+                <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loan)}</Text>
               </View>
 
-              <View style={styles.customerInfoRow}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Name</Text>
-                  <Text style={styles.infoValue}>{customerData.name}</Text>
-                </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Loan ID</Text>
+                <Text style={styles.detailValue}>#{loan?.id ?? '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Customer</Text>
+                <Text style={styles.detailValue}>{loan?.customer_name ?? '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Phone</Text>
+                <Text style={styles.detailValue}>{loan?.customer_phone ?? '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Customer No</Text>
+                <Text style={styles.detailValue}>{loan?.customer_no ?? '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Branch</Text>
+                <Text style={styles.detailValue}>{loan?.branch ?? '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Line</Text>
+                <Text style={styles.detailValue}>{loan?.line_name ?? '—'}</Text>
               </View>
 
-              <View style={styles.customerInfoRow}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Loan ID</Text>
-                  <Text style={styles.infoValue}>{customerData.loanId}</Text>
-                </View>
+              {/* <Text style={styles.detailSectionTitle}>Amounts</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Loan amount</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loan?.loan_amount)}</Text>
               </View>
-
-              <View style={styles.customerInfoRow}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Phone</Text>
-                  <Text style={styles.infoValue}>{customerData.phone}</Text>
-                </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Approved amount</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loan?.approved_amount)}</Text>
               </View>
-            </View>
-          )}
-
-          {/* Loan Renewal Details */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Loan Renewal Details</Text>
-
-            <View style={styles.formRow}>
-              <Text style={styles.formLabel}>Initial Loan Amount</Text>
-              <TextInput
-                style={[styles.formInput, styles.readOnlyInput]}
-                value={initialLoanAmount}
-                editable={false}
-                placeholder="0"
-              />
-            </View>
-
-            <View style={styles.formRow}>
-              <Text style={styles.formLabel}>Renewal Amount</Text>
-              <TextInput
-                style={styles.formInput}
-                value={renewalAmount}
-                onChangeText={setRenewalAmount}
-                keyboardType="numeric"
-                placeholder="0"
-              />
-            </View>
-
-            <View style={styles.formRow1}>
-              <Text style={styles.formLabel}>Request Extra Funds</Text>
-              <TouchableOpacity
-                style={[styles.toggleButton, requestExtraFunds && styles.toggleButtonActive]}
-                onPress={() => setRequestExtraFunds(!requestExtraFunds)}
-              >
-                <View style={[styles.toggleDot, requestExtraFunds && styles.toggleDotActive]} />
-              </TouchableOpacity>
-            </View>
-
-            {requestExtraFunds && (
-              <View style={styles.formRow}>
-                <Text style={styles.formLabel}>Additional Amount Requested</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={additionalAmount}
-                  onChangeText={setAdditionalAmount}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Balance amount</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loan?.balance_amount)}</Text>
               </View>
-            )}
-          </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Interest amount</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loan?.intrest_amount)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Processing fees</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loan?.processing_fees)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Payment type</Text>
+                <Text style={styles.detailValue}>{loan?.payment_type ?? '—'}</Text>
+              </View> */}
 
-          {/* KYC Verification */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>KYC Verification</Text>
+              {/* <Text style={styles.detailSectionTitle}>Dates & Period</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Requested date</Text>
+                <Text style={styles.detailValue}>{formatLoanDate(loan?.requested_date)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Approved date</Text>
+                <Text style={styles.detailValue}>{formatLoanDate(loan?.approved_date)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Loan period</Text>
+                <Text style={styles.detailValue}>{loan?.loan_period != null ? `${loan.loan_period} months` : '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Created</Text>
+                <Text style={styles.detailValue}>{formatLoanDate(loan?.created_at)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Updated</Text>
+                <Text style={styles.detailValue}>{formatLoanDate(loan?.updated_at)}</Text>
+              </View> */}
 
-            <View style={styles.photoSection}>
-              <Text style={styles.formLabel}>Live Photo Capture</Text>
-              <View style={styles.photoContainer}>
-                {customerPhoto ? (
-                  <View style={styles.photoPreview}>
-                    <Image source={{ uri: customerPhoto.uri }} style={styles.photoImage} />
-                    <TouchableOpacity style={styles.removePhotoButton} onPress={() => setCustomerPhoto(null)}>
-                      <Ionicons name="close-circle" size={24} color={COLORS.white} />
-                    </TouchableOpacity>
+              {loan?.reject_reason && (
+                <>
+                  <Text style={styles.detailSectionTitle}>Rejection</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Reason</Text>
+                    <Text style={[styles.detailValue, { color: COLORS.error }]}>{loan.reject_reason}</Text>
                   </View>
-                ) : (
-                  <TouchableOpacity style={styles.photoPlaceholder} onPress={handlePhotoCapture}>
-                    <Ionicons name="camera" size={40} color={COLORS.text.tertiary} />
-                    <Text style={styles.photoPlaceholderText}>Take Photo</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {!customerPhoto && (
-                <View style={styles.requiredBadge}>
-                  <Text style={styles.requiredText}>Required</Text>
-                </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Rejected date</Text>
+                    <Text style={styles.detailValue}>{formatLoanDate(loan?.rejected_date)}</Text>
+                  </View>
+                </>
               )}
             </View>
-          </View>
-
-          {/* Aadhar Section */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Aadhar Verification</Text>
-
-            <View style={styles.formRow}>
-              <Text style={styles.formLabel}>Aadhar Number</Text>
-              <View style={styles.aadharContainer}>
-                <TextInput
-                  style={[styles.formInput, styles.aadharInput]}
-                  value={aadharNumber}
-                  onChangeText={setAadharNumber}
-                  keyboardType="numeric"
-                  maxLength={12}
-                  placeholder="Enter 12-digit Aadhar"
-                />
-                <TouchableOpacity style={styles.uploadButton} onPress={handleAadharUpload}>
-                  <Ionicons name="cloud-upload-outline" size={20} color={COLORS.primary} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.formRow}>
-              <Text style={styles.formLabel}>Aadhar Card Image</Text>
-              <View style={styles.aadharImageContainer}>
-                {aadharCardImage ? (
-                  <View style={styles.aadharPreview}>
-                    <Image source={{ uri: aadharCardImage.uri }} style={styles.aadharImage} />
-                    <TouchableOpacity style={styles.removeAadharButton} onPress={() => setAadharCardImage(null)}>
-                      <Ionicons name="close-circle" size={24} color={COLORS.white} />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.aadharOptionsContainer}>
-                    <TouchableOpacity style={styles.aadharOptionButton} onPress={handleAadharPhotoCapture}>
-                      <Ionicons name="camera" size={30} color={COLORS.primary} />
-                      <Text style={styles.aadharOptionText}>Capture Photo</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.aadharOptionButton} onPress={handleAadharUpload}>
-                      <Ionicons name="image-outline" size={30} color={COLORS.primary} />
-                      <Text style={styles.aadharOptionText}>Upload Image</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -420,6 +362,74 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SIZES.padding,
     paddingBottom: SIZES.padding * 2, // Reduced padding since button is fixed
+  },
+  loanDetailsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: SIZES.margin,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3.84,
+    elevation: 3,
+  },
+  loanDetailsTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: '700',
+    color: COLORS.text?.primary || COLORS.primary,
+    marginBottom: SIZES.margin,
+  },
+  loanDetailsBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base * 0.5,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.margin,
+  },
+  loanDetailsBadgeText: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  detailSectionTitle: {
+    fontSize: SIZES.body1,
+    fontWeight: '600',
+    color: COLORS.text?.secondary || '#333',
+    marginTop: SIZES.margin,
+    marginBottom: SIZES.base * 0.5,
+    paddingTop: SIZES.base,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SIZES.base * 0.5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  detailLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.text?.tertiary || '#666',
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.text?.secondary || '#333',
+    flex: 1,
+    textAlign: 'right',
+  },
+  detailValueHighlight: {
+    fontSize: SIZES.body2,
+    fontWeight: '700',
+    color: COLORS.primary,
+    flex: 1,
+    textAlign: 'right',
   },
   card: {
     backgroundColor: COLORS.white,
