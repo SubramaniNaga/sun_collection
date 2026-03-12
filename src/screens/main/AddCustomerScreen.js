@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import DeviceInfo from 'react-native-device-info';
+import { getDeviceId } from '../../utils/deviceId';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import Button from '../../components/common/Button';
@@ -63,24 +64,15 @@ const AddCustomerScreen = ({ navigation }) => {
   const handlePhotoCapture = async () => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Camera permission is required to take photo');
         return;
       }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setCustomerPhoto(result.assets[0]);
-      }
+      const asset = await pickFromCamera([4, 3]);
+      if (asset) setCustomerPhoto(asset);
     } catch (error) {
-      Alert.alert('Error', 'Failed to capture photo');
+      console.error('Photo capture error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || 'Failed to capture photo. Please try again.');
     }
   };
 
@@ -88,24 +80,15 @@ const AddCustomerScreen = ({ navigation }) => {
   const handleAadharUpload = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Gallery permission is required to select image');
         return;
       }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
-        allowsEditing: true,
-        aspect: [3, 2],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAadharImage(result.assets[0]);
-      }
+      const asset = await pickFromLibrary([3, 2]);
+      if (asset) setAadharImage(asset);
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload Aadhar image');
+      console.error('Aadhar upload error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || 'Failed to select Aadhar image. Please try again.');
     }
   };
 
@@ -118,8 +101,7 @@ const AddCustomerScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const deviceId = await DeviceInfo.getUniqueId();
-      const deviceString = deviceId._j || deviceId;
+      const deviceString = await getDeviceId();
 
       const formData = new FormData();
       formData.append('customer_no', customerNo);

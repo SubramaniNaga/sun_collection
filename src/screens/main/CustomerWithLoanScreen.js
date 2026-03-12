@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
@@ -97,49 +98,34 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   // Image handlers
   const handleImagePick = async (type, source) => {
     try {
-      let result;
       if (source === 'camera') {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
         if (!permissionResult.granted) {
           Alert.alert('Permission Required', 'Camera permission is required');
           return;
         }
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [3, 2],
-          quality: 0.8,
-        });
+        const image = await pickFromCamera([3, 2]);
+        if (image) {
+          if (type === 'aadhar') setAadharImage(image);
+          else if (type === 'customer') setCustomerPhoto(image);
+          else if (type === 'address') setAddressProof(image);
+        }
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permissionResult.granted) {
           Alert.alert('Permission Required', 'Gallery permission is required');
           return;
         }
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [3, 2],
-          quality: 0.8,
-        });
-      }
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const image = result.assets[0];
-        switch (type) {
-          case 'aadhar':
-            setAadharImage(image);
-            break;
-          case 'customer':
-            setCustomerPhoto(image);
-            break;
-          case 'address':
-            setAddressProof(image);
-            break;
+        const image = await pickFromLibrary([3, 2]);
+        if (image) {
+          if (type === 'aadhar') setAadharImage(image);
+          else if (type === 'customer') setCustomerPhoto(image);
+          else if (type === 'address') setAddressProof(image);
         }
       }
     } catch (error) {
-      Alert.alert('Error', `Failed to ${source === 'camera' ? 'capture' : 'pick'} image`);
+      console.error('Image pick error:', error?.message ?? error);
+      Alert.alert('Error', error?.message || `Failed to ${source === 'camera' ? 'capture' : 'pick'} image. Please try again.`);
     }
   };
 
@@ -149,12 +135,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // Get branch_id and line_id from storage
-      const storedBranchId = await AsyncStorage.getItem('branch_id');
-      const storedLineId = await AsyncStorage.getItem('line_id');
+      // Get branch_id and line_id from storage (keys match login: branchId, lineId)
+      const storedBranchId = await AsyncStorage.getItem('branchId');
+      const storedLineId = await AsyncStorage.getItem('lineId');
       
       if (!storedBranchId || !storedLineId) {
         Alert.alert('Error', 'Branch and Line information not found. Please login again.');
+        setLoading(false);
         return;
       }
 
@@ -203,16 +190,19 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       }
 
       const response = await apiServices.customer.createCustomerWithLoan(formData);
+      const success = response?.success !== false && (response?.status !== 400 && response?.status !== 500);
+      const message = response?.message || 'Customer and loan created successfully!';
       
-      if (response.success) {
-        Alert.alert('Success', 'Customer and loan created successfully!');
+      if (success) {
+        Alert.alert('Success', message);
         navigation.goBack();
       } else {
-        Alert.alert('Error', response.message || 'Failed to create customer with loan');
+        Alert.alert('Error', response?.message || message || 'Failed to create customer with loan');
       }
     } catch (error) {
       console.error('Create customer with loan error:', error);
-      Alert.alert('Error', 'Failed to create customer with loan. Please try again.');
+      const errMsg = error.response?.data?.message || error.message || 'Failed to create customer with loan. Please try again.';
+      Alert.alert('Error', errMsg);
     } finally {
       setLoading(false);
     }

@@ -66,10 +66,30 @@ apiClient.interceptors.request.use(
       
       if (token && !isPublicEndpoint) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log(`🔑 Adding auth token to ${config.method?.toUpperCase()} ${config.url}`);
       } else if (!token && !isPublicEndpoint) {
         console.warn(`⚠️ No auth token available for ${config.method?.toUpperCase()} ${config.url}`);
       }
+
+      // Log every API request – URL, params, and body (to verify data is passing correctly)
+      const method = (config.method || 'get').toUpperCase();
+      const fullUrl = config.baseURL + config.url + (config.params && Object.keys(config.params).length
+        ? '?' + new URLSearchParams(config.params).toString()
+        : '');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(`📤 API REQUEST [${method}]`, fullUrl);
+      if (config.params && Object.keys(config.params).length > 0) {
+        console.log('📤 Request params:', JSON.stringify(config.params, null, 2));
+      }
+      if (config.data != null) {
+        if (typeof config.data === 'object' && config.data.constructor?.name === 'FormData') {
+          const keys = [];
+          config.data.forEach((_, key) => keys.push(key));
+          console.log('📤 Request body: FormData (multipart), keys:', keys.join(', '));
+        } else {
+          console.log('📤 Request body:', JSON.stringify(config.data, null, 2));
+        }
+      }
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       // Start global loading
       if (loadingContext) {
@@ -87,6 +107,14 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
+    // Log every API response – status and data (to verify response is coming correctly)
+    const method = (response.config?.method || 'get').toUpperCase();
+    const url = response.config?.url || '';
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📥 API RESPONSE [${method}]`, url, '| Status:', response.status);
+    console.log('📥 Response data:', JSON.stringify(response.data, null, 2));
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     // Stop global loading
     if (loadingContext) {
       loadingContext.stopLoading();
@@ -94,6 +122,16 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // Log API error response
+    const method = (error.config?.method || 'get').toUpperCase();
+    const url = error.config?.url || '';
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📥 API ERROR [${method}]`, url, '| Status:', error.response?.status, '| Message:', error.message);
+    if (error.response?.data) {
+      console.log('📥 Error response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     // Stop global loading
     if (loadingContext) {
       loadingContext.stopLoading();

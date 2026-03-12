@@ -1,28 +1,43 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 
+const SEARCH_DEBOUNCE_MS = 400;
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '—';
+  try { return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return dateStr; }
+};
+
+const formatAmount = (val) => {
+  const num = parseFloat(val);
+  return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
+};
+
 const CollectionScreen = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const [collectionData, setCollectionData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const searchDebounceRef = useRef(null);
 
-  useEffect(() => {
-    fetchCollectionData();
-  }, []);
-
-  const fetchCollectionData = async () => {
+  const fetchCollectionData = useCallback(async (customerPhone = '') => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiServices.collection.getCollectionList();
-      setCollectionData(response.data || []);
+      const response = await apiServices.collection.getCollectionList({
+        customer_phone: customerPhone.trim() || undefined,
+      });
+      const raw = response?.response ?? response?.data ?? response?.data?.response;
+      const list = Array.isArray(raw) ? raw : [];
+      setCollectionData(list);
     } catch (err) {
       console.error('Failed to fetch collection data:', err);
       setError('Failed to load collection data. Please check your connection and try again.');
@@ -30,14 +45,36 @@ const CollectionScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filteredData = collectionData.filter(item =>
-    item.name.toLowerCase().includes(searchText.toLowerCase()) ||
-    item.accountNo.toLowerCase().includes(searchText.toLowerCase()) ||
-    item.phone.includes(searchText) ||
-    item.vehicleNo.toLowerCase().includes(searchText.toLowerCase())
+  // Load when screen is focused (initial load and when returning from CollectionDetails so list shows updated data)
+  useFocusEffect(
+    useCallback(() => {
+      fetchCollectionData(searchText);
+    }, [fetchCollectionData, searchText])
   );
+
+  // When user types in search bar, call API with customer_phone for server-side filtering (debounced)
+  const isFirstMountRef = useRef(true);
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      fetchCollectionData(searchText);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchText, fetchCollectionData]);
+
+  const filteredData = Array.isArray(collectionData) ? collectionData : [];
 
   const handleItemPress = (item) => {
     navigation.navigate('CollectionDetails', { item });
@@ -57,19 +94,6 @@ const CollectionScreen = ({ navigation }) => {
       });
   };
 
-  const handleLocationPress = (latitude, longitude, name) => {
-    const locationUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-    Linking.canOpenURL(locationUrl)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(locationUrl);
-        } else {
-          Alert.alert('Error', 'Maps not available');
-        }
-      })
-      .catch((err) => console.error('Error opening maps:', err));
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar style="dark" backgroundColor={COLORS.primary} />
@@ -84,7 +108,7 @@ const CollectionScreen = ({ navigation }) => {
           <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search..."
+            placeholder="Search by phone..."
             placeholderTextColor={COLORS.text.tertiary}
             value={searchText}
             onChangeText={setSearchText}
@@ -99,13 +123,13 @@ const CollectionScreen = ({ navigation }) => {
           ) : error ? (
             <View style={styles.centerContainer}>
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchCollectionData}>
+              <TouchableOpacity style={styles.retryButton} onPress={() => fetchCollectionData('')}>
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
           ) : filteredData.length === 0 ? (
             <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>No collection data found</Text>
+              <Text style={styles.emptyText}>No collections found</Text>
             </View>
           ) : (
             filteredData.map((item) => (
@@ -114,40 +138,29 @@ const CollectionScreen = ({ navigation }) => {
               style={styles.listItem}
               onPress={() => handleItemPress(item)}
             >
-              {/* First Row: Name | Acc No | Phone Icon */}
               <View style={styles.itemRow}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemAccount}>{item.accountNo}</Text>
+                <Text style={styles.itemName} numberOfLines={1}>{item.customer_name ?? '—'}</Text>
                 <TouchableOpacity
                   style={styles.inlineIconButton}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handlePhonePress(item.phone);
+                    if (item.customer_phone) handlePhonePress(item.customer_phone);
                   }}
                 >
                   <Ionicons name="call" size={18} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
-          
-              {/* Second Row: Assets | Status | Location Icon */}
               <View style={styles.itemRow}>
-                <Text style={styles.itemAssets}>Assets: {item.assets}</Text>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: item.arrearStatus === 'Clear' ? '#4CAF50' : '#FF9800' }
-                ]}>
-                  <Text style={styles.statusText}>{item.arrearStatus}</Text>
+                <Text style={styles.itemAssets}>Week {item.collection_week} · {formatDate(item.collection_date)}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: (item.amount_paid != null && Number(item.amount_paid) > 0) ? '#4CAF50' : '#FF9800' }]}>
+                  <Text style={styles.statusText}>{(item.amount_paid != null && Number(item.amount_paid) > 0) ? 'Paid' : 'Pending'}</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.inlineIconButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleLocationPress(item.latitude, item.longitude, item.name);
-                  }}
-                >
-                  <Ionicons name="location" size={18} color={COLORS.primary} />
-                </TouchableOpacity>
               </View>
+              <View style={[styles.itemRow, styles.itemRowLast]}>
+                <Text style={styles.itemMetaLeft}>Paid: {formatAmount(item.amount_paid)}</Text>
+                <Text style={styles.itemMetaRight}>Balance: {formatAmount(item.balance_amount)}</Text>
+              </View>
+              {/* {item.locality ? <Text style={styles.itemLocality} numberOfLines={1}>{item.locality}</Text> : null} */}
             </TouchableOpacity>
             ))
           )}
@@ -200,7 +213,8 @@ const styles = StyleSheet.create({
   listItem: {
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
-    padding: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
     marginBottom: SIZES.base,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -209,23 +223,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.base / 2,
+    marginBottom: SIZES.base,
+    minHeight: 24,
+  },
+  itemRowLast: {
+    marginBottom: 0,
   },
   itemName: {
     fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.text.primary,
     flex: 1,
-  },
-  itemAccount: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-   
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base / 2,
-    borderRadius: SIZES.radius / 2,
-    flex: 1,
-    textAlign: 'center',
+    marginRight: SIZES.base,
   },
   inlineIconButton: {
     padding: SIZES.base / 2,
@@ -233,18 +242,30 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 35,
-    height: 35,
+    width: 36,
+    height: 36,
   },
   itemAssets: {
     fontSize: SIZES.body3,
     color: COLORS.text.secondary,
     flex: 1,
+    marginRight: SIZES.base,
+  },
+  itemMetaLeft: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+  },
+  itemMetaRight: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+    marginLeft: SIZES.base,
   },
   statusBadge: {
     paddingHorizontal: SIZES.base,
     paddingVertical: SIZES.base / 2,
     borderRadius: SIZES.radius / 2,
+    minWidth: 56,
+    alignItems: 'center',
   },
   statusText: {
     fontSize: SIZES.body5,
