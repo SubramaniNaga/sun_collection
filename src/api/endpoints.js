@@ -11,6 +11,7 @@ export const ENDPOINTS = {
     CREATE: '/customer',
     CREATE_WITH_LOAN: '/customer/with-loan',
     LIST: '/customer',
+    SEARCH: '/customer/search',
     DETAILS: (id) => `/customer/${id}`,
     UPDATE: (id) => `/customer/${id}`,
     DELETE: (id) => `/customer/${id}`,

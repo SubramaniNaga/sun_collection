@@ -161,16 +161,31 @@ export const apiServices = {
         for (let [key, value] of formData.entries()) {
           formDataWithParams.append(key, value);
         }
-        if (lineId) {
-          formDataWithParams.append('line_id', lineId);
-        }
-        if (branchId) {
-          formDataWithParams.append('branch_id', branchId);
-        }
+        const lineIdNum = lineId != null && lineId !== '' ? (Number(lineId) || parseInt(lineId, 10) || 1) : 1;
+        const branchIdNum = branchId != null && branchId !== '' ? (Number(branchId) || parseInt(branchId, 10) || 1) : 1;
+        formDataWithParams.append('line_id', lineIdNum);
+        formDataWithParams.append('branch_id', branchIdNum);
 
+        // Log payload (scalar values + file placeholders; actual file bodies are binary)
+        const payloadLog = {};
+        for (const [key, value] of formDataWithParams.entries()) {
+          if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value && 'type' in value) {
+            payloadLog[key] = `[FILE] name: ${value.name}, type: ${value.type}, uri: ${value.uri?.substring?.(0, 60)}...`;
+          } else {
+            payloadLog[key] = value;
+          }
+        }
+        console.log('👤 createCustomerWithLoan - PAYLOAD:', JSON.stringify(payloadLog, null, 2));
         console.log('👤 API: createCustomerWithLoan - POST', ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, '| lineId:', lineId, '| branchId:', branchId);
+
         const response = await apiClient.post(ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, formDataWithParams, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          transformRequest: (data, headers) => {
+            delete headers['Content-Type'];
+            return data;
+          },
         });
         return response.data;
       } catch (error) {
@@ -187,6 +202,22 @@ export const apiServices = {
         return response.data;
       } catch (error) {
         console.error('Get customers error:', error);
+        throw error;
+      }
+    },
+
+    searchCustomer: async (search, lineId) => {
+      try {
+        if (!lineId) {
+          const stored = await AsyncStorage.getItem('lineId');
+          lineId = stored;
+        }
+        const params = { search: search.trim(), line_id: lineId };
+        console.log('👤 API: searchCustomer - GET', ENDPOINTS.CUSTOMER.SEARCH, '| params:', params);
+        const response = await apiClient.get(ENDPOINTS.CUSTOMER.SEARCH, { params });
+        return response.data;
+      } catch (error) {
+        console.error('Search customer error:', error);
         throw error;
       }
     },

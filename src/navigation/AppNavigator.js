@@ -21,6 +21,7 @@ import LoanScreen from '../screens/main/LoanScreen';
 import NIPScreen from '../screens/main/NIPScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
+import UpfrontCashAddScreen from '../screens/main/UpfrontCashAddScreen';
 import UpfrontCashScreen from '../screens/main/UpfrontCashScreen';
 import { useAuthContext } from '../store/AuthContext';
 const Stack = createNativeStackNavigator();
@@ -156,6 +157,13 @@ const HomeStack = () => (
     <Stack.Screen 
       name="UpfrontCash" 
       component={UpfrontCashScreen} 
+      options={{ 
+        headerShown: false,
+      }}
+    />
+    <Stack.Screen 
+      name="UpfrontCashAdd" 
+      component={UpfrontCashAddScreen} 
       options={{ 
         headerShown: false,
       }}

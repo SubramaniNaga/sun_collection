@@ -1,34 +1,42 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
-import FormInput from '../../components/common/FormInput';
-import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
-import { useAuthContext } from '../../store/AuthContext';
+
+const formatAmount = (val) => {
+  if (val == null || val === '') return '—';
+  const n = typeof val === 'number' ? val : parseFloat(val);
+  return isNaN(n) ? String(val) : `₹${n.toLocaleString('en-IN')}`;
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return String(dateStr);
+  }
+};
+
+const purposeLabel = (value) => {
+  const map = {
+    field_collection_float: 'Field Collection Float',
+    customer_refund_handling: 'Customer Refund',
+    petty_expenses: 'Petty Expenses',
+    emergency_requirement: 'Emergency',
+    other: 'Other',
+  };
+  return map[value] || value || '—';
+};
 
 const UpfrontCashScreen = ({ navigation }) => {
-  const { user } = useAuthContext();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
-
-  // Form state
-  const [formData, setFormData] = useState({
-    amountTaken: '',
-    purpose: '',
-    cashReceivedFrom: '',
-    approvedBy: '',
-    remarks: '',
-    agentSignature: null,
-    managerSignature: null,
-  });
-
-  // Float summary state
+  const [loading, setLoading] = useState(true);
+  const [list, setList] = useState([]);
   const [floatSummary, setFloatSummary] = useState({
     previousFloatBalance: 0,
     totalUpfrontCashTaken: 0,
@@ -36,401 +44,132 @@ const UpfrontCashScreen = ({ navigation }) => {
     currentOutstandingFloat: 0,
   });
 
-  // Dropdown options
-  const purposeOptions = [
-    { label: 'Field Collection Float', value: 'field_collection_float' },
-    { label: 'Customer Refund Handling', value: 'customer_refund_handling' },
-    { label: 'Petty Expenses', value: 'petty_expenses' },
-    { label: 'Emergency Requirement', value: 'emergency_requirement' },
-    { label: 'Other', value: 'other' },
-  ];
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // TODO: Replace with API when available
+      // const [listRes, summaryRes] = await Promise.all([
+      //   apiClient.get('/upfront-cash/list'),
+      //   apiClient.get('/wallet/float-summary'),
+      // ]);
+      // setList(listRes.data?.response ?? listRes.data ?? []);
+      // setFloatSummary(summaryRes.data ?? {});
 
-  const cashReceivedFromOptions = [
-    { label: 'Manager', value: 'manager' },
-    { label: 'Accountant', value: 'accountant' },
-    { label: 'Branch Head', value: 'branch_head' },
-  ];
-
-  const approvedByOptions = [
-    { label: 'John Manager', value: 'john_manager' },
-    { label: 'Sarah Accountant', value: 'sarah_accountant' },
-    { label: 'Mike Branch Head', value: 'mike_branch_head' },
-  ];
-
-  // Auto-filled header data
-  const headerData = {
-    agentName: user?.name || 'Agent Name',
-    agentId: user?.id || 'AG001',
-    branchName: user?.branch || 'Main Branch',
-    currentDate: new Date().toLocaleDateString('en-IN'),
-    entryId: '', // Will be generated after submit
-  };
-
-  // Fetch float summary on mount
-  useEffect(() => {
-    fetchFloatSummary();
+      setList([
+        { id: 1, entryId: 'UC001', amountTaken: 2000, purpose: 'field_collection_float', cashReceivedFrom: 'manager', date: new Date().toISOString(), status: 'ACTIVE' },
+        { id: 2, entryId: 'UC002', amountTaken: 1500, purpose: 'petty_expenses', cashReceivedFrom: 'accountant', date: new Date(Date.now() - 86400000).toISOString(), status: 'SETTLED' },
+      ]);
+      setFloatSummary({
+        previousFloatBalance: 5000,
+        totalUpfrontCashTaken: 2000,
+        totalSettled: 1500,
+        currentOutstandingFloat: 5500,
+      });
+    } catch (error) {
+      console.error('Upfront cash fetch error:', error);
+      setList([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fetchFloatSummary = async () => {
-    try {
-      // TODO: Uncomment when API endpoint is available
-      // const response = await apiClient.get('/wallet/float-summary');
-      // setFloatSummary(response.data);
-      
-      // Set mock data for now
-      setFloatSummary({
-        previousFloatBalance: 5000,
-        totalUpfrontCashTaken: 2000,
-        totalSettled: 1500,
-        currentOutstandingFloat: 5500,
-      });
-    } catch (error) {
-      console.error('Error fetching float summary:', error);
-      // Set mock data for demo
-      setFloatSummary({
-        previousFloatBalance: 5000,
-        totalUpfrontCashTaken: 2000,
-        totalSettled: 1500,
-        currentOutstandingFloat: 5500,
-      });
-    }
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
+
+  const handleAddPress = () => {
+    navigation.navigate('UpfrontCashAdd');
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.amountTaken) {
-      newErrors.amountTaken = 'Amount is required';
-    } else if (parseFloat(formData.amountTaken) <= 0) {
-      newErrors.amountTaken = 'Amount must be greater than 0';
-    }
-
-    if (!formData.purpose) {
-      newErrors.purpose = 'Purpose is required';
-    }
-
-    if (!formData.cashReceivedFrom) {
-      newErrors.cashReceivedFrom = 'Cash received from is required';
-    }
-
-    if (!formData.approvedBy) {
-      newErrors.approvedBy = 'Approved by is required';
-    }
-
-    if (!formData.agentSignature) {
-      newErrors.agentSignature = 'Agent signature is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const captureLocation = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        throw new Error('Location permission denied');
-      }
-
-      let locationData = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      return {
-        latitude: locationData.coords.latitude,
-        longitude: locationData.coords.longitude,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      console.error('Location capture error:', error);
-      return null;
-    }
-  };
-
-  const generateEntryId = () => {
-    return `UC${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Capture system data
-      const locationData = await captureLocation();
-      const entryId = generateEntryId();
-
-      const payload = {
-        entryId,
-        agentId: headerData.agentId,
-        agentName: headerData.agentName,
-        branchName: headerData.branchName,
-        amountTaken: parseFloat(formData.amountTaken),
-        purpose: formData.purpose,
-        cashReceivedFrom: formData.cashReceivedFrom,
-        approvedBy: formData.approvedBy,
-        remarks: formData.remarks,
-        modeOfTransfer: 'cash',
-        agentSignature: formData.agentSignature,
-        managerSignature: formData.managerSignature,
-        status: 'ACTIVE',
-        timestamp: new Date().toISOString(),
-        location: locationData,
-        createdBy: headerData.agentId,
-        deviceId: 'DEVICE_ID', // Add device ID logic if needed
-      };
-
-      // Submit to API
-      // TODO: Uncomment when API endpoint is available
-      // const response = await apiClient.post('/upfront-cash', payload);
-      console.log('Upfront Cash Entry Payload:', payload);
-
-      // Update float summary
-      await fetchFloatSummary();
-
-      Alert.alert(
-        'Success',
-        `Upfront Cash Entry created successfully!\nEntry ID: ${entryId}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('Submit error:', error);
-      Alert.alert('Error', 'Failed to submit upfront cash entry. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const renderHeaderSection = () => (
-    <Card style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>Agent Information</Text>
-      <View style={styles.headerGrid}>
-        <View style={styles.headerItem}>
-          <Text style={styles.headerLabel}>Agent Name</Text>
-          <FormInput
-            value={headerData.agentName}
-            editable={false}
-            style={styles.readonlyInput}
-          />
-        </View>
-        <View style={styles.headerItem}>
-          <Text style={styles.headerLabel}>Agent ID</Text>
-          <FormInput
-            value={headerData.agentId}
-            editable={false}
-            style={styles.readonlyInput}
-          />
-        </View>
-        <View style={styles.headerItem}>
-          <Text style={styles.headerLabel}>Branch Name</Text>
-          <FormInput
-            value={headerData.branchName}
-            editable={false}
-            style={styles.readonlyInput}
-          />
-        </View>
-        <View style={styles.headerItem}>
-          <Text style={styles.headerLabel}>Date</Text>
-          <FormInput
-            value={headerData.currentDate}
-            editable={false}
-            style={styles.readonlyInput}
-          />
+  const renderItem = ({ item }) => (
+    <Card style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.entryId}>{item.entryId || `#${item.id}`}</Text>
+        <View style={[styles.statusBadge, item.status === 'SETTLED' && styles.statusSettled]}>
+          <Text style={styles.statusText}>{item.status || 'ACTIVE'}</Text>
         </View>
       </View>
-    </Card>
-  );
-
-  const renderUpfrontCashDetails = () => (
-    <Card style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>Upfront Cash Details</Text>
-      
-      <FormInput
-        label="Amount Taken (₹)"
-        value={formData.amountTaken}
-        onChangeText={(value) => handleInputChange('amountTaken', value)}
-        placeholder="Enter amount"
-        keyboardType="numeric"
-        error={errors.amountTaken}
-      />
-
-      <FormPicker
-        label="Purpose"
-        value={formData.purpose}
-        onValueChange={(value) => handleInputChange('purpose', value)}
-        items={purposeOptions}
-        placeholder="Select purpose"
-        error={errors.purpose}
-      />
-
-      <FormPicker
-        label="Cash Received From"
-        value={formData.cashReceivedFrom}
-        onValueChange={(value) => handleInputChange('cashReceivedFrom', value)}
-        items={cashReceivedFromOptions}
-        placeholder="Select person"
-        error={errors.cashReceivedFrom}
-      />
-
-      <FormPicker
-        label="Approved By"
-        value={formData.approvedBy}
-        onValueChange={(value) => handleInputChange('approvedBy', value)}
-        items={approvedByOptions}
-        placeholder="Select approver"
-        error={errors.approvedBy}
-      />
-
-      <FormInput
-        label="Remarks"
-        value={formData.remarks}
-        onChangeText={(value) => handleInputChange('remarks', value)}
-        placeholder="Enter remarks (optional)"
-        multiline
-        numberOfLines={3}
-      />
-    </Card>
-  );
-
-  const renderAcknowledgement = () => (
-    <Card style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>Acknowledgement</Text>
-      
-      <TouchableOpacity
-        style={[
-          styles.signatureBox,
-          errors.agentSignature && styles.signatureBoxError,
-        ]}
-        onPress={() => {
-          // TODO: Implement signature pad
-          Alert.alert('Signature', 'Signature pad will be implemented here');
-          handleInputChange('agentSignature', 'mock_signature_data');
-        }}
-      >
-        {formData.agentSignature ? (
-          <View style={styles.signatureContent}>
-            <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-            <Text style={styles.signatureText}>Agent Signature Added</Text>
-          </View>
-        ) : (
-          <View style={styles.signaturePlaceholder}>
-            <Ionicons name="create-outline" size={24} color={COLORS.text.tertiary} />
-            <Text style={styles.signaturePlaceholderText}>Tap to add Agent Signature</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.signatureBox}
-        onPress={() => {
-          // TODO: Implement signature pad
-          Alert.alert('Signature', 'Manager signature pad will be implemented here');
-          handleInputChange('managerSignature', 'mock_manager_signature');
-        }}
-      >
-        {formData.managerSignature ? (
-          <View style={styles.signatureContent}>
-            <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-            <Text style={styles.signatureText}>Manager Signature Added</Text>
-          </View>
-        ) : (
-          <View style={styles.signaturePlaceholder}>
-            <Ionicons name="create-outline" size={24} color={COLORS.text.tertiary} />
-            <Text style={styles.signaturePlaceholderText}>Tap to add Manager Signature (Optional)</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {errors.agentSignature && (
-        <Text style={styles.errorText}>Agent signature is required</Text>
-      )}
+      <View style={styles.cardRow}>
+        <Text style={styles.label}>Amount</Text>
+        <Text style={styles.value}>{formatAmount(item.amountTaken)}</Text>
+      </View>
+      <View style={styles.cardRow}>
+        <Text style={styles.label}>Purpose</Text>
+        <Text style={styles.value}>{purposeLabel(item.purpose)}</Text>
+      </View>
+      <View style={styles.cardRow}>
+        <Text style={styles.label}>Date</Text>
+        <Text style={styles.value}>{formatDate(item.date)}</Text>
+      </View>
     </Card>
   );
 
   const renderFloatSummary = () => (
-    <Card style={styles.sectionCard}>
+    <Card style={styles.summaryCard}>
       <Text style={styles.sectionTitle}>Float Summary</Text>
-      
       <View style={styles.summaryGrid}>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Previous Float Balance</Text>
-          <Text style={styles.summaryValue}>₹{floatSummary.previousFloatBalance.toLocaleString('en-IN')}</Text>
+          <Text style={styles.summaryLabel}>Previous Float</Text>
+          <Text style={styles.summaryValue}>{formatAmount(floatSummary.previousFloatBalance)}</Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Total Upfront Cash Taken</Text>
-          <Text style={styles.summaryValue}>₹{floatSummary.totalUpfrontCashTaken.toLocaleString('en-IN')}</Text>
+          <Text style={styles.summaryLabel}>Upfront Taken</Text>
+          <Text style={styles.summaryValue}>{formatAmount(floatSummary.totalUpfrontCashTaken)}</Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Total Settled</Text>
-          <Text style={styles.summaryValue}>₹{floatSummary.totalSettled.toLocaleString('en-IN')}</Text>
+          <Text style={styles.summaryLabel}>Settled</Text>
+          <Text style={styles.summaryValue}>{formatAmount(floatSummary.totalSettled)}</Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Current Outstanding Float</Text>
-          <Text style={[styles.summaryValue, styles.outstandingFloat]}>
-            ₹{floatSummary.currentOutstandingFloat.toLocaleString('en-IN')}
-          </Text>
+          <Text style={styles.summaryLabel}>Outstanding</Text>
+          <Text style={[styles.summaryValue, styles.outstanding]}>{formatAmount(floatSummary.currentOutstandingFloat)}</Text>
         </View>
       </View>
     </Card>
   );
 
+  const renderEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.centerWrap}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyState}>
+        <Ionicons name="wallet-outline" size={48} color={COLORS.text.tertiary} />
+        <Text style={styles.emptyStateText}>No upfront cash entries</Text>
+        <Text style={styles.emptyStateSubText}>Tap + to add an entry</Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
-      
-      <Header 
-        title="Up-front Cash" 
+      <StatusBar style="dark" backgroundColor={COLORS.primary} />
+      <Header
+        title="Up-front Cash"
         showBackButton={true}
-        onBackPress={() => navigation.goBack()} 
+        onBackPress={() => navigation.goBack()}
+        rightComponent={
+          <TouchableOpacity onPress={handleAddPress} style={styles.headerAddButton} activeOpacity={0.7}>
+            <Ionicons name="add" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        }
       />
-
-      <View style={styles.mainContent}>
-        <KeyboardAvoidingView
-          style={styles.keyboardContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <ScrollView 
-            style={styles.content} 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {renderHeaderSection()}
-            {renderUpfrontCashDetails()}
-            {renderAcknowledgement()}
-            {renderFloatSummary()}
-            
-            <View style={styles.bottomPadding} />
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-
-      <View style={styles.bottomSection}>
-        <Button
-          title="Submit Upfront Cash Entry"
-          onPress={handleSubmit}
-          loading={isSubmitting}
-          disabled={isSubmitting}
-          style={styles.submitButton}
-          size="large"
-        />
-      </View>
+      <FlatList
+        data={list}
+        keyExtractor={(item) => String(item.id ?? item.entryId ?? Math.random())}
+        renderItem={renderItem}
+        ListHeaderComponent={list.length > 0 ? renderFloatSummary : null}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={list.length === 0 ? styles.listEmpty : styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 };
@@ -438,22 +177,22 @@ const UpfrontCashScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.white,
   },
-  mainContent: {
-    flex: 1,
+  headerAddButton: {
+    padding: SIZES.padding / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  keyboardContainer: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
+  listContent: {
     padding: SIZES.padding,
-    paddingBottom: SIZES.padding * 6, // Extra padding for fixed button
+    paddingBottom: SIZES.padding * 2,
   },
-  sectionCard: {
+  listEmpty: {
+    flexGrow: 1,
+    paddingBottom: SIZES.padding,
+  },
+  summaryCard: {
     marginBottom: SIZES.margin,
   },
   sectionTitle: {
@@ -461,59 +200,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: SIZES.margin,
-  },
-  headerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  headerItem: {
-    width: '48%',
-    marginBottom: SIZES.margin,
-  },
-  headerLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    marginBottom: SIZES.base / 2,
-  },
-  readonlyInput: {
-    backgroundColor: COLORS.lightGray,
-  },
-  signatureBox: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-    marginBottom: SIZES.margin,
-    minHeight: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signatureBoxError: {
-    borderColor: 'red',
-  },
-  signatureContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  signatureText: {
-    fontSize: SIZES.body2,
-    color: COLORS.primary,
-    marginLeft: SIZES.base,
-  },
-  signaturePlaceholder: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  signaturePlaceholderText: {
-    fontSize: SIZES.body2,
-    color: COLORS.text.tertiary,
-    marginLeft: SIZES.base,
-  },
-  errorText: {
-    fontSize: SIZES.body3,
-    color: 'red',
-    marginTop: SIZES.base / 2,
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -537,22 +223,85 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text.primary,
   },
-  outstandingFloat: {
+  outstanding: {
     color: COLORS.primary,
   },
-  bottomPadding: {
-    height: 20,
+  card: {
+    marginBottom: SIZES.margin,
   },
-  bottomSection: {
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    paddingBottom: SIZES.padding,
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SIZES.margin * 0.75,
+    paddingBottom: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  submitButton: {
-    // Additional button styling if needed
+  entryId: {
+    fontSize: SIZES.body1,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  statusBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: SIZES.base,
+    paddingVertical: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+  },
+  statusSettled: {
+    backgroundColor: COLORS.success + '20',
+  },
+  statusText: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.base * 0.5,
+  },
+  label: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.tertiary,
+    width: 80,
+  },
+  value: {
+    fontSize: SIZES.body2,
+    fontWeight: '500',
+    color: COLORS.text.primary,
+    flex: 1,
+  },
+  centerWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SIZES.padding * 4,
+  },
+  loadingText: {
+    marginTop: SIZES.margin,
+    fontSize: SIZES.body2,
+    color: COLORS.text.secondary,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SIZES.padding * 4,
+  },
+  emptyStateText: {
+    fontSize: SIZES.h4,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    marginTop: SIZES.margin,
+    textAlign: 'center',
+  },
+  emptyStateSubText: {
+    fontSize: SIZES.body2,
+    color: COLORS.text.tertiary,
+    marginTop: SIZES.base / 2,
+    textAlign: 'center',
   },
 });
 

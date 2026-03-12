@@ -30,7 +30,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '1',
       title: 'Fuel Expense',
       category: 'Fuel',
-      date: '2024-03-15',
+      date: '15-03-2026',
       amount: 1500.00,
       status: 'Approved',
     },
@@ -38,7 +38,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '2',
       title: 'Vehicle Maintenance',
       category: 'Vehicle Maintenance',
-      date: '2024-03-14',
+      date: '14-03-2026',
       amount: 3500.00,
       status: 'Process',
     },
@@ -46,7 +46,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '3',
       title: 'Office Supplies',
       category: 'Office Expense',
-      date: '2024-03-13',
+      date: '13-03-2026',
       amount: 800.00,
       status: 'Pending',
     },
@@ -54,7 +54,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '4',
       title: 'Staff Lunch',
       category: 'Food / Travel',
-      date: '2024-03-12',
+      date: '12-03-2026',
       amount: 450.00,
       status: 'Approved',
     },
@@ -62,7 +62,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '5',
       title: 'Collection Travel',
       category: 'Collection Expense',
-      date: '2024-03-11',
+      date: '11-03-2026',
       amount: 1200.00,
       status: 'Pending',
     },
@@ -70,7 +70,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '6',
       title: 'Office Rent',
       category: 'Office Expense',
-      date: '2024-03-10',
+      date: '10-03-2026',
       amount: 10000.00,
       status: 'Approved',
     },
@@ -78,7 +78,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '7',
       title: 'Vehicle Insurance',
       category: 'Vehicle Maintenance',
-      date: '2024-03-09',
+      date: '09-03-2026',
       amount: 2500.00,
       status: 'Process',
     },
@@ -86,7 +86,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '8',
       title: 'Miscellaneous',
       category: 'Miscellaneous',
-      date: '2024-03-08',
+      date: '08-03-2026',
       amount: 300.00,
       status: 'Pending',
     },
@@ -94,7 +94,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '9',
       title: 'Miscellaneous',
       category: 'Miscellaneous',
-      date: '2024-03-08',
+      date: '08-03-2026',
       amount: 300.00,
       status: 'Pending',
     },
@@ -102,7 +102,7 @@ const ExpensesScreen = ({ navigation }) => {
       id: '10',
       title: 'Miscellaneous',
       category: 'Miscellaneous',
-      date: '2024-03-08',
+      date: '08-03-2026',
       amount: 300.00,
       status: 'Pending',
     },
@@ -153,14 +153,14 @@ const ExpensesScreen = ({ navigation }) => {
           <Text style={styles.expenseTitle} numberOfLines={1}>{item.title}</Text>
           <View style={styles.expenseMeta}>
             <Text style={styles.categoryText}>{item.category}</Text>
-            <Text style={styles.dateText}>• {item.date}</Text>
+
           </View>
         </View>
 
         {/* Right section: Status and Amount */}
         <View style={styles.expenseRightSection}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
+          <View >
+            <Text style={styles.dateText}>{item.date}</Text>
           </View>
           <Text style={styles.amountText}>₹{item.amount.toFixed(0)}</Text>
         </View>

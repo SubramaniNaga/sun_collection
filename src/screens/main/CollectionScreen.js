@@ -127,16 +127,41 @@ const CollectionScreen = ({ navigation }) => {
   };
 
   const filteredData = Array.isArray(collectionData) ? collectionData : [];
+  const isSelectedDateToday = formatDateForAPI(selectedDate) === getCurrentDateString();
 
-  const handleItemPress = (item) => {
-    // Show payment collection modal instead of navigating
-    const collection = item instanceof Collection ? item : new Collection(item);
+  const openPaymentModal = (collection) => {
     setSelectedCollection(collection);
     setPaymentMode('Cash');
     setCollectedAmount('');
     setRemarks('');
     setPaymentErrors({});
     setShowPaymentModal(true);
+  };
+
+  const handleItemPress = (item) => {
+    const collection = item instanceof Collection ? item : new Collection(item);
+
+    if (!isSelectedDateToday) {
+      Alert.alert(
+        'Collection payment',
+        "Collection payment can only be recorded for the current date. Please select today's date to collect payment."
+      );
+      return;
+    }
+
+    if (collection.isPaid()) {
+      Alert.alert(
+        'Payment done',
+        'Want to pay again?',
+        [
+          { text: 'No', style: 'cancel' },
+          { text: 'Yes', onPress: () => openPaymentModal(collection) },
+        ]
+      );
+      return;
+    }
+
+    openPaymentModal(collection);
   };
 
   const handlePhonePress = (phoneNumber) => {
