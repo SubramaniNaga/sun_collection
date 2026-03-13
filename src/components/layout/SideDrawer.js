@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { Alert, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
@@ -42,9 +42,21 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
       id: 'logout',
       title: t('settings.logout'),
       icon: '🚪',
-      onPress: async () => {
-        await logout();
-        onClose();
+      onPress: () => {
+        Alert.alert(
+          t('settings.confirmLogout'),
+          null,
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('settings.confirmLogoutConfirm'),
+              onPress: async () => {
+                await logout();
+                onClose();
+              },
+            },
+          ]
+        );
       },
       isDestructive: true,
     },

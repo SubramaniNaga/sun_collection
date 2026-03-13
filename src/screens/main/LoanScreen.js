@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
@@ -45,6 +46,16 @@ const LoanScreen = ({ navigation, route }) => {
     loanId: String(loan?.id ?? ''),
     initialAmount: loan?.loan_amount ?? '',
   } : {});
+
+  // Approved loan-given flow (when loan is approved)
+  const isLoanApproved = Boolean(
+    loan &&
+    loan.approval_status !== '2' &&
+    loan.loan_status !== '4' &&
+    (loan.approval_status === '1' || loan.loan_status === '2')
+  );
+  const [paymentType, setPaymentType] = useState('cash');
+  const [loanGivenPhoto, setLoanGivenPhoto] = useState(null);
 
   // Renewal states
   const [initialLoanAmount, setInitialLoanAmount] = useState(customerData.initialAmount || '');
@@ -143,6 +154,37 @@ const LoanScreen = ({ navigation, route }) => {
     }
   };
 
+  // Loan given photo (approved flow)
+  const handleLoanGivenPhotoCapture = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert(t('common.error'), t('customer.cameraPermissionRequired'));
+        return;
+      }
+      const asset = await pickFromCamera([4, 3]);
+      if (asset) setLoanGivenPhoto(asset);
+    } catch (error) {
+      console.error('Loan given photo capture error:', error?.message ?? error);
+      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
+    }
+  };
+
+  const handleLoanGivenPhotoUpload = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert(t('common.error'), t('customer.galleryPermissionRequired'));
+        return;
+      }
+      const asset = await pickFromLibrary([4, 3]);
+      if (asset) setLoanGivenPhoto(asset);
+    } catch (error) {
+      console.error('Loan given photo upload error:', error?.message ?? error);
+      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
+    }
+  };
+
   // Validation states
   const [errors, setErrors] = useState({});
 
@@ -170,6 +212,9 @@ const LoanScreen = ({ navigation, route }) => {
 
   // Check if submit button should be enabled
   const isSubmitEnabled = () => {
+    if (loan && isLoanApproved) {
+      return paymentType.trim().length > 0 && loanGivenPhoto != null;
+    }
     return customerPhoto &&
       aadharNumber.trim().length === 12;
   };
@@ -244,8 +289,72 @@ const LoanScreen = ({ navigation, route }) => {
       });
   };
 
-  // Handle submission
+  // Handle submission (approved: PUT loan given with lat/long; else renewal flow)
   const handleSubmit = async () => {
+    if (loan && isLoanApproved) {
+      if (!paymentType.trim() || !loanGivenPhoto) {
+        Alert.alert(t('common.error'), t('loan.paymentTypeAndPhotoRequired') || 'Payment type and loan given photo are required.');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        let locationData;
+        try {
+          locationData = await captureLocation();
+        } catch (locationError) {
+          Alert.alert(t('common.error'), t('customer.locationRequired'));
+          setIsSubmitting(false);
+          return;
+        }
+        const loanId = loan.id;
+        const photoUri = loanGivenPhoto.uri || loanGivenPhoto.localUri;
+        const fileName = loanGivenPhoto.fileName || photoUri?.split?.('/').pop() || 'loan_given_photo.png';
+        const mimeType = loanGivenPhoto.mimeType || 'image/png';
+
+        const payloadPaymentType = paymentType.trim();
+        const payloadLatitude = String(locationData.latitude ?? '');
+        const payloadLongitude = String(locationData.longitude ?? '');
+
+        console.log('━━━━━━━━━━━━━━━━━━━━ [Loan Given] PAYLOAD ━━━━━━━━━━━━━━━━━━━━');
+        console.log('[Loan Given] loanId:', loanId);
+        console.log('[Loan Given] payment_type:', payloadPaymentType);
+        console.log('[Loan Given] latitude:', payloadLatitude);
+        console.log('[Loan Given] longitude:', payloadLongitude);
+        console.log('[Loan Given] loan_given_photo (file):', {
+          uri: photoUri || '(null)',
+          name: fileName,
+          type: mimeType,
+          sentAs: 'binary (multipart/form-data file part)',
+        });
+        console.log('[Loan Given] loanGivenPhoto raw keys:', loanGivenPhoto ? Object.keys(loanGivenPhoto) : []);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        const formData = new FormData();
+        formData.append('payment_type', payloadPaymentType);
+        formData.append('latitude', payloadLatitude);
+        formData.append('longitude', payloadLongitude);
+        formData.append('loan_given_photo', {
+          uri: photoUri,
+          name: fileName,
+          type: mimeType,
+        });
+
+        console.log('[Loan Given] Calling updateLoanGiven, loanId:', loanId);
+        await apiServices.loan.updateLoanGiven(loanId, formData);
+        Alert.alert(
+          t('common.success'),
+          t('loan.loanGivenUpdated') || 'Loan given updated successfully.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } catch (error) {
+        Alert.alert(t('common.error'), error?.response?.data?.message || error?.message || t('loan.failedToProcessRenewal'));
+        console.error('Update loan given error:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -253,7 +362,6 @@ const LoanScreen = ({ navigation, route }) => {
     setIsSubmitting(true);
 
     try {
-      // Capture location before submission
       let locationData;
       try {
         locationData = await captureLocation();
@@ -289,8 +397,8 @@ const LoanScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="dark" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
       <Header
         title={t('loan.loanDetails')}
@@ -526,6 +634,50 @@ const LoanScreen = ({ navigation, route }) => {
                   <Text style={styles.imageIconLabel}>{t('loan.loanGivenPhoto')}</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Approved: Process loan given — payment type + loan given photo */}
+              {isLoanApproved && (
+                <>
+                  <Text style={styles.detailSectionTitle}>{t('loan.processLoanGiven') || 'Process Loan'}</Text>
+                  <View style={styles.formRow}>
+                    <Text style={styles.formLabel}>{t('loan.paymentType')}</Text>
+                    <View style={styles.paymentTypeRow}>
+                      {['cash', 'upi'].map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={[styles.paymentTypeChip, paymentType === type && styles.paymentTypeChipActive]}
+                          onPress={() => setPaymentType(type)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.paymentTypeChipText, paymentType === type && styles.paymentTypeChipTextActive]}>{type}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.loanGivenImageSection}>
+                    <Text style={styles.loanGivenImageLabel}>{t('loan.loanGivenPhoto')}</Text>
+                    {loanGivenPhoto ? (
+                      <View style={styles.loanGivenImagePreview}>
+                        <Image source={{ uri: loanGivenPhoto.uri || loanGivenPhoto.localUri }} style={styles.loanGivenImage} resizeMode="cover" />
+                        <TouchableOpacity style={styles.loanGivenRemoveButton} onPress={() => setLoanGivenPhoto(null)} activeOpacity={0.7}>
+                          <Ionicons name="close-circle" size={24} color={COLORS.white} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.loanGivenImageOptions}>
+                        <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoCapture} activeOpacity={0.7}>
+                          <Ionicons name="camera" size={30} color={COLORS.primary} />
+                          <Text style={styles.loanGivenImageOptionText}>{t('customer.takePhoto') || 'Take Photo'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoUpload} activeOpacity={0.7}>
+                          <Ionicons name="image-outline" size={30} color={COLORS.primary} />
+                          <Text style={styles.loanGivenImageOptionText}>{t('customer.chooseFromLibrary') || 'Choose from Library'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
             </View>
           )}
 
@@ -544,7 +696,7 @@ const LoanScreen = ({ navigation, route }) => {
               <Text style={styles.submitButtonText}>{t('common.processing')}</Text>
             </View>
           ) : (
-            <Text style={styles.submitButtonText}>{t('loan.processRenewal')}</Text>
+            <Text style={styles.submitButtonText}>{loan && isLoanApproved ? (t('loan.update') || 'Update') : t('loan.processRenewal')}</Text>
           )}
         </TouchableOpacity>
       </SafeAreaView>
@@ -1043,6 +1195,87 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body4,
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  paymentTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SIZES.base,
+    marginTop: SIZES.base * 0.5,
+  },
+  paymentTypeChip: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  paymentTypeChipActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '15',
+  },
+  paymentTypeChipText: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+  },
+  paymentTypeChipTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  loanGivenPhotoRow: {
+    flexDirection: 'row',
+    gap: SIZES.base,
+    marginTop: SIZES.base * 0.5,
+  },
+  loanGivenImageSection: {
+    marginBottom: SIZES.margin,
+  },
+  loanGivenImageLabel: {
+    fontSize: SIZES.body2,
+    fontWeight: '500',
+    color: COLORS.text?.primary || '#333',
+    marginBottom: SIZES.base / 2,
+  },
+  loanGivenImagePreview: {
+    position: 'relative',
+    width: '100%',
+    height: 120,
+    borderRadius: SIZES.radius,
+    overflow: 'hidden',
+  },
+  loanGivenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  loanGivenRemoveButton: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+  },
+  loanGivenImageOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  loanGivenImageOptionButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SIZES.padding,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+    marginHorizontal: SIZES.base / 2,
+  },
+  loanGivenImageOptionText: {
+    fontSize: SIZES.body3,
+    color: COLORS.text?.secondary || '#666',
+    marginTop: SIZES.base / 2,
+    fontWeight: '500',
   },
 });
 

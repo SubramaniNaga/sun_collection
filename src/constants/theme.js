@@ -1,7 +1,10 @@
+const STATUS_BAR_COLOR = '#1d7ee2';
+
 export const COLORS = {
   primary: '#1d7ee2',
   secondary: '#1d7ee2',
-  
+  statusBar: STATUS_BAR_COLOR,
+
   white: '#FFFFFF',
   black: '#000000',
   gray: '#666666',

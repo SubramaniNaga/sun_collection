@@ -158,8 +158,8 @@ const UpfrontCashAddScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       <Header title={t('upfrontCash.addUpfrontCash')} showBackButton={true} onBackPress={() => navigation.goBack()} />
       <View style={styles.mainContent}>
         <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>

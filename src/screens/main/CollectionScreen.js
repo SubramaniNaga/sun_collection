@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
@@ -38,6 +38,15 @@ const formatDate = (dateStr) => {
 const formatAmount = (val) => {
   const num = parseFloat(val);
   return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
+};
+
+const API_BASE_URL = 'http://65.0.100.65:6005';
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+  if (imagePath.startsWith('/api')) return `${API_BASE_URL}${imagePath}`;
+  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${API_BASE_URL}/api/v1${cleanPath}`;
 };
 
 const CollectionScreen = ({ navigation }) => {
@@ -459,8 +468,8 @@ const CollectionScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="dark" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       <Header
         title={t('collection.title')}
         showBackButton={true}
@@ -562,7 +571,19 @@ const CollectionScreen = ({ navigation }) => {
                   onPress={() => handleItemPress(collection)}
                 >
                   <View style={styles.itemRow}>
-                    <Text style={styles.itemName} numberOfLines={1}>{collection.customerNo} - {collection.customerName ?? '—'}</Text>
+                    {collection.customerPhoto ? (
+                      <Image
+                        source={{ uri: getImageUrl(collection.customerPhoto) }}
+                        style={styles.itemCustomerPhoto}
+                      />
+                    ) : (
+                      <View style={styles.itemCustomerPhotoPlaceholder}>
+                        <Ionicons name="person-outline" size={20} color={COLORS.text.tertiary} />
+                      </View>
+                    )}
+                    <Text style={styles.itemName} numberOfLines={1}>
+                      {' - '}{(collection.customerId ?? collection.customerNo ?? '—')}{' - '}{(collection.customerName ?? '—')}
+                    </Text>
                     <View style={styles.iconButtonContainer}>
                       {collection.customerAddress && (
                         <TouchableOpacity
@@ -588,6 +609,7 @@ const CollectionScreen = ({ navigation }) => {
                       )}
                     </View>
                   </View>
+                  <View style={styles.itemDivider} />
                   <View style={styles.itemRow}>
                     <Text style={styles.itemAssets}>
                       Week {collection.collectionWeek ?? '—'} · {collection.getFormattedCollectionDate()}
@@ -844,6 +866,28 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.base,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  itemCustomerPhoto: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.lightGray,
+    marginRight: SIZES.base,
+  },
+  itemCustomerPhotoPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.lightGray,
+    marginRight: SIZES.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginVertical: SIZES.base,
+    marginLeft: 0,
   },
   itemRow: {
     flexDirection: 'row',

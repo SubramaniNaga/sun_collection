@@ -1,6 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
+
+const STATUS_BAR_COLOR = '#1d7ee2';
 
 const Header = ({ 
   title, 
@@ -11,7 +14,10 @@ const Header = ({
   rightComponent,
   style 
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
+    <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
     <View style={[styles.header, style]}>
       {showMenuButton && (
         <TouchableOpacity 
@@ -39,12 +45,16 @@ const Header = ({
         <View style={styles.headerPlaceholder} />
       )}
     </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  headerWrapper: {
+    backgroundColor: STATUS_BAR_COLOR,
+  },
   header: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: STATUS_BAR_COLOR,
     height: 60,
     flexDirection: 'row',
     alignItems: 'center',

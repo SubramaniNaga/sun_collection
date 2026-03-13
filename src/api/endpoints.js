@@ -27,6 +27,8 @@ export const ENDPOINTS = {
   LOAN: {
     LIST: '/loan',
     NIP: '/loan/nip',
+    GIVEN_UPDATE: (id) => `/loan/given/${id}`,
+    TYPES: '/loan-type',
   },
 };
 

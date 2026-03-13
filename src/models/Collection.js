@@ -22,6 +22,7 @@ class Collection {
     this.customerPhone = data.customer_phone || null;
     this.customerNo = data.customer_no || null;
     this.customerAddress = data.customer_address || null;
+    this.customerPhoto = data.customer_photo || null;
 
     // Loan fields
     this.loanAmount = data.loan_amount || '0';

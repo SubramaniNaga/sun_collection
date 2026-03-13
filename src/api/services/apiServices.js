@@ -152,21 +152,18 @@ export const apiServices = {
 
     createCustomerWithLoan: async (formData) => {
       try {
-        // Get line_id and branch_id from AsyncStorage
         const lineId = await AsyncStorage.getItem('lineId');
         const branchId = await AsyncStorage.getItem('branchId');
 
-        // Add line_id and branch_id to form data
         const formDataWithParams = new FormData();
-        for (let [key, value] of formData.entries()) {
+        for (const [key, value] of formData.entries()) {
           formDataWithParams.append(key, value);
         }
         const lineIdNum = lineId != null && lineId !== '' ? (Number(lineId) || parseInt(lineId, 10) || 1) : 1;
         const branchIdNum = branchId != null && branchId !== '' ? (Number(branchId) || parseInt(branchId, 10) || 1) : 1;
-        formDataWithParams.append('line_id', lineIdNum);
-        formDataWithParams.append('branch_id', branchIdNum);
+        formDataWithParams.append('line_id', String(lineIdNum));
+        formDataWithParams.append('branch_id', String(branchIdNum));
 
-        // Log payload (scalar values + file placeholders; actual file bodies are binary)
         const payloadLog = {};
         for (const [key, value] of formDataWithParams.entries()) {
           if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value && 'type' in value) {
@@ -178,18 +175,43 @@ export const apiServices = {
         console.log('👤 createCustomerWithLoan - PAYLOAD:', JSON.stringify(payloadLog, null, 2));
         console.log('👤 API: createCustomerWithLoan - POST', ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, '| lineId:', lineId, '| branchId:', branchId);
 
-        const response = await apiClient.post(ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, formDataWithParams, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          transformRequest: (data, headers) => {
-            delete headers['Content-Type'];
-            return data;
-          },
+        const path = ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN;
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const token = await AsyncStorage.getItem('authToken');
+
+        const headers = {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+        const response = await fetch(fullUrl, {
+          method: 'POST',
+          headers,
+          body: formDataWithParams,
+          signal: controller.signal,
         });
-        return response.data;
+
+        clearTimeout(timeoutId);
+
+        console.log('👤 createCustomerWithLoan - response status', response.status);
+        const data = await response.json().catch(() => ({}));
+        console.log('👤 createCustomerWithLoan - response data', data);
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+        return data;
       } catch (error) {
         console.error('Create customer with loan error:', error);
+        console.error('Create customer with loan - error.message:', error?.message);
+        if (error.name === 'AbortError') {
+          console.error('Create customer with loan - request timed out');
+        }
         throw error;
       }
     },
@@ -328,7 +350,80 @@ export const apiServices = {
         console.error('Get NIP list error:', error);
         throw error;
       }
-    }
+    },
+
+    getLoanTypes: async () => {
+      try {
+        console.log('💰 API: getLoanTypes - GET', ENDPOINTS.LOAN.TYPES);
+        const response = await apiClient.get(ENDPOINTS.LOAN.TYPES);
+        const data = response.data?.data ?? response.data;
+        const list = Array.isArray(data) ? data : [];
+        console.log('💰 API: getLoanTypes - Response: count:', list.length);
+        return list;
+      } catch (error) {
+        console.error('Get loan types error:', error);
+        throw error;
+      }
+    },
+
+    updateLoanGiven: async (loanId, formData) => {
+      try {
+        const path = ENDPOINTS.LOAN.GIVEN_UPDATE(loanId);
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const token = await AsyncStorage.getItem('authToken');
+
+        console.log('💰 API: updateLoanGiven - PUT', path);
+        console.log('💰 API: updateLoanGiven - full URL', fullUrl);
+        console.log('💰 API: updateLoanGiven - loanId', loanId);
+
+        if (formData && typeof formData.forEach === 'function') {
+          console.log('━━━━━━━━━━━━━━ [updateLoanGiven] FormData payload ━━━━━━━━━━━━');
+          formData.forEach((value, key) => {
+            if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value && 'type' in value) {
+              console.log(`  ${key}: [FILE] name=${value.name}, type=${value.type}, uri=${typeof value.uri === 'string' ? value.uri.substring(0, 80) + '...' : value.uri}`);
+            } else {
+              console.log(`  ${key}:`, value, `(type: ${typeof value})`);
+            }
+          });
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        }
+
+        const headers = {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(fullUrl, {
+          method: 'PUT',
+          headers,
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        console.log('💰 API: updateLoanGiven - response status', response.status);
+        const data = await response.json().catch(() => ({}));
+        console.log('💰 API: updateLoanGiven - response data', data);
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+        return data;
+      } catch (error) {
+        console.error('Update loan given error:', error);
+        console.error('Update loan given - error.message:', error?.message);
+        if (error.name === 'AbortError') {
+          console.error('Update loan given - request timed out');
+        }
+        throw error;
+      }
+    },
   },
 
   // Collection Services

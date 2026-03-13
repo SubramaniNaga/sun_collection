@@ -307,17 +307,14 @@ const NIPScreen = ({ navigation }) => {
             </View>
           )}
         </TouchableOpacity>
-        <Text style={styles.nipCardCustomerId} numberOfLines={1}>
-          {getCustomerIdDisplay(item)}
-        </Text>
-        <Text style={styles.nipCardName} numberOfLines={1}>
-          {item?.customerName ?? '—'}
+        <Text style={styles.nipCardNameLine} numberOfLines={1}>
+          {' - '}{getCustomerIdDisplay(item)}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
         </Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
           <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
         </View>
       </View>
-     
+      <View style={styles.nipCardDivider} />
       <View style={styles.nipCardRow}>
         <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.nipCardLabel}>{t('loan.loanAmount')}</Text>
@@ -418,8 +415,8 @@ const NIPScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       
       <Header 
         title={t('nip.title')} 
@@ -586,10 +583,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.margin * 0.75,
-    paddingBottom: SIZES.base,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  },
+  nipCardDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginVertical: SIZES.margin * 0.5,
+  },
+  nipCardNameLine: {
+    flex: 1,
+    fontSize: SIZES.body1,
+    fontWeight: '700',
+    color: COLORS.text?.primary || COLORS.primary,
+    // marginHorizontal: SIZES.base,
   },
   nipCardPhotoWrap: {
     width: 44,
@@ -608,20 +613,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  nipCardCustomerId: {
-    fontSize: SIZES.body2,
-    color: COLORS.text.secondary,
-    marginRight: 0,
-    minWidth: 20,
-  },
-  nipCardName: {
-    flex: 1,
-    fontSize: SIZES.body1,
-    fontWeight: '700',
-    color: COLORS.text?.primary || COLORS.primary,
-    marginRight: SIZES.base,
-    minWidth: 0,
   },
   statusBadge: {
     paddingHorizontal: SIZES.base,

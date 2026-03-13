@@ -112,7 +112,7 @@ const SplashScreen = ({ navigation }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" backgroundColor={COLORS.primary} />
+        <StatusBar style="dark" backgroundColor={COLORS.statusBar} />
         <View style={styles.content}>
           <Text style={styles.title}>{t('auth.sunCollection')}</Text>
           <Text style={styles.subtitle}>

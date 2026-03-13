@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -31,8 +32,15 @@ const CustomDrawerContent = (props) => {
     },
   ];
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    Alert.alert(
+      t('settings.confirmLogout'),
+      null,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('settings.confirmLogoutConfirm'), onPress: async () => await logout() },
+      ]
+    );
   };
 
   const getInitials = (name) => {

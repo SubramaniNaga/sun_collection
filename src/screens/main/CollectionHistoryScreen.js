@@ -294,8 +294,8 @@ const CollectionHistoryScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="dark" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
       <Header
         title={t('collectionHistory.title')}

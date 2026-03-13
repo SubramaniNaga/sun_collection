@@ -153,8 +153,8 @@ const AddCustomerScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar style="dark" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       
       <Header 
         title="Add Customer" 

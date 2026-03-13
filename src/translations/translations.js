@@ -234,6 +234,8 @@ const translations = {
       renewalSubmitted: 'Loan renewal request submitted successfully!',
       failedToProcessRenewal: 'Failed to process loan renewal. Please try again.',
       processRenewal: 'Process Renewal',
+      processLoanGiven: 'Process Loan',
+      update: 'Update',
     },
 
     // NIP
@@ -271,6 +273,7 @@ const translations = {
       loanAmount: 'Loan Amount',
       loanPeriod: 'Loan Period',
       selectLoanType: 'Select Loan Type',
+      loadingLoanTypes: 'Loading...',
       enterLoanAmount: 'Enter loan amount',
       enterLoanPeriod: 'Enter loan period',
       monthly: 'Monthly',
@@ -427,6 +430,8 @@ const translations = {
       about: 'About',
       version: 'Version',
       logout: 'Logout',
+      confirmLogout: 'Confirm logout?',
+      confirmLogoutConfirm: 'Confirm',
       preferences: 'Preferences',
       pushNotifications: 'Push Notifications',
       receiveCollectionNotifications: 'Receive notifications about collections',
@@ -703,6 +708,8 @@ const translations = {
       renewalSubmitted: 'கடன் புதுப்பிப்பு கோரிக்கை வெற்றிகரமாக சமர்ப்பிக்கப்பட்டது!',
       failedToProcessRenewal: 'கடன் புதுப்பிப்பை செயலாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
       processRenewal: 'புதுப்பிப்பை செயலாக்கு',
+      processLoanGiven: 'கடனை செயலாக்கு',
+      update: 'புதுப்பி',
     },
 
     // NIP
@@ -740,6 +747,7 @@ const translations = {
       loanAmount: 'கடன் தொகை',
       loanPeriod: 'கடன் காலம்',
       selectLoanType: 'கடன் வகையைத் தேர்ந்தெடு',
+      loadingLoanTypes: 'ஏற்றுகிறது...',
       enterLoanAmount: 'கடன் தொகையை உள்ளிடவும்',
       enterLoanPeriod: 'கடன் காலத்தை உள்ளிடவும்',
       monthly: 'மாதாந்திர',
@@ -896,6 +904,8 @@ const translations = {
       about: 'பற்றி',
       version: 'பதிப்பு',
       logout: 'வெளியேறு',
+      confirmLogout: 'வெளியேற உறுதிசெய்யவா?',
+      confirmLogoutConfirm: 'உறுதி',
       preferences: 'விருப்பங்கள்',
       pushNotifications: 'புஷ் அறிவிப்புகள்',
       receiveCollectionNotifications: 'வசூல்கள் பற்றிய அறிவிப்புகளைப் பெறுங்கள்',

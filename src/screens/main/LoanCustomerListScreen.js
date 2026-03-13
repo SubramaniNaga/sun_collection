@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -97,9 +98,11 @@ const LoanCustomerListScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchLoans(1, false);
-  }, [fetchLoans]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchLoans(1, false);
+    }, [fetchLoans])
+  );
 
   const loadMore = useCallback(() => {
     if (loadingMore || !pagination.hasNextPage) return;
@@ -258,17 +261,14 @@ const LoanCustomerListScreen = ({ navigation }) => {
             </View>
           )}
         </TouchableOpacity>
-        <Text style={styles.loanCardCustomerNo} numberOfLines={1}>
-          {item?.customer_no ?? '—'}
-        </Text>
-        <Text style={styles.loanCardName} numberOfLines={1}>
-          {item?.customer_name ?? '—'}
+        <Text style={styles.loanCardNameLine} numberOfLines={1}>
+          {' - '}{(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
         </Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
           <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
         </View>
       </View>
-     
+      <View style={styles.loanCardDivider} />
       <View style={styles.loanCardRow}>
         <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
@@ -365,8 +365,8 @@ const LoanCustomerListScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="dark" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
       <Header
         title={t('loan.loanManagement')}
@@ -560,10 +560,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.margin * 0.75,
-    paddingBottom: SIZES.base,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  },
+  loanCardDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginVertical: SIZES.margin * 0.5,
+  },
+  loanCardNameLine: {
+    flex: 1,
+    fontSize: SIZES.body1,
+    fontWeight: '700',
+    color: COLORS.text?.primary || COLORS.primary,
+    // marginHorizontal: SIZES.base,
   },
   loanCardPhotoWrap: {
     width: 44,
@@ -582,20 +590,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loanCardCustomerNo: {
-    fontSize: SIZES.body2,
-    color: COLORS.text.secondary,
-    marginRight: 0,
-    minWidth: 32,
-  },
-  loanCardName: {
-    flex: 1,
-    fontSize: SIZES.body1,
-    fontWeight: '700',
-    color: COLORS.text?.primary || COLORS.primary,
-    marginRight: 0,
-    minWidth: 0,
   },
   photoModalBackdrop: {
     flex: 1,

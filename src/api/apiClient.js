@@ -3,8 +3,36 @@ import axios from 'axios';
 import { ErrorHandler } from '../utils/errorHandler';
 import { clearSession } from '../utils/sessionManager';
 
-const API_BASE_URL = __DEV__ 
-  ? 'http://65.0.100.65:6005/api/v1' 
+/**
+ * CORS:
+ * - Native (Android/iOS): CORS does NOT apply. "Network Error" is usually connectivity,
+ *   timeout, or Android cleartext HTTP — not CORS.
+ * - Web (browser): CORS applies. Only the backend can fix it (see BACKEND_CORS below).
+ *   Frontend cannot bypass CORS; it is enforced by the browser.
+ */
+export const BACKEND_CORS_CHECKLIST = `
+Backend team: to allow this app to call the API from the browser (web build), please:
+
+1. Allow the app origin in CORS, e.g.:
+   Access-Control-Allow-Origin: http://localhost:8081
+   (or your production web URL, or "*" for development only)
+
+2. Allow methods used by the app:
+   Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+
+3. Allow headers we send:
+   Access-Control-Allow-Headers: Authorization, Content-Type, Accept
+
+4. For PUT (and other non-simple requests), the browser sends an OPTIONS preflight.
+   Respond to OPTIONS /api/v1/loan/given/:id with 200 and the above headers.
+
+5. If using multipart/form-data (e.g. PUT /loan/given/:id with file), ensure
+   Content-Type is not restricted — allow the request's Content-Type (including
+   multipart/form-data with boundary).
+`;
+
+const API_BASE_URL = __DEV__
+  ? 'http://65.0.100.65:6005/api/v1'
   : 'http://65.0.100.65:6005/api/v1';
 
 const apiClient = axios.create({
@@ -85,6 +113,17 @@ apiClient.interceptors.request.use(
           const keys = [];
           config.data.forEach((_, key) => keys.push(key));
           console.log('📤 Request body: FormData (multipart), keys:', keys.join(', '));
+          try {
+            config.data.forEach((value, key) => {
+              if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value) {
+                console.log(`📤   ${key}: [FILE] name=${value.name}, type=${value.type || 'n/a'}, uri=${typeof value.uri === 'string' ? value.uri.substring(0, 70) + '...' : value.uri}`);
+              } else {
+                console.log(`📤   ${key}:`, value);
+              }
+            });
+          } catch (e) {
+            console.log('📤   (FormData values not logged:', e?.message, ')');
+          }
         } else {
           console.log('📤 Request body:', JSON.stringify(config.data, null, 2));
         }

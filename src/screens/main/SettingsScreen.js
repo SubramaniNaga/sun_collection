@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../../components/common/Card';
 import { COLORS, SIZES } from '../../constants/theme';
@@ -127,7 +127,16 @@ const SettingsScreen = ({ navigation }) => {
           title: t('settings.logout'),
           subtitle: t('settings.signOutAccount'),
           type: 'destructive',
-          onPress: logout,
+          onPress: () => {
+            Alert.alert(
+              t('settings.confirmLogout'),
+              null,
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('settings.confirmLogoutConfirm'), onPress: logout },
+              ]
+            );
+          },
         },
       ],
     },
