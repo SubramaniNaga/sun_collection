@@ -130,8 +130,18 @@ apiClient.interceptors.request.use(
       }
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-      // Start global loading
-      if (loadingContext) {
+      // Skip global loader for list/pagination endpoints – screens show their own loaders:
+      // initial load = spinner only, pagination = skeleton only (mutually exclusive).
+      const listEndpoints = ['/loan', '/expense', '/collection', '/loan/nip', '/expense-category/active/list'];
+      const isListRequest = (config.method || 'get').toLowerCase() === 'get' &&
+        listEndpoints.some(ep => config.url && config.url.includes(ep));
+      const isCollectionHistory = config.url && config.url.includes('/collection/history');
+      if (isListRequest || isCollectionHistory) {
+        config.skipGlobalLoader = true;
+      }
+
+      // Start global loading only when screen is not handling it
+      if (loadingContext && !config.skipGlobalLoader) {
         loadingContext.startLoading();
       }
     } catch (error) {
@@ -154,8 +164,8 @@ apiClient.interceptors.response.use(
     console.log('📥 Response data:', JSON.stringify(response.data, null, 2));
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // Stop global loading
-    if (loadingContext) {
+    // Stop global loading only if we started it (skip for list/pagination)
+    if (loadingContext && !response.config?.skipGlobalLoader) {
       loadingContext.stopLoading();
     }
     return response;
@@ -171,8 +181,8 @@ apiClient.interceptors.response.use(
     }
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // Stop global loading
-    if (loadingContext) {
+    // Stop global loading only if we started it (skip for list/pagination)
+    if (loadingContext && !error.config?.skipGlobalLoader) {
       loadingContext.stopLoading();
     }
 

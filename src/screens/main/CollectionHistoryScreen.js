@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
 import Header from '../../components/common/Header';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import CollectionHistory from '../../models/CollectionHistory';
 import { useLanguage } from '../../store/LanguageContext';
@@ -265,6 +266,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
   };
 
   const renderEmpty = () => {
+    // Initial load only: spinner (never skeleton). Pagination = skeleton in footer only.
     if (loading) {
       return (
         <View style={styles.centerContainer}>
@@ -465,6 +467,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: SIZES.padding * 3,
+  },
+  skeletonWrap: {
+    flex: 1,
   },
   loadingText: {
     fontSize: SIZES.body2,

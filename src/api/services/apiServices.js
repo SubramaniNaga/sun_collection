@@ -426,6 +426,104 @@ export const apiServices = {
     },
   },
 
+  // Expense category (active list for expense type selection)
+  expenseCategory: {
+    getActiveList: async () => {
+      try {
+        const response = await apiClient.get(ENDPOINTS.EXPENSE_CATEGORY.ACTIVE_LIST);
+        const data = response.data?.data ?? response.data;
+        const list = Array.isArray(data) ? data : [];
+        return list;
+      } catch (error) {
+        console.error('Get active expense categories error:', error);
+        throw error;
+      }
+    },
+  },
+
+  // Expense (list with pagination + create)
+  expense: {
+    getList: async (params = {}) => {
+      try {
+        const { page = 1, limit = 10 } = params;
+        const response = await apiClient.get(ENDPOINTS.EXPENSE.LIST, {
+          params: { page, limit },
+        });
+        const raw = response.data;
+        const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+        const pag = raw?.pagination ?? {};
+        return {
+          data: list,
+          pagination: {
+            currentPage: pag.currentPage ?? page,
+            hasNextPage: Boolean(pag.hasNextPage),
+            totalPages: pag.totalPages ?? 1,
+          },
+        };
+      } catch (error) {
+        console.error('Get expense list error:', error);
+        throw error;
+      }
+    },
+
+    create: async (payload) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        const lineId = await AsyncStorage.getItem('lineId');
+        const token = await AsyncStorage.getItem('authToken');
+
+        const formData = new FormData();
+        formData.append('title', String(payload.title ?? ''));
+        formData.append('category', String(payload.category ?? ''));
+        formData.append('amount', String(payload.amount ?? ''));
+        formData.append('date', String(payload.date ?? ''));
+        formData.append('description', String(payload.description ?? ''));
+        formData.append('branch_id', String(branchId ?? '1'));
+        formData.append('line_id', String(lineId ?? '1'));
+
+        if (payload.receiptImageUri) {
+          const uri = typeof payload.receiptImageUri === 'object' ? payload.receiptImageUri?.uri : payload.receiptImageUri;
+          if (uri) {
+            const name = uri.split('/').pop()?.split('?')[0] || 'receipt_image.png';
+            const type = (uri || '').toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg';
+            formData.append('receipt_image', { uri, name, type });
+          }
+        }
+
+        const path = ENDPOINTS.EXPENSE.CREATE;
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(fullUrl, {
+          method: 'POST',
+          headers,
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+        return data;
+      } catch (error) {
+        console.error('Create expense error:', error);
+        if (error.name === 'AbortError') {
+          console.error('Create expense - request timed out');
+        }
+        throw error;
+      }
+    },
+  },
+
   // Collection Services
   collection: {
     getCollectionList: async (params = {}) => {

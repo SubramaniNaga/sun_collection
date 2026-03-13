@@ -1,29 +1,64 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import apiServices from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 
+const LIMIT = 10;
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+// Pending: #F59E0B, Approved: #10B981, Rejected: #EF4444 Process: #FFC107 #17a2b8
+const STATUS_CONFIG = {
+  '0': { label: 'Pending', color: '#F59E0B', bg: '#FEF3C7' },
+  '1': { label: 'Approved', color: '#10B981', bg: '#D1FAE5' },
+  '2': { label: 'Rejected', color: '#EF4444', bg: '#FEE2E2' },
+};
+
+
+
+const formatAmount = (val) => {
+  if (val == null || val === '') return '₹0';
+  const num = parseFloat(val);
+  return isNaN(num) ? String(val) : `₹${num.toLocaleString('en-IN')}`;
+};
+
 const ExpensesScreen = ({ navigation }) => {
   const { t } = useLanguage();
-  // State for expenses list
   const [expenses, setExpenses] = useState([]);
-  const [filteredExpenses, setFilteredExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(null);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    hasNextPage: false,
+    totalPages: 1,
+  });
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [showFilterModal, setShowFilterModal] = useState(false);
 
-  // Filter options
   const filterOptions = [
     t('common.all'),
     t('expenses.pending'),
@@ -31,158 +66,97 @@ const ExpensesScreen = ({ navigation }) => {
     t('expenses.approved'),
   ];
 
-  // Mock expenses data
-  const mockExpenses = [
-    {
-      id: '1',
-      title: 'Fuel Expense',
-      category: 'Fuel',
-      date: '15-03-2026',
-      amount: 1500.00,
-      status: 'Approved',
-    },
-    {
-      id: '2',
-      title: 'Vehicle Maintenance',
-      category: 'Vehicle Maintenance',
-      date: '14-03-2026',
-      amount: 3500.00,
-      status: 'Process',
-    },
-    {
-      id: '3',
-      title: 'Office Supplies',
-      category: 'Office Expense',
-      date: '13-03-2026',
-      amount: 800.00,
-      status: 'Pending',
-    },
-    {
-      id: '4',
-      title: 'Staff Lunch',
-      category: 'Food / Travel',
-      date: '12-03-2026',
-      amount: 450.00,
-      status: 'Approved',
-    },
-    {
-      id: '5',
-      title: 'Collection Travel',
-      category: 'Collection Expense',
-      date: '11-03-2026',
-      amount: 1200.00,
-      status: 'Pending',
-    },
-    {
-      id: '6',
-      title: 'Office Rent',
-      category: 'Office Expense',
-      date: '10-03-2026',
-      amount: 10000.00,
-      status: 'Approved',
-    },
-    {
-      id: '7',
-      title: 'Vehicle Insurance',
-      category: 'Vehicle Maintenance',
-      date: '09-03-2026',
-      amount: 2500.00,
-      status: 'Process',
-    },
-    {
-      id: '8',
-      title: 'Miscellaneous',
-      category: 'Miscellaneous',
-      date: '08-03-2026',
-      amount: 300.00,
-      status: 'Pending',
-    },
-    {
-      id: '9',
-      title: 'Miscellaneous',
-      category: 'Miscellaneous',
-      date: '08-03-2026',
-      amount: 300.00,
-      status: 'Pending',
-    },
-    {
-      id: '10',
-      title: 'Miscellaneous',
-      category: 'Miscellaneous',
-      date: '08-03-2026',
-      amount: 300.00,
-      status: 'Pending',
-    },
-  ];
+  const fetchExpenses = useCallback(async (page = 1, append = false) => {
+    try {
+      if (page === 1) {
+        setLoading(true);
+        setError(null);
+      } else {
+        setLoadingMore(true);
+      }
 
-  // Initialize data
-  useEffect(() => {
-    setExpenses(mockExpenses);
-    setFilteredExpenses(mockExpenses);
-  }, []);
+      const result = await apiServices.expense.getList({ page, limit: LIMIT });
+      const list = Array.isArray(result?.data) ? result.data : [];
+      const pag = result?.pagination || {};
 
-  // Apply filter
-  useEffect(() => {
-    if (selectedFilter === t('common.all')) {
-      setFilteredExpenses(expenses);
-    } else {
-      // Map filter text back to status value
-      const statusMap = {
-        [t('expenses.pending')]: 'Pending',
-        [t('expenses.process')]: 'Process',
-        [t('expenses.approved')]: 'Approved',
-      };
-      const statusValue = statusMap[selectedFilter] || selectedFilter;
-      setFilteredExpenses(expenses.filter(expense => expense.status === statusValue));
+      setExpenses((prev) => (append ? [...prev, ...list] : list));
+      setPagination({
+        currentPage: pag.currentPage ?? page,
+        hasNextPage: Boolean(pag.hasNextPage),
+        totalPages: pag.totalPages ?? 1,
+      });
+    } catch (err) {
+      console.error('Fetch expenses error:', err);
+      if (page === 1) {
+        setError(t('expenses.noExpensesFound'));
+        setExpenses([]);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-  }, [selectedFilter, expenses, t]);
+  }, [t]);
 
-  // Handle filter selection
+  useFocusEffect(
+    useCallback(() => {
+      fetchExpenses(1, false);
+    }, [fetchExpenses])
+  );
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !pagination.hasNextPage) return;
+    fetchExpenses(pagination.currentPage + 1, true);
+  }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchExpenses]);
+
+  const filteredExpenses = (() => {
+    if (selectedFilter === t('common.all')) return expenses;
+    const statusMap = {
+      [t('expenses.pending')]: ['0', 'Pending'],
+      [t('expenses.process')]: ['2', 'Process'],
+      [t('expenses.approved')]: ['1', 'Approved'],
+    };
+    const allowed = statusMap[selectedFilter] || [];
+    return expenses.filter((e) => allowed.includes(String(e.status)));
+  })();
+
   const handleFilterSelect = (filter) => {
     setSelectedFilter(filter);
     setShowFilterModal(false);
   };
 
-  // Get status color
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Approved':
-        return COLORS.success || '#28a745';
-      case 'Process':
-        return COLORS.warning || '#ffc107';
-      case 'Pending':
-        return COLORS.info || '#17a2b8';
-      default:
-        return COLORS.text.secondary;
-    }
+    const s = String(status ?? '');
+    if (s === '1' || s === 'Approved') return COLORS.success || '#28a745';
+    if (s === '2' || s === 'Process') return COLORS.warning || '#ffc107';
+    return COLORS.info || '#17a2b8';
   };
 
-  // Render expense item
-  const renderExpenseItem = ({ item }) => (
-    <View style={styles.expenseCard}>
-      {/* Main content row */}
-      <View style={styles.expenseMainRow}>
-        {/* Left section: Title and meta */}
-        <View style={styles.expenseLeftSection}>
-          <Text style={styles.expenseTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.expenseMeta}>
-            <Text style={styles.categoryText}>{item.category}</Text>
+  const renderExpenseItem = ({ item }) => {
+    const dateVal = item.expense_date ?? item.date;
+    const amountVal = item.amount ?? 0;
+    const statusLabel = item.status != null ? String(item.status) : 'Pending';
+    const status = STATUS_CONFIG[item.status] || { label: 'Unknown', color: '#6B7280', bg: '#E5E7EB' };
 
+    return (
+      <View style={styles.expenseCard}>
+        <View style={styles.expenseMainRow}>
+          <View style={styles.expenseLeftSection}>
+            <Text style={styles.expenseTitle} numberOfLines={1}>{item.title ?? '—'}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+              <Text style={[styles.statusText, { color: status.color }]}>
+                {status.label}
+              </Text>
+            </View>
           </View>
-        </View>
-
-        {/* Right section: Status and Amount */}
-        <View style={styles.expenseRightSection}>
-          <View >
-            <Text style={styles.dateText}>{item.date}</Text>
+          <View style={styles.expenseRightSection}>
+            <Text style={styles.dateText}>{formatDate(dateVal)}</Text>
+            <Text style={styles.amountText}>{formatAmount(amountVal)}</Text>
           </View>
-          <Text style={styles.amountText}>₹{item.amount.toFixed(0)}</Text>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
-  // Render filter option
   const renderFilterOption = (option) => (
     <TouchableOpacity
       key={option}
@@ -204,6 +178,49 @@ const ExpensesScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ListSkeleton count={2} />
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    // Initial load only: spinner (never skeleton). Pagination = skeleton in footer only.
+    if (loading) {
+      return (
+        <View style={styles.initialLoaderWrap}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="alert-circle-outline" size={48} color={COLORS.text.tertiary} />
+          <Text style={styles.emptyStateText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchExpenses(1, false)}>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyState}>
+        <Ionicons name="receipt-outline" size={64} color={COLORS.text.tertiary} />
+        <Text style={styles.emptyStateText}>{t('expenses.noExpensesFound')}</Text>
+        <Text style={styles.emptyStateSubtext}>
+          {selectedFilter === t('common.all')
+            ? t('expenses.addFirstExpense')
+            : t('expenses.noFilteredExpenses', { filter: selectedFilter })}
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
@@ -223,29 +240,21 @@ const ExpensesScreen = ({ navigation }) => {
       />
 
       <View style={styles.content}>
-        {filteredExpenses.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={64} color={COLORS.text.tertiary} />
-            <Text style={styles.emptyStateText}>{t('expenses.noExpensesFound')}</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {selectedFilter === t('common.all')
-                ? t('expenses.addFirstExpense')
-                : t('expenses.noFilteredExpenses', { filter: selectedFilter })
-              }
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredExpenses}
-            renderItem={renderExpenseItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+        <FlatList
+          data={filteredExpenses}
+          renderItem={renderExpenseItem}
+          keyExtractor={(item) => String(item?.id ?? Math.random())}
+          contentContainerStyle={
+            filteredExpenses.length === 0 ? styles.listContainerEmpty : styles.listContainer
+          }
+          showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListEmptyComponent={renderEmpty}
+          ListFooterComponent={filteredExpenses.length > 0 ? renderFooter : null}
+        />
       </View>
 
-      {/* Floating Add Button */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => navigation.navigate('ExpenseAdd')}
@@ -253,10 +262,9 @@ const ExpensesScreen = ({ navigation }) => {
         <Ionicons name="add" size={24} color={COLORS.white} />
       </TouchableOpacity>
 
-      {/* Filter Modal */}
       <Modal
         visible={showFilterModal}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setShowFilterModal(false)}
       >
@@ -275,7 +283,6 @@ const ExpensesScreen = ({ navigation }) => {
                 <Ionicons name="close" size={20} color={COLORS.text.secondary} />
               </TouchableOpacity>
             </View>
-
             <ScrollView style={styles.filterOptionsContainer}>
               {filterOptions.map(renderFilterOption)}
             </ScrollView>
@@ -297,12 +304,28 @@ const styles = StyleSheet.create({
   filterButton: {
     padding: SIZES.padding / 2,
   },
-  // List styles
   listContainer: {
     padding: SIZES.padding,
     paddingTop: SIZES.padding * 0.75,
   },
-  // Compact card styles
+  listContainerEmpty: {
+    flexGrow: 1,
+    padding: SIZES.padding,
+  },
+  initialLoaderWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SIZES.padding * 4,
+  },
+  loadingText: {
+    marginTop: SIZES.margin,
+    fontSize: SIZES.body2,
+    color: COLORS.text.secondary,
+  },
+  footerLoader: {
+    paddingVertical: SIZES.padding,
+  },
   expenseCard: {
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
@@ -346,17 +369,6 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body3,
     color: COLORS.text.tertiary,
   },
-  statusBadge: {
-    paddingHorizontal: SIZES.base * 0.5,
-    paddingVertical: SIZES.base * 0.25,
-    borderRadius: SIZES.radius / 2,
-    marginBottom: SIZES.base * 0.25,
-  },
-  statusText: {
-    fontSize: SIZES.body3,
-    fontWeight: '600',
-    color: COLORS.white,
-  },
   amountText: {
     fontSize: SIZES.body2,
     fontWeight: '700',
@@ -379,6 +391,17 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
     textAlign: 'center',
     marginTop: SIZES.base,
+  },
+  retryButton: {
+    marginTop: SIZES.margin,
+    paddingVertical: SIZES.base,
+    paddingHorizontal: SIZES.padding,
+    backgroundColor: COLORS.primary,
+    borderRadius: SIZES.radius,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',
@@ -444,6 +467,12 @@ const styles = StyleSheet.create({
   selectedFilterOptionText: {
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  statusBadge: {
+    paddingVertical: SIZES.base * 0.25,
+    paddingHorizontal: SIZES.base,
+    borderRadius: SIZES.radius,
+    alignSelf: 'flex-start',
   },
 });
 

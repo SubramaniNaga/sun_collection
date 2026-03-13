@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
@@ -31,20 +32,6 @@ const getImageUrl = (imagePath) => {
   const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
   return `${API_BASE_URL}/api/v1${cleanPath}`;
 };
-
-// Custom skeleton loader (no package)
-const LoanListSkeleton = () => (
-  <>
-    {[1, 2, 3].map((i) => (
-      <View key={i} style={styles.skeletonCard}>
-        <View style={[styles.skeletonLine, { width: '60%', marginBottom: SIZES.base }]} />
-        <View style={[styles.skeletonLine, { width: '40%', marginBottom: SIZES.base / 2 }]} />
-        <View style={[styles.skeletonLine, { width: '35%' }]} />
-        <View style={styles.skeletonBadge} />
-      </View>
-    ))}
-  </>
-);
 
 const LoanCustomerListScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -326,12 +313,13 @@ const LoanCustomerListScreen = ({ navigation }) => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <LoanListSkeleton />
+        <ListSkeleton count={2} />
       </View>
     );
   };
 
   const renderEmpty = () => {
+    // Initial load only: show spinner (never skeleton). Pagination uses ListFooterComponent (skeleton only).
     if (loading) {
       return (
         <View style={styles.centerWrap}>
@@ -500,6 +488,9 @@ const styles = StyleSheet.create({
   customerListContainerEmpty: {
     flexGrow: 1,
     paddingBottom: SIZES.padding,
+  },
+  skeletonWrap: {
+    flex: 1,
   },
   centerWrap: {
     flex: 1,
@@ -674,28 +665,6 @@ const styles = StyleSheet.create({
   },
   footerLoader: {
     paddingVertical: SIZES.padding,
-  },
-  skeletonCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-    marginBottom: SIZES.margin * 0.5,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  skeletonLine: {
-    height: 14,
-    backgroundColor: COLORS.lightGray || '#e9ecef',
-    borderRadius: 4,
-  },
-  skeletonBadge: {
-    position: 'absolute',
-    top: SIZES.padding,
-    right: SIZES.padding,
-    width: 70,
-    height: 24,
-    backgroundColor: COLORS.lightGray || '#e9ecef',
-    borderRadius: SIZES.radius / 2,
   },
   headerAddButton: {
     padding: SIZES.padding / 2,

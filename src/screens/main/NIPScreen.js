@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import NIPLoan from '../../models/NIPLoan';
@@ -92,20 +93,6 @@ const getDummyData = () => [
     address_longitude: '77.5948',
   },
 ];
-
-// Custom skeleton loader
-const NIPListSkeleton = () => (
-  <>
-    {[1, 2, 3].map((i) => (
-      <View key={i} style={styles.skeletonCard}>
-        <View style={[styles.skeletonLine, { width: '60%', marginBottom: SIZES.base }]} />
-        <View style={[styles.skeletonLine, { width: '40%', marginBottom: SIZES.base / 2 }]} />
-        <View style={[styles.skeletonLine, { width: '35%' }]} />
-        <View style={styles.skeletonBadge} />
-      </View>
-    ))}
-  </>
-);
 
 const NIPScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -374,12 +361,13 @@ const NIPScreen = ({ navigation }) => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <NIPListSkeleton />
+        <ListSkeleton count={2} />
       </View>
     );
   };
 
   const renderEmpty = () => {
+    // Initial load only: show spinner (never skeleton). Pagination = skeleton in footer only.
     if (loading) {
       return (
         <View style={styles.centerWrap}>
@@ -447,12 +435,7 @@ const NIPScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {loading && nipList.length === 0 ? (
-        <View style={styles.skeletonContainer}>
-          <NIPListSkeleton />
-        </View>
-      ) : (
-        <FlatList
+      <FlatList
           data={filteredList}
           keyExtractor={(item) => String(item?.id ?? Math.random())}
           renderItem={renderNIPItem}
@@ -467,7 +450,6 @@ const NIPScreen = ({ navigation }) => {
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
         />
-      )}
 
       <Modal
         visible={photoModalVisible}
@@ -537,28 +519,11 @@ const styles = StyleSheet.create({
     padding: SIZES.base / 2,
   },
   skeletonContainer: {
+    flex: 1,
     padding: SIZES.padding,
   },
-  skeletonCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-    marginBottom: SIZES.margin,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  skeletonLine: {
-    height: 12,
-    backgroundColor: COLORS.border,
-    borderRadius: 4,
-    marginBottom: SIZES.base / 2,
-  },
-  skeletonBadge: {
-    width: 60,
-    height: 20,
-    backgroundColor: COLORS.border,
-    borderRadius: 10,
-    marginTop: SIZES.base,
+  skeletonWrap: {
+    flex: 1,
   },
   nipListContainer: {
     padding: SIZES.padding,

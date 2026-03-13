@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
@@ -547,6 +547,7 @@ const CollectionScreen = ({ navigation }) => {
         <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
           {loading ? (
             <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
               <Text style={styles.loadingText}>{t('collection.loadingCollections')}</Text>
             </View>
           ) : error ? (

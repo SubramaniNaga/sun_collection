@@ -30,6 +30,13 @@ export const ENDPOINTS = {
     GIVEN_UPDATE: (id) => `/loan/given/${id}`,
     TYPES: '/loan-type',
   },
+  EXPENSE_CATEGORY: {
+    ACTIVE_LIST: '/expense-category/active/list',
+  },
+  EXPENSE: {
+    CREATE: '/expense',
+    LIST: '/expense',
+  },
 };
 
 export default ENDPOINTS;
