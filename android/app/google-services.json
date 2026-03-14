@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "649194918942",
-    "project_id": "suncollection",
-    "storage_bucket": "suncollection.firebasestorage.app"
+    "project_number": "313169367007",
+    "project_id": "suncollection-ab849",
+    "storage_bucket": "suncollection-ab849.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:649194918942:android:4b1a03035112d9552bca0f",
+        "mobilesdk_app_id": "1:313169367007:android:71892aee08e62f2f4d3e6a",
         "android_client_info": {
           "package_name": "com.sunapp.mobile"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBwK_wcpftP5eLmp6Lsx3A10gI6RJkg7fQ"
+          "current_key": "AIzaSyBjsLPCLDA8mgucJzE5BUphqRS7Kw1stkg"
         }
       ],
       "services": {

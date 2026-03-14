@@ -6,22 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
 import Header from '../../components/common/Header';
-import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import CollectionHistory from '../../models/CollectionHistory';
 import { useLanguage } from '../../store/LanguageContext';
+import { formatDateForAPI } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
-
-// Format date as YYYY-MM-DD for API
-const formatDateForAPI = (date) => {
-  if (!date) return '';
-  const d = date instanceof Date ? date : new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const CollectionHistoryScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -215,21 +205,6 @@ const CollectionHistoryScreen = ({ navigation }) => {
     if (amount == null || amount === '') return '₹0';
     const num = parseFloat(amount);
     return isNaN(num) ? '₹0' : `₹${num.toLocaleString('en-IN')}`;
-  };
-
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return '—';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
   };
 
   const renderHistoryItem = ({ item }) => {

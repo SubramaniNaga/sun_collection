@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Linking,
@@ -16,11 +15,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
-import ListSkeleton from '../../components/common/ListSkeleton';
 import Header from '../../components/common/Header';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import NIPLoan from '../../models/NIPLoan';
 import { useLanguage } from '../../store/LanguageContext';
+import { showError } from '../../utils/alertService';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const LIMIT = 20;
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -189,18 +190,18 @@ const NIPScreen = ({ navigation }) => {
     Linking.openURL(phoneUrl)
       .then((supported) => {
         if (!supported) {
-          Alert.alert(t('common.error'), t('collection.call'));
+          showError(t('common.error'), t('collection.call'));
         }
       })
       .catch((err) => {
         console.error('Error opening phone dialer:', err);
-        Alert.alert(t('common.error'), t('collection.call'));
+        showError(t('common.error'), t('collection.call'));
       });
   };
 
   const handleMapPress = (latitude, longitude) => {
     if (!latitude || !longitude) {
-      Alert.alert(t('common.error'), t('collection.map'));
+      showError(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -208,7 +209,7 @@ const NIPScreen = ({ navigation }) => {
     const lng = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert(t('common.error'), t('collection.map'));
+      showError(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -227,7 +228,7 @@ const NIPScreen = ({ navigation }) => {
         console.error('Error opening Google Maps:', err);
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert(t('common.error'), t('collection.map'));
+          showError(t('common.error'), t('collection.map'));
         });
       });
   };
@@ -289,13 +290,15 @@ const NIPScreen = ({ navigation }) => {
               resizeMode="cover"
             />
           ) : (
-            <View style={styles.nipCardPhotoPlaceholder}>
-              <Ionicons name="person" size={20} color={COLORS.text.tertiary} />
-            </View>
+            <Image
+              source={{ uri: 'https://www.kambaa.com/favicon.png' }}
+              style={styles.nipCardPhoto}
+              resizeMode="cover"
+            />
           )}
         </TouchableOpacity>
         <Text style={styles.nipCardNameLine} numberOfLines={1}>
-          {' - '}{getCustomerIdDisplay(item)}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
+         {getCustomerIdDisplay(item)}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
         </Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
           <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
@@ -327,7 +330,7 @@ const NIPScreen = ({ navigation }) => {
         <Text style={styles.nipCardValue} numberOfLines={1}>{item?.branchName ?? '—'}</Text>
       </View>
       <View style={styles.nipCardFooter}>
-        <Text style={styles.nipCardDate}>{t('loan.requested')} {formatDate(item?.requestedDate)}</Text>
+        <Text style={styles.nipCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requestedDate)}</Text>
         <View style={styles.nipCardFooterIcons}>
           {item?.addressLatitude && item?.addressLongitude && (
             <TouchableOpacity

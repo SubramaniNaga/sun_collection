@@ -1,3 +1,5 @@
+import { formatDisplayDate } from '../utils/dateFormatter';
+
 /**
  * Collection Model
  * Represents a collection record from the API
@@ -27,7 +29,8 @@ class Collection {
     // Loan fields
     this.loanAmount = data.loan_amount || '0';
     this.approvedAmount = data.approved_amount || '0';
-    this.loanPeriod = data.loan_period || null;
+    this.loanPeriod = data.loan_period ?? null;
+    this.loanTypeName = data.loan_type_name || null;
     this.approvalStatus = data.approval_status || null;
 
     // Branch and Line fields
@@ -71,16 +74,7 @@ class Collection {
    * @returns {string}
    */
   getFormattedCollectionDate() {
-    if (!this.collectionDate) return '—';
-    try {
-      return new Date(this.collectionDate).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return this.collectionDate;
-    }
+    return formatDisplayDate(this.collectionDate);
   }
 
   /**

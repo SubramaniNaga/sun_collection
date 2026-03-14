@@ -47,7 +47,7 @@ const FormPicker = ({
         <Text style={{
           flex: 1,
           fontSize: SIZES.body2,
-          color: selectedItem ? COLORS.text.primary : COLORS.text.tertiary,
+          color: selectedItem ? COLORS.black : COLORS.text.tertiary,
         }}>
           {selectedItem ? selectedItem.label : placeholder}
         </Text>
@@ -102,7 +102,7 @@ const FormPicker = ({
               <Text style={{
                 fontSize: SIZES.h3,
                 fontWeight: '600',
-                color: COLORS.text.primary,
+                color: COLORS.black,
               }}>
                 Select {label}
               </Text>
@@ -128,7 +128,7 @@ const FormPicker = ({
                 >
                   <Text style={{
                     fontSize: SIZES.body2,
-                    color: COLORS.text.primary,
+                    color: COLORS.black,
                     fontWeight: value === item.value ? '600' : '400',
                   }}>
                     {item.label}

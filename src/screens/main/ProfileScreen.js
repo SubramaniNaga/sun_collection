@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
@@ -11,6 +11,7 @@ import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert } from '../../utils/alertService';
 
 const ProfileScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -47,24 +48,19 @@ const ProfileScreen = ({ navigation }) => {
     AsyncStorage.getItem('lineId').then(setLineId);
   }, []);
 
-  const displayBranchId = user?.branch_id ?? user?.branchId ?? branchId ?? 'N/A';
-  const displayLineId = user?.line_id ?? user?.lineId ?? lineId ?? 'N/A';
+  const displayBranch = user?.branch ?? user?.branch_id ?? branchId ?? 'N/A';
+  const displayLine = user?.line ?? user?.line_name ?? lineId ?? 'N/A';
 
   const handleLanguageChange = (newLanguage) => {
-    Alert.alert(
-      t('profile.selectLanguage'),
-      t('profile.selectLanguage'),
-      [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-        },
-        {
-          text: t('common.ok'),
-          onPress: () => changeLanguage(newLanguage),
-        },
-      ]
-    );
+    showAlert({
+      type: 'info',
+      title: t('profile.selectLanguage'),
+      message: t('profile.selectLanguage'),
+      buttons: [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.ok'), onPress: () => changeLanguage(newLanguage) },
+      ],
+    });
   };
 
   const menuItems = [
@@ -74,25 +70,16 @@ const ProfileScreen = ({ navigation }) => {
       title: t('profile.language'),
       icon: 'language-outline',
       onPress: () => {
-        Alert.alert(
-          t('profile.selectLanguage'),
-          '',
-          [
-            {
-              text: t('common.cancel'),
-              style: 'cancel',
-            },
-            {
-              text: t('profile.english'),
-              onPress: () => changeLanguage('en'),
-            },
-            {
-              text: t('profile.tamil'),
-              onPress: () => changeLanguage('ta'),
-            },
+        showAlert({
+          type: 'info',
+          title: t('profile.selectLanguage'),
+          message: '',
+          buttons: [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('profile.english'), onPress: () => changeLanguage('en') },
+            { text: t('profile.tamil'), onPress: () => changeLanguage('ta') },
           ],
-          { cancelable: true }
-        );
+        });
       },
     },
     {
@@ -167,13 +154,13 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="business-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('profile.branchId')}</Text>
-              <Text style={styles.detailValue}>{displayBranchId}</Text>
+              <Text style={styles.detailLabel}>{t('profile.branch')}</Text>
+              <Text style={styles.detailValue}>{displayBranch}</Text>
             </View>
             <View style={[styles.detailRow, styles.detailRowLast]}>
               <Ionicons name="git-branch-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('profile.lineId')}</Text>
-              <Text style={styles.detailValue}>{displayLineId}</Text>
+              <Text style={styles.detailLabel}>{t('profile.line')}</Text>
+              <Text style={styles.detailValue}>{displayLine}</Text>
             </View>
           </View>
         </Card>

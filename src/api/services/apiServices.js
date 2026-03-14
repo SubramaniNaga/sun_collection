@@ -366,6 +366,18 @@ export const apiServices = {
       }
     },
 
+    getLoanDetails: async (loanId) => {
+      try {
+        console.log('💰 API: getLoanDetails - GET', ENDPOINTS.LOAN.DETAILS(loanId));
+        const response = await apiClient.get(ENDPOINTS.LOAN.DETAILS(loanId));
+        console.log('💰 API: getLoanDetails - Response success');
+        return response.data;
+      } catch (error) {
+        console.error('Get loan details error:', error);
+        throw error;
+      }
+    },
+
     updateLoanGiven: async (loanId, formData) => {
       try {
         const path = ENDPOINTS.LOAN.GIVEN_UPDATE(loanId);
@@ -533,10 +545,11 @@ export const apiServices = {
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
-        const { customer_phone = '', collection_date = '' } = params;
+        const { customer_phone = '', customer_name = '', collection_date = '' } = params;
         const requestParams = {
           branch_id: branchId,
           ...(customer_phone && { customer_phone }),
+          ...(customer_name && { customer_name }),
           ...(collection_date && { collection_date }),
         };
         console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', JSON.stringify(requestParams, null, 2));

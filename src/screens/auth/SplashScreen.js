@@ -1,11 +1,12 @@
 import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert, showWarning } from '../../utils/alertService';
 
 const SplashScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -23,15 +24,10 @@ const SplashScreen = ({ navigation }) => {
       
       // Step 2: Check maintenance mode first
       if (versionData.isMaintaince) {
-        Alert.alert(
+        showWarning(
           t('auth.maintenanceMode'),
           versionData.maitainnaceMessage || t('auth.maintenanceInProgress'),
-          [
-            {
-              text: t('common.retry'),
-              onPress: () => performAppChecks(),
-            }
-          ]
+          [{ text: t('common.retry'), onPress: () => performAppChecks() }]
         );
         return;
       }
@@ -51,26 +47,17 @@ const SplashScreen = ({ navigation }) => {
           ? 'https://apps.apple.com' 
           : 'https://play.google.com/store/apps';
 
-        Alert.alert(
-          t('auth.updateRequired'),
-          t('auth.newVersionAvailable', { version: apiVersion, currentVersion }),
-          forceUpdate ? [
-            {
-              text: t('auth.updateNow'),
-              onPress: () => Linking.openURL(storeUrl),
-            }
-          ] : [
-            {
-              text: t('auth.updateNow'),
-              onPress: () => Linking.openURL(storeUrl),
-            },
-            {
-              text: t('auth.skip'),
-              onPress: () => navigateToMain(),
-              style: 'cancel',
-            }
-          ]
-        );
+        showAlert({
+          type: 'warning',
+          title: t('auth.updateRequired'),
+          message: t('auth.newVersionAvailable', { version: apiVersion, currentVersion }),
+          buttons: forceUpdate
+            ? [{ text: t('auth.updateNow'), onPress: () => Linking.openURL(storeUrl) }]
+            : [
+                { text: t('auth.updateNow'), onPress: () => Linking.openURL(storeUrl) },
+                { text: t('auth.skip'), onPress: () => navigateToMain(), style: 'cancel' },
+              ],
+        });
       } else {
         // No update needed, navigate to main screen
         navigateToMain();

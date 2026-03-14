@@ -21,14 +21,15 @@ export const ENDPOINTS = {
   },
   COLLECTION: {
     LIST: '/collection',
-    UPDATE_AMOUNT: (id) => `/collection/amount/${id}`,
+    UPDATE_AMOUNT: (id) => `/collection/payment/${id}`,
     HISTORY: '/collection/history',
   },
   LOAN: {
     LIST: '/loan',
     NIP: '/loan/nip',
     GIVEN_UPDATE: (id) => `/loan/given/${id}`,
-    TYPES: '/loan-type',
+    TYPES: '/loan-type/active/list',
+    DETAILS: (id) => `/loan/details/${id}`,
   },
   EXPENSE_CATEGORY: {
     ACTIVE_LIST: '/expense-category/active/list',

@@ -8,6 +8,7 @@ import Card from '../../components/common/Card';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const formatAmount = (val) => {
   if (val == null || val === '') return '—';
@@ -103,7 +104,7 @@ const UpfrontCashScreen = ({ navigation }) => {
       </View>
       <View style={styles.cardRow}>
         <Text style={styles.label}>{t('common.date')}</Text>
-        <Text style={styles.value}>{formatDate(item.date)}</Text>
+        <Text style={styles.value}>{formatDisplayDate(item.date)}</Text>
       </View>
     </Card>
   );

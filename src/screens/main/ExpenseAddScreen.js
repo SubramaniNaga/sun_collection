@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,6 +19,7 @@ import Header from '../../components/common/Header';
 import CustomImagePicker from '../../components/common/ImagePicker';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 
 const initialFormState = {
   category: '',
@@ -102,15 +102,14 @@ const ExpenseAddScreen = ({ navigation }) => {
         setFormData(initialFormState);
         setSelectedImage(null);
         setErrors({});
-        Alert.alert(t('common.success'), message, [
+        showSuccess(t('common.success'), message, [
           { text: t('common.ok'), onPress: () => navigation.goBack() },
         ]);
       } else {
-        Alert.alert(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
+        showError(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
       }
     } catch (error) {
-      const errMsg = error.response?.data?.message || error.message || t('errors.somethingWentWrong');
-      Alert.alert(t('common.error'), errMsg);
+      showError(t('common.error'), getApiErrorMessage(error, t('errors.somethingWentWrong')));
     } finally {
       setSubmitting(false);
     }

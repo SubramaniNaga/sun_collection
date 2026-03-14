@@ -4,36 +4,17 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
 
 const SEARCH_DEBOUNCE_MS = 400;
-
-// Format date as YYYY-MM-DD for API
-const formatDateForAPI = (date) => {
-  if (!date) return '';
-  const d = date instanceof Date ? date : new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Get current date in YYYY-MM-DD format
-const getCurrentDateString = () => {
-  return formatDateForAPI(new Date());
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—';
-  try { return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return dateStr; }
-};
 
 const formatAmount = (val) => {
   const num = parseFloat(val);
@@ -68,15 +49,16 @@ const CollectionScreen = ({ navigation }) => {
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchCollectionData = useCallback(async (customerPhone = '', collectionDate = null) => {
+  const fetchCollectionData = useCallback(async (searchQuery = '', collectionDate = null) => {
     try {
       setLoading(true);
       setError(null);
       const dateToUse = collectionDate || selectedDate;
       const dateString = formatDateForAPI(dateToUse);
-      
+      const trimmed = (searchQuery || '').trim();
+      const isNumeric = /^\d+$/.test(trimmed.replace(/\s/g, ''));
       const response = await apiServices.collection.getCollectionList({
-        customer_phone: customerPhone.trim() || undefined,
+        ...(trimmed && (isNumeric ? { customer_phone: trimmed } : { customer_name: trimmed })),
         collection_date: dateString,
       });
       const raw = response?.response ?? response?.data ?? response?.data?.response;
@@ -153,22 +135,38 @@ const CollectionScreen = ({ navigation }) => {
     const collection = item instanceof Collection ? item : new Collection(item);
 
     if (!isSelectedDateToday) {
-      Alert.alert(
+      showWarning(
         'Collection payment',
         "Collection payment can only be recorded for the current date. Please select today's date to collect payment."
       );
       return;
     }
 
+    const balanceAmount = parseFloat(collection.balanceAmount) || 0;
+    if (balanceAmount <= 0) {
+      showError(t('common.error'), t('collection.noBalanceToCollect'));
+      return;
+    }
+
     if (collection.isPaid()) {
-      Alert.alert(
-        'Payment done',
-        'Want to pay again?',
-        [
+      showAlert({
+        type: 'warning',
+        title: 'Payment done',
+        message: 'Want to pay again?',
+        buttons: [
           { text: 'No', style: 'cancel' },
-          { text: 'Yes', onPress: () => openPaymentModal(collection) },
-        ]
-      );
+          {
+            text: 'Yes',
+            onPress: () => {
+              if ((parseFloat(collection.balanceAmount) || 0) <= 0) {
+                showError(t('common.error'), t('collection.noBalanceToCollect'));
+                return;
+              }
+              openPaymentModal(collection);
+            },
+          },
+        ],
+      });
       return;
     }
 
@@ -180,18 +178,18 @@ const CollectionScreen = ({ navigation }) => {
     Linking.openURL(phoneUrl)
       .then((supported) => {
         if (!supported) {
-          Alert.alert('Error', 'Phone dialer not available');
+          showError('Error', 'Phone dialer not available');
         }
       })
       .catch((err) => {
         console.error('Error opening phone dialer:', err);
-        Alert.alert('Error', 'Could not open phone dialer');
+        showError('Error', 'Could not open phone dialer');
       });
   };
 
   const handleMapPress = (address) => {
     if (!address || !address.trim()) {
-      Alert.alert('Error', 'Address not available');
+      showError('Error', 'Address not available');
       return;
     }
 
@@ -216,7 +214,7 @@ const CollectionScreen = ({ navigation }) => {
         // Fallback to web version
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
+          showError('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
         });
       });
   };
@@ -249,32 +247,23 @@ const CollectionScreen = ({ navigation }) => {
       const isEnabled = await Location.hasServicesEnabledAsync();
       if (!isEnabled) {
         const userAction = await new Promise((resolve) => {
-          Alert.alert(
-            t('collection.locationServicesDisabled'),
-            t('collection.enableLocation'),
-            [
-              {
-                text: t('common.cancel'),
-                style: 'cancel',
-                onPress: () => resolve('cancel'),
-              },
+          showAlert({
+            type: 'warning',
+            title: t('collection.locationServicesDisabled'),
+            message: t('collection.enableLocation'),
+            buttons: [
+              { text: t('common.cancel'), style: 'cancel', onPress: () => resolve('cancel') },
               {
                 text: t('common.ok'),
                 onPress: () => {
-                  if (Platform.OS === 'android') {
-                    Linking.openSettings();
-                  } else {
-                    Linking.openURL('app-settings:');
-                  }
+                  if (Platform.OS === 'android') Linking.openSettings();
+                  else Linking.openURL('app-settings:');
                   resolve('settings');
                 },
               },
-              {
-                text: t('common.retry'),
-                onPress: () => resolve('retry'),
-              },
-            ]
-          );
+              { text: t('common.retry'), onPress: () => resolve('retry') },
+            ],
+          });
         });
         
         if (userAction === 'cancel') {
@@ -301,28 +290,22 @@ const CollectionScreen = ({ navigation }) => {
       
       if (status !== 'granted') {
         const userAction = await new Promise((resolve) => {
-          Alert.alert(
-            t('collection.locationPermissionDenied'),
-            t('collection.enableLocation'),
-            [
-              {
-                text: t('common.cancel'),
-                style: 'cancel',
-                onPress: () => resolve('cancel'),
-              },
+          showAlert({
+            type: 'warning',
+            title: t('collection.locationPermissionDenied'),
+            message: t('collection.enableLocation'),
+            buttons: [
+              { text: t('common.cancel'), style: 'cancel', onPress: () => resolve('cancel') },
               {
                 text: t('common.ok'),
                 onPress: () => {
-                  if (Platform.OS === 'android') {
-                    Linking.openSettings();
-                  } else {
-                    Linking.openURL('app-settings:');
-                  }
+                  if (Platform.OS === 'android') Linking.openSettings();
+                  else Linking.openURL('app-settings:');
                   resolve('settings');
                 },
               },
-            ]
-          );
+            ],
+          });
         });
         
         if (userAction === 'cancel') {
@@ -373,7 +356,7 @@ const CollectionScreen = ({ navigation }) => {
     }
 
     if (!selectedCollection || !selectedCollection.id) {
-      Alert.alert(t('common.error'), t('collection.noCollections'));
+      showError(t('common.error'), t('collection.noCollections'));
       return;
     }
 
@@ -394,21 +377,15 @@ const CollectionScreen = ({ navigation }) => {
         if (!isUserCancelled) {
           // Ask user if they want to continue without location
           const shouldContinue = await new Promise((resolve) => {
-            Alert.alert(
-              t('collection.locationError'),
-              t('collection.locationError'),
-              [
-                {
-                  text: t('common.cancel'),
-                  style: 'cancel',
-                  onPress: () => resolve(false),
-                },
-                {
-                  text: t('common.ok'),
-                  onPress: () => resolve(true),
-                },
-              ]
-            );
+            showAlert({
+              type: 'warning',
+              title: t('collection.locationError'),
+              message: t('collection.locationError'),
+              buttons: [
+                { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                { text: t('common.ok'), onPress: () => resolve(true) },
+              ],
+            });
           });
 
           if (!shouldContinue) {
@@ -440,19 +417,18 @@ const CollectionScreen = ({ navigation }) => {
 
       await apiServices.collection.updateAmount(selectedCollection.id, payload);
       
-      Alert.alert(t('common.success'), t('success.collectionUpdated'), [
+      showSuccess(t('common.success'), t('success.collectionUpdated'), [
         {
           text: t('common.ok'),
           onPress: () => {
             setShowPaymentModal(false);
-            // Refresh the collection list
             fetchCollectionData(searchText, selectedDate);
           },
         },
       ]);
     } catch (err) {
       console.error('Failed to update collection amount:', err);
-      Alert.alert(t('common.error'), err.response?.data?.message || t('errors.somethingWentWrong'));
+      showError(t('common.error'), err.response?.data?.message || t('errors.somethingWentWrong'));
     } finally {
       setIsSubmitting(false);
     }
@@ -494,7 +470,7 @@ const CollectionScreen = ({ navigation }) => {
           >
             <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
             <Text style={styles.datePickerText}>
-              {formatDate(selectedDate.toISOString())}
+              {formatDisplayDate(selectedDate)}
             </Text>
           </Pressable>
         </View>
@@ -578,12 +554,13 @@ const CollectionScreen = ({ navigation }) => {
                         style={styles.itemCustomerPhoto}
                       />
                     ) : (
-                      <View style={styles.itemCustomerPhotoPlaceholder}>
-                        <Ionicons name="person-outline" size={20} color={COLORS.text.tertiary} />
-                      </View>
+                      <Image
+                        source={{ uri: 'https://www.kambaa.com/favicon.png' }}
+                        style={styles.itemCustomerPhoto}
+                      />
                     )}
                     <Text style={styles.itemName} numberOfLines={1}>
-                      {' - '}{(collection.customerId ?? collection.customerNo ?? '—')}{' - '}{(collection.customerName ?? '—')}
+                      {(collection.customerId ?? collection.customerNo ?? '—')}{' - '}{(collection.customerName ?? '—')}
                     </Text>
                     <View style={styles.iconButtonContainer}>
                       {collection.customerAddress && (
@@ -618,6 +595,10 @@ const CollectionScreen = ({ navigation }) => {
                     <View style={[styles.statusBadge, { backgroundColor: collection.getStatusColor() }]}>
                       <Text style={styles.statusText}>{collection.getStatusText()}</Text>
                     </View>
+                  </View>
+                  <View style={styles.itemRow}>
+                    <Text style={styles.itemMetaLeft}>{t('loan.loanPeriod')}:</Text>
+                    <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
                   </View>
                   <View style={styles.itemRow}>
                     <Text style={styles.itemMetaLeft}>Paid: {collection.getFormattedAmountPaid()}</Text>
@@ -846,7 +827,7 @@ const styles = StyleSheet.create({
   },
   datePickerText: {
     fontSize: SIZES.body3,
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   searchIcon: {
     marginRight: SIZES.base,
@@ -854,7 +835,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: SIZES.body2,
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   listContainer: {
     flex: 1,
@@ -903,7 +884,7 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: SIZES.body1,
     fontWeight: '600',
-    color: COLORS.text.primary,
+    color: COLORS.black,
     flex: 1,
     marginRight: SIZES.base,
   },
@@ -1015,7 +996,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: SIZES.body1,
     fontWeight: '600',
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   modalButton: {
     fontSize: SIZES.body2,
@@ -1056,7 +1037,7 @@ const styles = StyleSheet.create({
   paymentModalTitle: {
     fontSize: SIZES.body1,
     fontWeight: '600',
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   paymentModalBody: {
     padding: SIZES.padding,
@@ -1071,7 +1052,7 @@ const styles = StyleSheet.create({
   customerInfoName: {
     fontSize: SIZES.body1,
     fontWeight: '600',
-    color: COLORS.text.primary,
+    color: COLORS.black,
     marginBottom: SIZES.base / 2,
   },
   customerInfoBalance: {
@@ -1084,7 +1065,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: SIZES.body3,
     fontWeight: '500',
-    color: COLORS.text.primary,
+    color: COLORS.black,
     marginBottom: SIZES.base,
   },
   radioButtonContainer: {

@@ -70,7 +70,7 @@ const HomeStack = () => (
     screenOptions={{
       headerShown: true,
       headerStyle: {
-        backgroundColor: COLORS.primary,
+        backgroundColor: COLORS.statusBar,
         elevation: 2,
         shadowOpacity: 0.1,
         shadowColor: COLORS.black,

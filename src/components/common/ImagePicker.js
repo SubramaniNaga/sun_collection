@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
-import { Alert, Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
+import { showAlert, showError, showWarning } from '../../utils/alertService';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const CustomImagePicker = ({
@@ -18,7 +19,7 @@ const CustomImagePicker = ({
       if (source === 'camera') {
         const cameraPermission = await ExpoImagePicker.requestCameraPermissionsAsync();
         if (!cameraPermission.granted) {
-          Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+          showWarning('Permission Required', 'Camera permission is required to take photos.');
           return;
         }
         const asset = await pickFromCamera([4, 3]);
@@ -26,7 +27,7 @@ const CustomImagePicker = ({
       } else {
         const mediaPermission = await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
         if (!mediaPermission.granted) {
-          Alert.alert('Permission Required', 'Gallery permission is required to select photos.');
+          showWarning('Permission Required', 'Gallery permission is required to select photos.');
           return;
         }
         const asset = await pickFromLibrary([4, 3]);
@@ -34,20 +35,21 @@ const CustomImagePicker = ({
       }
     } catch (error) {
       console.error('Image picker error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || 'Failed to pick image. Please try again.');
+      showError('Error', error?.message || 'Failed to pick image. Please try again.');
     }
   };
 
   const removeImage = () => {
     if (editable) {
-      Alert.alert(
-        'Remove Image',
-        'Are you sure you want to remove this image?',
-        [
+      showAlert({
+        type: 'warning',
+        title: 'Remove Image',
+        message: 'Are you sure you want to remove this image?',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Remove', onPress: () => onImageChange(null) },
-        ]
-      );
+        ],
+      });
     }
   };
 
@@ -56,7 +58,7 @@ const CustomImagePicker = ({
       <Text style={{
         fontSize: SIZES.body2,
         fontWeight: '500',
-        color: COLORS.text.primary,
+        color: COLORS.black,
         marginBottom: SIZES.base,
       }}>
         Receipt Image

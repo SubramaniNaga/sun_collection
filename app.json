@@ -48,7 +48,23 @@
         "expo-image-picker",
         {
           "photosPermission": "The app needs access to photos to upload expense receipts.",
-          "cameraPermission": "The app needs access to camera to take photos of expense receipts."
+          "cameraPermission": "The app needs access to camera to take photos of expense receipts.",
+          "colors": {
+            "cropToolbarColor": "#1d7ee2",
+            "cropToolbarIconColor": "#ffffff",
+            "cropToolbarActionTextColor": "#ffffff",
+            "cropBackButtonIconColor": "#ffffff",
+            "cropBackgroundColor": "#ffffff"
+          },
+          "dark": {
+            "colors": {
+              "cropToolbarColor": "#1d7ee2",
+              "cropToolbarIconColor": "#ffffff",
+              "cropToolbarActionTextColor": "#ffffff",
+              "cropBackButtonIconColor": "#ffffff",
+              "cropBackgroundColor": "#ffffff"
+            }
+          }
         }
       ],
       "@react-native-community/datetimepicker",

@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Linking,
@@ -17,10 +16,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
-import ListSkeleton from '../../components/common/ListSkeleton';
 import Header from '../../components/common/Header';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { showError } from '../../utils/alertService';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -99,14 +100,14 @@ const LoanCustomerListScreen = ({ navigation }) => {
 
   const filteredList = searchQuery.trim()
     ? loanList.filter(
-        (loan) =>
-          (loan?.customer_name ?? '')
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase()) ||
-          (loan?.customer_phone ?? '').includes(searchQuery) ||
-          (loan?.customer_no ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-          String(loan?.id ?? '').includes(searchQuery)
-      )
+      (loan) =>
+        (loan?.customer_name ?? '')
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (loan?.customer_phone ?? '').includes(searchQuery) ||
+        (loan?.customer_no ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(loan?.id ?? '').includes(searchQuery)
+    )
     : loanList;
 
   const handleCustomerSelect = (loan) => {
@@ -131,18 +132,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
     Linking.openURL(phoneUrl)
       .then((supported) => {
         if (!supported) {
-          Alert.alert(t('common.error'), t('collection.call'));
+          showError(t('common.error'), t('collection.call'));
         }
       })
       .catch((err) => {
         console.error('Error opening phone dialer:', err);
-        Alert.alert(t('common.error'), t('collection.call'));
+        showError(t('common.error'), t('collection.call'));
       });
   };
 
   const handleMapPress = (latitude, longitude) => {
     if (!latitude || !longitude) {
-      Alert.alert(t('common.error'), t('collection.map'));
+      showError(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -150,14 +151,14 @@ const LoanCustomerListScreen = ({ navigation }) => {
     const lng = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert(t('common.error'), t('collection.map'));
+      showError(t('common.error'), t('collection.map'));
       return;
     }
 
     // Try Google Maps app first, fallback to web
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     const googleMapsAppUrl = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}`;
-    
+
     // Try to open Google Maps app, fallback to web
     Linking.canOpenURL(googleMapsAppUrl)
       .then((supported) => {
@@ -172,12 +173,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
         // Fallback to web version
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert(t('common.error'), t('collection.map'));
+          showError(t('common.error'), t('collection.map'));
         });
       });
   };
 
   const getStatusLabel = (loan) => {
+    // Use dynamic loan_status_name from API response if available, fallback to status_id logic
+    if (loan?.loan_status_name) {
+      return loan.loan_status_name;
+    }
+    
+    // Fallback logic for backward compatibility
     const approval = loan?.approval_status;
     const loanStatus = loan?.loan_status;
     if (approval === '2') return 'Rejected';
@@ -190,21 +197,12 @@ const LoanCustomerListScreen = ({ navigation }) => {
 
   const getStatusColor = (loan) => {
     const label = getStatusLabel(loan);
-    if (label === 'Active') return COLORS.success || '#28a745';
-    if (label === 'Rejected') return COLORS.error || '#dc3545';
-    if (label === 'Closed') return COLORS.text?.tertiary || '#6c757d';
-    if (label === 'Approved') return COLORS.primary;
-    return COLORS.warning || '#ffc107';
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch {
-      return dateStr;
-    }
+    if (label === 'Approved') return COLORS.success || '#10B981';
+    if (label === 'Active') return COLORS.success || '#10B981';
+    if (label === 'Rejected') return COLORS.error || '#EF4444';
+    if (label === 'Closed') return COLORS.text?.tertiary || '#6B7280';
+    if (label === 'Pending') return '#F59E0B'; // Orange
+    return COLORS.primary || '#1d7ee2';
   };
 
   const formatAmount = (val) => {
@@ -243,13 +241,15 @@ const LoanCustomerListScreen = ({ navigation }) => {
               resizeMode="cover"
             />
           ) : (
-            <View style={styles.loanCardPhotoPlaceholder}>
-              <Ionicons name="person" size={20} color={COLORS.text.tertiary} />
-            </View>
+            <Image
+              source={{ uri: 'https://www.kambaa.com/favicon.png' }}
+              style={styles.loanCardPhoto}
+              resizeMode="cover"
+            />
           )}
         </TouchableOpacity>
         <Text style={styles.loanCardNameLine} numberOfLines={1}>
-          {' - '}{(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
+          {(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
         </Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
           <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
@@ -276,10 +276,12 @@ const LoanCustomerListScreen = ({ navigation }) => {
       <View style={styles.loanCardRow}>
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.loanCardLabel}>{t('loan.loanPeriod')}</Text>
-        <Text style={styles.loanCardValue} numberOfLines={1}>{item?.loan_period != null ? `${item?.loan_period}/${item?.loan_period_type}` : '—'}</Text>
+        <Text style={styles.loanCardValue} numberOfLines={1}>
+          {item?.loan_type_name || '—'}
+        </Text>
       </View>
-        <View style={styles.loanCardFooter}>
-        <Text style={styles.loanCardDate}>{t('loan.requested')} {formatDate(item?.requested_date)}</Text>
+      <View style={styles.loanCardFooter}>
+        <Text style={styles.loanCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requested_date)}</Text>
         <View style={styles.loanCardFooterIcons}>
           {item?.address_latitude && item?.address_longitude && (
             <TouchableOpacity
@@ -554,7 +556,7 @@ const styles = StyleSheet.create({
   },
   loanCardDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.gray,
     marginVertical: SIZES.margin * 0.5,
   },
   loanCardNameLine: {
@@ -656,7 +658,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: SIZES.base,
     paddingVertical: SIZES.base * 0.25,
-    borderRadius: SIZES.radius,
+    borderRadius: 8,
   },
   statusText: {
     fontSize: SIZES.body4 || 12,

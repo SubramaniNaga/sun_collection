@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { showError } from '../../utils/alertService';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
@@ -69,7 +70,7 @@ const LoginScreen = ({ navigation }) => {
     } catch (error) {
       const message = getLoginErrorMessage(error);
       setErrors({ general: message });
-      Alert.alert('Error', message);
+      showError('Error', message);
     }
   };
 
@@ -103,9 +104,14 @@ const LoginScreen = ({ navigation }) => {
         style={styles.keyboardContainer}
       >
         <View style={styles.card}>
-        <Text style={styles.title}>{t('auth.welcome')}</Text>
-        <Text style={styles.title}>{t('auth.sunMicrofinance')}</Text>
-        <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
+          <Image
+            source={require('../../../assets/images/favicon.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>{t('auth.welcome')}</Text>
+          <Text style={styles.title}>{t('auth.sunMicrofinance')}</Text>
+          <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
 
           <Input
             label={t('auth.phoneNumber')}
@@ -174,6 +180,12 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 2,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    alignSelf: 'center',
+    marginBottom: SIZES.padding,
   },
   title: {
     fontSize: SIZES.h2,

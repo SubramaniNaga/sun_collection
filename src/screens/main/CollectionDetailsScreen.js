@@ -1,17 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—';
-  try { return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-  catch { return String(dateStr); }
-};
+import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { formatDateTimeDisplay } from '../../utils/dateFormatter';
 
 const formatAmount = (val) => {
   if (val == null || val === '') return '—';
@@ -34,7 +30,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
   const handlePhonePress = () => {
     if (!item.customer_phone) return;
     Linking.openURL(`tel:${item.customer_phone}`).catch(() =>
-      Alert.alert('Error', 'Could not open phone dialer')
+      showError('Error', 'Could not open phone dialer')
     );
   };
 
@@ -43,12 +39,12 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
   const handleAddPayment = async () => {
     const total = calculateTotal();
     if (total <= 0) {
-      Alert.alert('Invalid', 'Please enter an amount greater than 0.');
+      showWarning('Invalid', 'Please enter an amount greater than 0.');
       return;
     }
     const collectionId = item.id;
     if (collectionId == null) {
-      Alert.alert('Error', 'Collection ID not found.');
+      showError('Error', 'Collection ID not found.');
       return;
     }
     try {
@@ -65,7 +61,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
         const paidStr = (amountPaid != null && amountPaid !== '') ? `₹${Number(amountPaid).toLocaleString('en-IN')}` : '—';
         const balanceStr = (balanceAmount != null && balanceAmount !== '') ? `₹${Number(balanceAmount).toLocaleString('en-IN')}` : '—';
         const weekStr = collectionWeek != null ? String(collectionWeek) : '—';
-        Alert.alert(
+        showSuccess(
           'Collection amount updated successfully',
           `Amount Paid: ${paidStr}\nBalance Amount: ${balanceStr}\nCollection Week: ${weekStr}`,
           [
@@ -81,11 +77,10 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
           ]
         );
       } else {
-        Alert.alert('Error', response?.message || 'Failed to update collection amount.');
+        showError('Error', response?.message || 'Failed to update collection amount.');
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Failed to update collection amount.';
-      Alert.alert('Error', msg);
+      showError('Error', getApiErrorMessage(err, 'Failed to update collection amount.'));
     } finally {
       setSubmitting(false);
     }
@@ -127,7 +122,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
             <Text style={styles.cardTitle}>Collection</Text>
             {/* <DetailRow label="Collection ID" value={item.id != null ? String(item.id) : null} /> */}
             <DetailRow label="Collection Week" value={item.collection_week != null ? `Week ${item.collection_week}` : null} />
-            <DetailRow label="Collection Date" value={item.collection_date ? formatDate(item.collection_date) : null} />
+            <DetailRow label="Collection Date" value={item.collection_date ? formatDateTimeDisplay(item.collection_date) : null} />
             <DetailRow label="Amount Paid" value={formatAmount(item.amount_paid)} />
             <DetailRow label="Balance Amount" value={formatAmount(item.balance_amount)} />
             {(item.notes != null && item.notes !== '') && <DetailRow label="Notes" value={item.notes} />}
@@ -159,10 +154,10 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
           {/* Timestamps */}
           {/* <View style={styles.card}>
             <Text style={styles.cardTitle}>Reference</Text>
-            <DetailRow label="Created At" value={item.created_at ? formatDate(item.created_at) : null} />
+            <DetailRow label="Created At" value={item.created_at ? formatDateTimeDisplay(item.created_at) : null} />
             <View style={[styles.detailRow, styles.detailRowLast]}>
               <Text style={styles.detailLabel}>Updated At</Text>
-              <Text style={styles.detailValue} numberOfLines={2}>{item.updated_at ? formatDate(item.updated_at) : '—'}</Text>
+              <Text style={styles.detailValue} numberOfLines={2}>{item.updated_at ? formatDateTimeDisplay(item.updated_at) : '—'}</Text>
             </View>
           </View> */}
 

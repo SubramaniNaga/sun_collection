@@ -1,3 +1,5 @@
+import { formatDisplayDate } from '../utils/dateFormatter';
+
 /**
  * NIP Loan Model
  * Represents a NIP (Network Integration Point) loan record from the API
@@ -84,16 +86,7 @@ class NIPLoan {
    * @returns {string}
    */
   getFormattedRequestedDate() {
-    if (!this.requestedDate) return '—';
-    try {
-      return new Date(this.requestedDate).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      });
-    } catch {
-      return this.requestedDate;
-    }
+    return formatDisplayDate(this.requestedDate);
   }
 
   /**

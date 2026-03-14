@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
@@ -13,6 +13,7 @@ import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -195,7 +196,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       return { latitude: lat, longitude: lng };
     } catch (error) {
       console.error('Location capture error:', error);
-      Alert.alert(t('common.error'), t('customer.locationRequired'));
+      showError(t('common.error'), t('customer.locationRequired'));
       throw error;
     } finally {
       setIsCapturingLocation(false);
@@ -208,7 +209,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       if (source === 'camera') {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
         if (!permissionResult.granted) {
-          Alert.alert(t('common.error'), t('customer.imageRequired'));
+          showError(t('common.error'), t('customer.imageRequired'));
           return;
         }
         const image = await pickFromCamera([3, 2]);
@@ -220,7 +221,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permissionResult.granted) {
-          Alert.alert(t('common.error'), t('customer.imageRequired'));
+          showError(t('common.error'), t('customer.imageRequired'));
           return;
         }
         const image = await pickFromLibrary([3, 2]);
@@ -232,7 +233,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Image pick error:', error?.message ?? error);
-      Alert.alert(t('common.error'), error?.message || t('customer.imageRequired'));
+      showError(t('common.error'), error?.message || t('customer.imageRequired'));
     }
   };
 
@@ -247,7 +248,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const storedLineId = await AsyncStorage.getItem('lineId');
       
       if (!storedBranchId || !storedLineId) {
-        Alert.alert(t('common.error'), t('errors.unauthorized'));
+        showError(t('common.error'), t('errors.unauthorized'));
         setLoading(false);
         return;
       }
@@ -315,18 +316,15 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const message = response?.message || 'Customer and loan created successfully!';
       
       if (success) {
-        Alert.alert(
-          t('common.success'),
-          message || t('success.customerCreated'),
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+        showSuccess(t('common.success'), message || t('success.customerCreated'), [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
       } else {
-        Alert.alert(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
+        showError(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
       }
     } catch (error) {
       console.error('Create customer with loan error:', error);
-      const errMsg = error.response?.data?.message || error.message || t('errors.somethingWentWrong');
-      Alert.alert(t('common.error'), errMsg);
+      showError(t('common.error'), getApiErrorMessage(error, t('errors.somethingWentWrong')));
     } finally {
       setLoading(false);
     }
@@ -382,7 +380,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       
       <Header 
@@ -421,8 +419,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-
           {customerType === 'New' && (
             <>
           <Input
@@ -531,18 +529,29 @@ const CustomerWithLoanScreen = ({ navigation }) => {
             </View>
           )}
         </ScrollView>
-        
-        {customerType === 'New' && (
-        <View style={[styles.fixedBottomContainer, { paddingBottom: insets.bottom }]}>
+      </KeyboardAvoidingView>
+
+      {/* Fixed button bar outside KeyboardAvoidingView so it never moves */}
+      {customerType === 'New' && (
+        <View style={[styles.fixedBottomContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
           <Button
-            title={t('customer.customerWithLoan')}
+            title={t('customer.createCustomer')}
             onPress={handleSubmit}
             loading={loading}
             style={styles.submitButton}
           />
         </View>
-        )}
-      </KeyboardAvoidingView>
+      )}
+      {customerType === 'Existing' && (
+        <View style={[styles.fixedBottomContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
+          <Button
+            title={t('customer.createCustomer')}
+            onPress={handleSubmit}
+            loading={loading}
+            style={styles.submitButton}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -742,19 +751,15 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body4,
     marginTop: SIZES.base / 2,
   },
-    fixedBottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  fixedBottomContainer: {
     backgroundColor: COLORS.white,
     paddingHorizontal: SIZES.padding,
-    paddingTop: SIZES.padding * 0.5,
+    paddingTop: SIZES.padding,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   submitButton: {
-    // Styling handled by component
+    minHeight: 52,
   },
 });
 

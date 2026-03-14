@@ -1,4 +1,4 @@
-import { TextInput, View, Text } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 
 const FormInput = ({
@@ -35,7 +35,7 @@ const FormInput = ({
           paddingHorizontal: SIZES.padding,
           paddingVertical: multiline ? SIZES.padding : SIZES.padding * 0.8,
           fontSize: SIZES.body2,
-          color: COLORS.text.primary,
+          color: COLORS.black,
           backgroundColor: editable ? COLORS.white : COLORS.lightGray,
           textAlignVertical: multiline ? 'top' : 'center',
           minHeight: multiline ? 80 : 0,

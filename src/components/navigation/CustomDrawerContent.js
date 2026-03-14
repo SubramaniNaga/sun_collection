@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert } from '../../utils/alertService';
 
 const CustomDrawerContent = (props) => {
   const { t } = useLanguage();
@@ -33,14 +33,15 @@ const CustomDrawerContent = (props) => {
   ];
 
   const handleLogout = () => {
-    Alert.alert(
-      t('settings.confirmLogout'),
-      null,
-      [
+    showAlert({
+      type: 'warning',
+      title: t('settings.confirmLogout'),
+      message: '',
+      buttons: [
         { text: t('common.cancel'), style: 'cancel' },
         { text: t('settings.confirmLogoutConfirm'), onPress: async () => await logout() },
-      ]
-    );
+      ],
+    });
   };
 
   const getInitials = (name) => {

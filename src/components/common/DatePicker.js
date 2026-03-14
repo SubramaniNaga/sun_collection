@@ -3,6 +3,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const DatePicker = ({
   label,
@@ -19,17 +20,6 @@ const DatePicker = ({
 
   // Convert the ISO string from your formData back to a Date object for the picker
   const dateValue = value ? new Date(value) : new Date();
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    // Formatting to DD/MM/YYYY
-    return d.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
 
   const onChange = (event, selectedDate) => {
     // For Android, we must close the picker immediately
@@ -69,9 +59,9 @@ const DatePicker = ({
         
         <Text style={[
           styles.valueText,
-          { color: value ? COLORS.text?.primary : COLORS.text?.tertiary }
+          { color: value ? COLORS.black : COLORS.text?.tertiary }
         ]}>
-          {formatDate(value) || 'Select date'}
+          {formatDisplayDate(value) || 'Select date'}
         </Text>
 
         {editable && (

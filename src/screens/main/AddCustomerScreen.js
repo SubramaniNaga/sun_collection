@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getDeviceId } from '../../utils/deviceId';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
@@ -65,14 +65,14 @@ const AddCustomerScreen = ({ navigation }) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Camera permission is required to take photo');
+        showWarning('Permission Required', 'Camera permission is required to take photo');
         return;
       }
       const asset = await pickFromCamera([4, 3]);
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
       console.error('Photo capture error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || 'Failed to capture photo. Please try again.');
+      showError('Error', error?.message || 'Failed to capture photo. Please try again.');
     }
   };
 
@@ -81,14 +81,14 @@ const AddCustomerScreen = ({ navigation }) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Gallery permission is required to select image');
+        showWarning('Permission Required', 'Gallery permission is required to select image');
         return;
       }
       const asset = await pickFromLibrary([3, 2]);
       if (asset) setAadharImage(asset);
     } catch (error) {
       console.error('Aadhar upload error:', error?.message ?? error);
-      Alert.alert('Error', error?.message || 'Failed to select Aadhar image. Please try again.');
+      showError('Error', error?.message || 'Failed to select Aadhar image. Please try again.');
     }
   };
 
@@ -139,14 +139,15 @@ const AddCustomerScreen = ({ navigation }) => {
       });
 
       if (response.data.success) {
-        Alert.alert('Success', 'Customer created successfully!');
-        navigation.goBack();
+        showSuccess('Success', 'Customer created successfully!', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
       } else {
-        Alert.alert('Error', response.data.message || 'Failed to create customer');
+        showError('Error', response.data.message || 'Failed to create customer');
       }
     } catch (error) {
       console.error('Create customer error:', error);
-      Alert.alert('Error', 'Failed to create customer. Please try again.');
+      showError('Error', getApiErrorMessage(error, 'Failed to create customer. Please try again.'));
     } finally {
       setLoading(false);
     }

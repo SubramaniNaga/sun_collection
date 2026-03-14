@@ -1,3 +1,5 @@
+import { formatDisplayDate } from '../utils/dateFormatter';
+
 /**
  * Collection History Model
  * Represents a collection history record from the API
@@ -69,16 +71,7 @@ class CollectionHistory {
    * @returns {string}
    */
   getFormattedPaymentDate() {
-    if (!this.paymentDate) return '—';
-    try {
-      return new Date(this.paymentDate).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return this.paymentDate;
-    }
+    return formatDisplayDate(this.paymentDate);
   }
 
   /**
@@ -86,16 +79,7 @@ class CollectionHistory {
    * @returns {string}
    */
   getFormattedCollectionDate() {
-    if (!this.collectionDate) return '—';
-    try {
-      return new Date(this.collectionDate).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return this.collectionDate;
-    }
+    return formatDisplayDate(this.collectionDate);
   }
 
   /**

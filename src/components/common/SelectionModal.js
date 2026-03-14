@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: SIZES.h3,
     fontWeight: '600',
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   closeButton: {
     padding: SIZES.base / 2,
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: SIZES.body1,
     fontWeight: '500',
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   optionDescription: {
     fontSize: SIZES.body3,

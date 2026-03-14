@@ -1,3 +1,5 @@
+import { formatDisplayDate } from './dateFormatter';
+
 export const formatters = {
   currency: (amount, currency = 'USD', locale = 'en-US') => {
     return new Intl.NumberFormat(locale, {
@@ -6,20 +8,9 @@ export const formatters = {
     }).format(amount);
   },
 
-  date: (date, options = {}) => {
-    const defaultOptions = {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    };
-    
-    const mergedOptions = { ...defaultOptions, ...options };
-    
-    if (date instanceof Date) {
-      return date.toLocaleDateString('en-US', mergedOptions);
-    }
-    
-    return new Date(date).toLocaleDateString('en-US', mergedOptions);
+  /** Format date as dd-MM-yyyy (uses centralized dateFormatter) */
+  date: (date) => {
+    return formatDisplayDate(date);
   },
 
   time: (date, options = {}) => {

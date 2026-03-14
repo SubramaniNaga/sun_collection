@@ -3,14 +3,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
@@ -18,18 +18,10 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-};
 // Pending: #F59E0B, Approved: #10B981, Rejected: #EF4444 Process: #FFC107 #17a2b8
 const STATUS_CONFIG = {
   '0': { label: 'Pending', color: '#F59E0B', bg: '#FEF3C7' },
@@ -139,18 +131,29 @@ const ExpensesScreen = ({ navigation }) => {
 
     return (
       <View style={styles.expenseCard}>
-        <View style={styles.expenseMainRow}>
-          <View style={styles.expenseLeftSection}>
-            <Text style={styles.expenseTitle} numberOfLines={1}>{item.title ?? '—'}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-              <Text style={[styles.statusText, { color: status.color }]}>
-                {status.label}
-              </Text>
+        <View style={styles.expenseGrid}>
+          {/* Top Row: Title and Date */}
+          <View style={styles.expenseTopRow}>
+            <View style={styles.expenseTitleContainer}>
+              <Text style={styles.expenseTitle} numberOfLines={1}>{item.title ?? '—'}</Text>
+            </View>
+            <View style={styles.expenseDateContainer}>
+              <Text style={styles.dateText}>{formatDisplayDate(dateVal)}</Text>
             </View>
           </View>
-          <View style={styles.expenseRightSection}>
-            <Text style={styles.dateText}>{formatDate(dateVal)}</Text>
-            <Text style={styles.amountText}>{formatAmount(amountVal)}</Text>
+          
+          {/* Bottom Row: Status and Amount */}
+          <View style={styles.expenseBottomRow}>
+            <View style={styles.expenseStatusContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                <Text style={[styles.statusText, { color: status.color }]}>
+                  {status.label}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.expenseAmountContainer}>
+              <Text style={styles.amountText}>{formatAmount(amountVal)}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -339,23 +342,40 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  expenseMainRow: {
+  expenseGrid: {
+    flex: 1,
+  },
+  expenseTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SIZES.base * 0.5,
+  },
+  expenseBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  expenseLeftSection: {
+  expenseTitleContainer: {
     flex: 1,
-    marginRight: SIZES.padding,
+    marginRight: SIZES.base,
   },
-  expenseRightSection: {
+  expenseDateContainer: {
     alignItems: 'flex-end',
+    minWidth: 80,
+  },
+  expenseStatusContainer: {
+    flex: 1,
+    marginRight: SIZES.base,
+  },
+  expenseAmountContainer: {
+    alignItems: 'flex-end',
+    minWidth: 80,
   },
   expenseTitle: {
     fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.text.primary,
-    marginBottom: SIZES.base * 0.25,
   },
   expenseMeta: {
     flexDirection: 'row',

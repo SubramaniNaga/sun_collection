@@ -2,23 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-const formatLoanDate = (dateStr) => {
-  if (!dateStr) return '—';
-  try { return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric'}); }
-  catch { return dateStr; }
-};
 
 const formatLoanAmount = (val) => {
   if (val == null || val === '') return '—';
@@ -30,6 +26,12 @@ const LoanScreen = ({ navigation, route }) => {
   const { t } = useLanguage();
   
   const getLoanStatusLabel = (loan) => {
+    // Use the dynamic status_name from API response if available, fallback to status_id logic
+    if (loan?.loan_status_name) {
+      return loan.loan_status_name;
+    }
+    
+    // Fallback logic for backward compatibility
     const approval = loan?.approval_status;
     const loanStatus = loan?.loan_status;
     if (approval === '2') return t('loan.rejected');
@@ -39,6 +41,17 @@ const LoanScreen = ({ navigation, route }) => {
     if (loanStatus === '2' || approval === '1') return t('loan.approved');
     return t('loan.pending');
   };
+
+  const getLoanStatusColor = (loan) => {
+    const label = getLoanStatusLabel(loan);
+    if (label === 'Approved') return COLORS.success || '#10B981';
+    if (label === 'Active') return COLORS.success || '#10B981';
+    if (label === 'Rejected') return COLORS.error || '#EF4444';
+    if (label === 'Closed') return COLORS.text?.tertiary || '#6B7280';
+    if (label === 'Pending') return '#F59E0B'; // Orange
+    return COLORS.primary || '#1d7ee2';
+  };
+
   const { loan, customerData: paramCustomerData } = route.params || {};
   const customerData = paramCustomerData || (loan ? {
     name: loan?.customer_name ?? '',
@@ -50,9 +63,9 @@ const LoanScreen = ({ navigation, route }) => {
   // Approved loan-given flow (when loan is approved)
   const isLoanApproved = Boolean(
     loan &&
+    loan.loan_status_name === 'Approved' &&
     loan.approval_status !== '2' &&
-    loan.loan_status !== '4' &&
-    (loan.approval_status === '1' || loan.loan_status === '2')
+    loan.loan_status !== '4'
   );
   const [paymentType, setPaymentType] = useState('cash');
   const [loanGivenPhoto, setLoanGivenPhoto] = useState(null);
@@ -77,6 +90,11 @@ const LoanScreen = ({ navigation, route }) => {
   // Image viewer states
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
+
+  // Loan details and collections states
+  const [loanDetails, setLoanDetails] = useState(null);
+  const [collections, setCollections] = useState([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Location capture function (called on submit)
   const captureLocation = async () => {
@@ -111,14 +129,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(t('common.error'), t('customer.cameraPermissionRequired'));
+        showError(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
       const asset = await pickFromCamera([4, 3]);
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
       console.error('Photo capture error:', error?.message ?? error);
-      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
+      showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
 
@@ -127,14 +145,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(t('common.error'), t('customer.cameraPermissionRequired'));
+        showError(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
       const asset = await pickFromCamera([3, 2]);
       if (asset) setAadharCardImage(asset);
     } catch (error) {
       console.error('Aadhar capture error:', error?.message ?? error);
-      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
+      showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
 
@@ -143,14 +161,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(t('common.error'), t('customer.galleryPermissionRequired'));
+        showError(t('common.error'), t('customer.galleryPermissionRequired'));
         return;
       }
       const asset = await pickFromLibrary([3, 2]);
       if (asset) setAadharCardImage(asset);
     } catch (error) {
       console.error('Aadhar upload error:', error?.message ?? error);
-      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
+      showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
     }
   };
 
@@ -159,14 +177,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(t('common.error'), t('customer.cameraPermissionRequired'));
+        showError(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
       const asset = await pickFromCamera([4, 3]);
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
       console.error('Loan given photo capture error:', error?.message ?? error);
-      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
+      showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
 
@@ -174,14 +192,14 @@ const LoanScreen = ({ navigation, route }) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(t('common.error'), t('customer.galleryPermissionRequired'));
+        showError(t('common.error'), t('customer.galleryPermissionRequired'));
         return;
       }
       const asset = await pickFromLibrary([4, 3]);
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
       console.error('Loan given photo upload error:', error?.message ?? error);
-      Alert.alert(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
+      showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
     }
   };
 
@@ -235,6 +253,28 @@ const LoanScreen = ({ navigation, route }) => {
     return `${API_BASE_URL}/api/v1${cleanPath}`;
   };
 
+  // Fetch loan details and collections when loan ID is available
+  useEffect(() => {
+    const fetchLoanDetails = async () => {
+      if (loan?.id) {
+        try {
+          setLoadingDetails(true);
+          const response = await apiServices.loan.getLoanDetails(loan.id);
+          // Use the detailed loan data from API response
+          setLoanDetails(response.data?.loan);
+          setCollections(response.data?.collections || []);
+        } catch (error) {
+          console.error('Failed to fetch loan details:', error);
+          showError(t('common.error'), 'Failed to load loan details');
+        } finally {
+          setLoadingDetails(false);
+        }
+      }
+    };
+
+    fetchLoanDetails();
+  }, [loan?.id]);
+
   // Handle image icon press
   const handleImagePress = (imagePath, title) => {
     const fullUrl = getImageUrl(imagePath);
@@ -243,7 +283,7 @@ const LoanScreen = ({ navigation, route }) => {
       setSelectedImage({ uri: fullUrl, title });
       setImageViewerVisible(true);
     } else {
-      Alert.alert(t('common.error'), t('customer.imageNotAvailable', { title }));
+      showError(t('common.error'), t('customer.imageNotAvailable', { title }));
     }
   };
 
@@ -256,7 +296,7 @@ const LoanScreen = ({ navigation, route }) => {
   // Handle map press for location
   const handleMapPress = (latitude, longitude, title) => {
     if (!latitude || !longitude) {
-      Alert.alert(t('common.error'), t('collection.map'));
+      showError(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -264,7 +304,7 @@ const LoanScreen = ({ navigation, route }) => {
     const lng = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lng)) {
-      Alert.alert(t('common.error'), t('collection.map'));
+      showError(t('common.error'), t('collection.map'));
       return;
     }
 
@@ -284,7 +324,7 @@ const LoanScreen = ({ navigation, route }) => {
         console.error('Error opening Google Maps:', err);
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
           console.error('Error opening Google Maps web:', fallbackErr);
-          Alert.alert(t('common.error'), t('collection.couldNotOpenGoogleMaps'));
+          showError(t('common.error'), t('collection.couldNotOpenGoogleMaps'));
         });
       });
   };
@@ -293,7 +333,7 @@ const LoanScreen = ({ navigation, route }) => {
   const handleSubmit = async () => {
     if (loan && isLoanApproved) {
       if (!paymentType.trim() || !loanGivenPhoto) {
-        Alert.alert(t('common.error'), t('loan.paymentTypeAndPhotoRequired') || 'Payment type and loan given photo are required.');
+        showError(t('common.error'), t('loan.paymentTypeAndPhotoRequired') || 'Payment type and loan given photo are required.');
         return;
       }
       setIsSubmitting(true);
@@ -302,7 +342,7 @@ const LoanScreen = ({ navigation, route }) => {
         try {
           locationData = await captureLocation();
         } catch (locationError) {
-          Alert.alert(t('common.error'), t('customer.locationRequired'));
+          showError(t('common.error'), t('customer.locationRequired'));
           setIsSubmitting(false);
           return;
         }
@@ -341,13 +381,13 @@ const LoanScreen = ({ navigation, route }) => {
 
         console.log('[Loan Given] Calling updateLoanGiven, loanId:', loanId);
         await apiServices.loan.updateLoanGiven(loanId, formData);
-        Alert.alert(
+        showSuccess(
           t('common.success'),
           t('loan.loanGivenUpdated') || 'Loan given updated successfully.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } catch (error) {
-        Alert.alert(t('common.error'), error?.response?.data?.message || error?.message || t('loan.failedToProcessRenewal'));
+        showError(t('common.error'), getApiErrorMessage(error, t('loan.failedToProcessRenewal')));
         console.error('Update loan given error:', error);
       } finally {
         setIsSubmitting(false);
@@ -366,7 +406,7 @@ const LoanScreen = ({ navigation, route }) => {
       try {
         locationData = await captureLocation();
       } catch (locationError) {
-        Alert.alert(t('common.error'), t('customer.locationRequired'));
+        showError(t('common.error'), t('customer.locationRequired'));
         setIsSubmitting(false);
         return;
       }
@@ -387,9 +427,9 @@ const LoanScreen = ({ navigation, route }) => {
       };
 
       console.log('Loan Renewal Payload:', payload);
-      Alert.alert(t('common.success'), t('loan.renewalSubmitted'));
+      showSuccess(t('common.success'), t('loan.renewalSubmitted'));
     } catch (error) {
-      Alert.alert(t('common.error'), t('loan.failedToProcessRenewal'));
+      showError(t('common.error'), getApiErrorMessage(error, t('loan.failedToProcessRenewal')));
       console.error('Submission error:', error);
     } finally {
       setIsSubmitting(false);
@@ -416,42 +456,39 @@ const LoanScreen = ({ navigation, route }) => {
           showsVerticalScrollIndicator={false}
         >
           {/* Complete Loan Details (when opened from list) */}
-          {loan && (
+          {(loan || loanDetails) && (
             <View style={styles.loanDetailsCard}>
               <View style={styles.detailRow}>
               <Text style={styles.loanDetailsTitle}>{t('loan.loanDetails')}</Text>
-              <View style={[styles.loanDetailsBadge, { backgroundColor: loan?.approval_status === '2' ? COLORS.error : loan?.loan_status === '3' ? COLORS.success : COLORS.primary }]}>
-                <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loan)}</Text>
+              <View style={[styles.loanDetailsBadge, { backgroundColor: getLoanStatusColor(loanDetails || loan) }]}>
+                <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loanDetails || loan)}</Text>
               </View>
 </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>{t('loan.loanId')}</Text>
-                <Text style={styles.detailValue}>#{loan?.id ?? '—'}</Text>
-              </View>
+            
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('customer.customer')}</Text>
-                <Text style={styles.detailValue}>{loan?.customer_name ?? '—'}</Text>
+                <Text style={styles.detailValue}>{(loanDetails?.customer_name || loan?.customer_name) ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('common.phone')}</Text>
-                <Text style={styles.detailValue}>{loan?.customer_phone ?? '—'}</Text>
+                <Text style={styles.detailValue}>{(loanDetails?.customer_phone || loan?.customer_phone) ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('customer.customerNo')}</Text>
-                <Text style={styles.detailValue}>{loan?.customer_no ?? '—'}</Text>
+                <Text style={styles.detailValue}>{(loanDetails?.customer_no || loan?.customer_no) ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.branch')}</Text>
-                <Text style={styles.detailValue}>{loan?.branch ?? '—'}</Text>
+                <Text style={styles.detailValue}>{(loanDetails?.branch_name || loan?.branch) ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.line')}</Text>
-                <Text style={styles.detailValue}>{loan?.line_name ?? '—'}</Text>
+                <Text style={styles.detailValue}>{(loanDetails?.line_name || loan?.line_name) ?? '—'}</Text>
               </View>
-              {loan?.loantype_id != null && (
+              {(loanDetails?.loantype_id || loan?.loantype_id) != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>{t('loan.loanTypeId')}</Text>
-                  <Text style={styles.detailValue}>{loan.loantype_id}</Text>
+                  <Text style={styles.detailLabel}>Loan Type</Text>
+                  <Text style={styles.detailValue}>{(loanDetails?.loan_type_name || loan?.loan_type_name) ?? '—'}</Text>
                 </View>
               )}
 
@@ -459,36 +496,36 @@ const LoanScreen = ({ navigation, route }) => {
               <Text style={styles.detailSectionTitle}>{t('loan.amounts')}</Text>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.loanAmount')}</Text>
-                <Text style={styles.detailValueHighlight}>{formatLoanAmount(loan?.loan_amount)}</Text>
+                <Text style={styles.detailValueHighlight}>{formatLoanAmount(loanDetails?.loan_amount || loan?.loan_amount)}</Text>
               </View>
-              {loan?.approved_amount != null && (
+              {(loanDetails?.approved_amount || loan?.approved_amount) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.approvedAmount')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.approved_amount)}</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.approved_amount || loan?.approved_amount)}</Text>
                 </View>
               )}
-              {loan?.balance_amount != null && (
+              {(loanDetails?.balance_amount || loan?.balance_amount) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.balanceAmount')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.balance_amount)}</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.balance_amount || loan?.balance_amount)}</Text>
                 </View>
               )}
-              {loan?.intrest_amount != null && (
+              {(loanDetails?.intrest_amount || loan?.intrest_amount) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.interestAmount')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.intrest_amount)}</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.intrest_amount || loan?.intrest_amount)}</Text>
                 </View>
               )}
-              {loan?.processing_fees != null && (
+              {(loanDetails?.processing_fees || loan?.processing_fees) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.processingFees')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanAmount(loan?.processing_fees)}</Text>
+                  <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.processing_fees || loan?.processing_fees)}</Text>
                 </View>
               )}
-              {loan?.payment_type != null && (
+              {(loanDetails?.payment_type || loan?.payment_type) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.paymentType')}</Text>
-                  <Text style={styles.detailValue}>{loan.payment_type}</Text>
+                  <Text style={styles.detailValue}>{(loanDetails?.payment_type || loan?.payment_type)}</Text>
                 </View>
               )}
 
@@ -496,44 +533,44 @@ const LoanScreen = ({ navigation, route }) => {
               <Text style={styles.detailSectionTitle}>{t('loan.datesAndPeriod')}</Text>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.requestedDate')}</Text>
-                <Text style={styles.detailValue}>{formatLoanDate(loan?.requested_date)}</Text>
+                <Text style={styles.detailValue}>{formatDisplayDate(loanDetails?.requested_date || loan?.requested_date)}</Text>
               </View>
-              {loan?.approved_date != null && (
+              {(loanDetails?.approved_date || loan?.approved_date) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.approvedDate')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanDate(loan.approved_date)}</Text>
+                  <Text style={styles.detailValue}>{formatDisplayDate(loanDetails?.approved_date || loan?.approved_date)}</Text>
                 </View>
               )}
-              {loan?.loan_period != null && (
+              {(loanDetails?.loan_period || loan?.loan_period) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.loanPeriod')}</Text>
-                  <Text style={styles.detailValue}>{`${loan.loan_period} ${t('loan.months')}`}</Text>
+                  <Text style={styles.detailValue}>{`${loanDetails?.loan_period || loan?.loan_period} ${t('loan.months')}`}</Text>
                 </View>
               )}
-              {loan?.loan_closed_on != null && (
+              {(loanDetails?.loan_closed_on || loan?.loan_closed_on) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.closedOn')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanDate(loan.loan_closed_on)}</Text>
+                  <Text style={styles.detailValue}>{formatDisplayDate(loanDetails?.loan_closed_on || loan?.loan_closed_on)}</Text>
                 </View>
               )}
-              <View style={styles.detailRow}>
+              {/* <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.created')}</Text>
-                <Text style={styles.detailValue}>{formatLoanDate(loan?.created_at)}</Text>
+                <Text style={styles.detailValue}>{formatDisplayDate(loanDetails?.created_at || loan?.created_at)}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.updated')}</Text>
-                <Text style={styles.detailValue}>{formatLoanDate(loan?.updated_at)}</Text>
-              </View>
+                <Text style={styles.detailValue}>{formatDisplayDate(loanDetails?.updated_at || loan?.updated_at)}</Text>
+              </View> */}
 
               {/* Location Section */}
-              {(loan?.address_latitude || loan?.address_longitude || loan?.loangiven_latitude || loan?.loangiven_longitude) && (
+              {((loanDetails?.address_latitude || loan?.address_latitude) || (loanDetails?.address_longitude || loan?.address_longitude) || (loanDetails?.loangiven_latitude || loan?.loangiven_latitude) || (loanDetails?.loangiven_longitude || loan?.loangiven_longitude)) && (
                 <>
                   <Text style={styles.detailSectionTitle}>{t('loan.location')}</Text>
-                  {loan?.address_latitude && loan?.address_longitude && (
+                  {((loanDetails?.address_latitude || loan?.address_latitude) && (loanDetails?.address_longitude || loan?.address_longitude)) && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>{t('loan.addressLocation')}</Text>
                       <TouchableOpacity
-                        onPress={() => handleMapPress(loan.address_latitude, loan.address_longitude, t('loan.addressLocation'))}
+                        onPress={() => handleMapPress(loanDetails?.address_latitude || loan?.address_latitude, loanDetails?.address_longitude || loan?.address_longitude, t('loan.addressLocation'))}
                         activeOpacity={0.7}
                       >
                         <View style={styles.locationButton}>
@@ -543,11 +580,11 @@ const LoanScreen = ({ navigation, route }) => {
                       </TouchableOpacity>
                     </View>
                   )}
-                  {loan?.loangiven_latitude && loan?.loangiven_longitude && (
+                  {(loanDetails?.loangiven_latitude || loan?.loangiven_latitude) && (loanDetails?.loangiven_longitude || loan?.loangiven_longitude) && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>{t('loan.loanGivenLocation')}</Text>
                       <TouchableOpacity
-                        onPress={() => handleMapPress(loan.loangiven_latitude, loan.loangiven_longitude, t('loan.loanGivenLocation'))}
+                        onPress={() => handleMapPress(loanDetails?.loangiven_latitude || loan?.loangiven_latitude, loanDetails?.loangiven_longitude || loan?.loangiven_longitude, t('loan.loanGivenLocation'))}
                         activeOpacity={0.7}
                       >
                         <View style={styles.locationButton}>
@@ -560,16 +597,16 @@ const LoanScreen = ({ navigation, route }) => {
                 </>
               )}
 
-              {loan?.reject_reason && (
+              {(loanDetails?.reject_reason || loan?.reject_reason) && (
                 <>
                   <Text style={styles.detailSectionTitle}>{t('loan.rejection')}</Text>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>{t('loan.reason')}</Text>
-                    <Text style={[styles.detailValue, { color: COLORS.error }]}>{loan.reject_reason}</Text>
+                    <Text style={[styles.detailValue, { color: COLORS.error }]}>{loanDetails?.reject_reason || loan?.reject_reason}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>{t('loan.rejectedDate')}</Text>
-                    <Text style={styles.detailValue}>{formatLoanDate(loan?.rejected_date)}</Text>
+                    <Text style={styles.detailValue}>{formatDisplayDate(loanDetails?.rejected_date || loan?.rejected_date)}</Text>
                   </View>
                 </>
               )}
@@ -579,12 +616,12 @@ const LoanScreen = ({ navigation, route }) => {
               <View style={styles.imagesRow}>
                 <TouchableOpacity
                   style={styles.imageIconContainer}
-                  onPress={() => handleImagePress(loan?.customer_photo, t('loan.customerPhoto'))}
+                  onPress={() => handleImagePress(loanDetails?.customer_photo || loan?.customer_photo, t('loan.customerPhoto'))}
                   activeOpacity={0.7}
                 >
-                  {loan?.customer_photo ? (
+                  {(loanDetails?.customer_photo || loan?.customer_photo) ? (
                     <Image
-                      source={{ uri: getImageUrl(loan.customer_photo) }}
+                      source={{ uri: getImageUrl(loanDetails?.customer_photo || loan?.customer_photo) }}
                       style={styles.imageIcon}
                       resizeMode="cover"
                     />
@@ -598,12 +635,12 @@ const LoanScreen = ({ navigation, route }) => {
 
                 <TouchableOpacity
                   style={styles.imageIconContainer}
-                  onPress={() => handleImagePress(loan?.address_proof, t('loan.addressProof'))}
+                  onPress={() => handleImagePress(loanDetails?.address_proof || loan?.address_proof, t('loan.addressProof'))}
                   activeOpacity={0.7}
                 >
-                  {loan?.address_proof ? (
+                  {(loanDetails?.address_proof || loan?.address_proof) ? (
                     <Image
-                      source={{ uri: getImageUrl(loan.address_proof) }}
+                      source={{ uri: getImageUrl(loanDetails?.address_proof || loan?.address_proof) }}
                       style={styles.imageIcon}
                       resizeMode="cover"
                     />
@@ -617,12 +654,12 @@ const LoanScreen = ({ navigation, route }) => {
 
                 <TouchableOpacity
                   style={styles.imageIconContainer}
-                  onPress={() => handleImagePress(loan?.loangiven_photo, t('loan.loanGivenPhoto'))}
+                  onPress={() => handleImagePress(loanDetails?.loangiven_photo || loan?.loangiven_photo, t('loan.loanGivenPhoto'))}
                   activeOpacity={0.7}
                 >
-                  {loan?.loangiven_photo ? (
+                  {(loanDetails?.loangiven_photo || loan?.loangiven_photo) ? (
                     <Image
-                      source={{ uri: getImageUrl(loan.loangiven_photo) }}
+                      source={{ uri: getImageUrl(loanDetails?.loangiven_photo || loan?.loangiven_photo) }}
                       style={styles.imageIcon}
                       resizeMode="cover"
                     />
@@ -677,6 +714,52 @@ const LoanScreen = ({ navigation, route }) => {
                     )}
                   </View>
                 </>
+              )}
+            </View>
+          )}
+
+          {/* Collections Table */}
+          {collections.length > 0 && (
+            <View style={styles.collectionsCard}>
+              <Text style={styles.collectionsTitle}>Collection History</Text>
+              {loadingDetails ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading collections...</Text>
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                  <View style={styles.collectionsTable}>
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.tableHeaderText, { width: 60 }]}>Week</Text>
+                      <Text style={[styles.tableHeaderText, { width: 100 }]}>Due Date</Text>
+                      <Text style={[styles.tableHeaderText, { width: 100 }]}>Payment Date</Text>
+                      <Text style={[styles.tableHeaderText, { width: 80 }]}>Amount Paid</Text>
+                      <Text style={[styles.tableHeaderText, { width: 80 }]}>Balance</Text>
+                      <Text style={[styles.tableHeaderText, { width: 60 }]}>Type</Text>
+                    </View>
+                    {collections.map((collection) => (
+                      <View key={collection.id} style={styles.tableRow}>
+                        <Text style={[styles.tableCellText, { width: 60 }]}>{collection.collection_week || '—'}</Text>
+                        <Text style={[styles.tableCellText, { width: 100 }]}>
+                          {collection.collection_date ? formatDisplayDate(collection.collection_date) : '—'}
+                        </Text>
+                        <Text style={[styles.tableCellText, { width: 100 }]}>
+                          {collection.payment_date ? formatDisplayDate(collection.payment_date) : '—'}
+                        </Text>
+                        <Text style={[styles.tableCellText, { width: 80 }]}>
+                          {collection.amount_paid ? formatLoanAmount(collection.amount_paid) : '—'}
+                        </Text>
+                        <Text style={[styles.tableCellText, { width: 80 }]}>
+                          {collection.balance_amount ? formatLoanAmount(collection.balance_amount) : '—'}
+                        </Text>
+                        <Text style={[styles.tableCellText, { width: 60 }]}>
+                          {collection.payment_type || '—'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
               )}
             </View>
           )}
@@ -780,7 +863,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.base * 0.5,
-    borderRadius: SIZES.radius,
+    borderRadius: 8,
     marginBottom: SIZES.margin,
   },
   loanDetailsBadgeText: {
@@ -1089,7 +1172,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButton: {
-    backgroundColor: '#0536a3', // Updated to match requirement
+    backgroundColor: '#1d7ee2', // Updated to match requirement
     paddingVertical: SIZES.padding,
     borderRadius: SIZES.radius,
     alignItems: 'center',
@@ -1276,6 +1359,67 @@ const styles = StyleSheet.create({
     color: COLORS.text?.secondary || '#666',
     marginTop: SIZES.base / 2,
     fontWeight: '500',
+  },
+  // Collections Table Styles
+  collectionsCard: {
+    backgroundColor: COLORS.white,
+    // margin: SIZES.padding,
+    borderRadius: SIZES.radius,
+    padding: SIZES.base,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  collectionsTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: '600',
+    color: COLORS.text?.primary || '#333',
+    marginBottom: SIZES.base,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: SIZES.padding,
+  },
+  loadingText: {
+    fontSize: SIZES.body2,
+    color: COLORS.text?.secondary || '#666',
+    marginTop: SIZES.base,
+  },
+  collectionsTable: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    minWidth: 480,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.lightGray,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderTopLeftRadius: SIZES.radius,
+    borderTopRightRadius: SIZES.radius,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tableHeaderText: {
+    fontSize: SIZES.body4,
+    fontWeight: '600',
+    color: COLORS.text?.primary || '#333',
+    paddingHorizontal: 2,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tableCellText: {
+    fontSize: SIZES.body4,
+    color: COLORS.text?.secondary || '#666',
+    paddingHorizontal: 2,
   },
 });
 

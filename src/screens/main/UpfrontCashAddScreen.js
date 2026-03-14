@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
@@ -12,6 +12,8 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { showError, showInfo, showSuccess } from '../../utils/alertService';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const UpfrontCashAddScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -60,7 +62,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
     agentName: user?.name || t('upfrontCash.agentName'),
     agentId: user?.id || 'AG001',
     branchName: user?.branch || t('upfrontCash.mainBranch'),
-    currentDate: new Date().toLocaleDateString('en-IN'),
+    currentDate: formatDisplayDate(new Date()),
   };
 
   useEffect(() => {
@@ -117,7 +119,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      Alert.alert(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
+      showError(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
       return;
     }
     setIsSubmitting(true);
@@ -144,14 +146,14 @@ const UpfrontCashAddScreen = ({ navigation }) => {
         deviceId: 'DEVICE_ID',
       };
       console.log('Upfront Cash Entry Payload:', payload);
-      Alert.alert(
+      showSuccess(
         t('common.success'),
         t('upfrontCash.entryCreatedSuccessfully', { entryId }),
         [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       console.error('Submit error:', error);
-      Alert.alert(t('common.error'), t('upfrontCash.failedToSubmitEntry'));
+      showError(t('common.error'), t('upfrontCash.failedToSubmitEntry'));
     } finally {
       setIsSubmitting(false);
     }
@@ -197,7 +199,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
 
             <Card style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>{t('upfrontCash.acknowledgement')}</Text>
-              <TouchableOpacity style={[styles.signatureBox, errors.agentSignature && styles.signatureBoxError]} onPress={() => { Alert.alert(t('upfrontCash.signature'), t('upfrontCash.signaturePadImplementation')); handleInputChange('agentSignature', 'mock_signature_data'); }}>
+              <TouchableOpacity style={[styles.signatureBox, errors.agentSignature && styles.signatureBoxError]} onPress={() => { showInfo(t('upfrontCash.signature'), t('upfrontCash.signaturePadImplementation')); handleInputChange('agentSignature', 'mock_signature_data'); }}>
                 {formData.agentSignature ? (
                   <View style={styles.signatureContent}>
                     <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
@@ -210,7 +212,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.signatureBox} onPress={() => { Alert.alert(t('upfrontCash.signature'), t('upfrontCash.managerSignaturePadImplementation')); handleInputChange('managerSignature', 'mock_manager_signature'); }}>
+              <TouchableOpacity style={styles.signatureBox} onPress={() => { showInfo(t('upfrontCash.signature'), t('upfrontCash.managerSignaturePadImplementation')); handleInputChange('managerSignature', 'mock_manager_signature'); }}>
                 {formData.managerSignature ? (
                   <View style={styles.signatureContent}>
                     <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />

@@ -6,6 +6,7 @@ import GlobalLoader from './src/components/common/GlobalLoader';
 import { COLORS } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider, useAuthContext } from './src/store/AuthContext';
+import AlertProvider from './src/store/AlertContext';
 import { LanguageProvider } from './src/store/LanguageContext';
 import { LoadingProvider, useLoading } from './src/store/LoadingContext';
 import {
@@ -73,7 +74,9 @@ export default function App() {
     <LanguageProvider>
       <LoadingProvider>
         <AuthProvider>
-          <AppContent />
+          <AlertProvider>
+            <AppContent />
+          </AlertProvider>
         </AuthProvider>
       </LoadingProvider>
     </LanguageProvider>

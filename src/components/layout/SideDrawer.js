@@ -1,9 +1,10 @@
 import React from 'react';
-import { Alert, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert } from '../../utils/alertService';
 
 const SideDrawer = ({ isVisible, onClose, navigation }) => {
   const { t } = useLanguage();
@@ -43,10 +44,11 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
       title: t('settings.logout'),
       icon: '🚪',
       onPress: () => {
-        Alert.alert(
-          t('settings.confirmLogout'),
-          null,
-          [
+        showAlert({
+          type: 'warning',
+          title: t('settings.confirmLogout'),
+          message: '',
+          buttons: [
             { text: t('common.cancel'), style: 'cancel' },
             {
               text: t('settings.confirmLogoutConfirm'),
@@ -55,8 +57,8 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
                 onClose();
               },
             },
-          ]
-        );
+          ],
+        });
       },
       isDestructive: true,
     },
