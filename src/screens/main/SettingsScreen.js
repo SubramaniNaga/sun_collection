@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../../components/common/Card';
+import LogoutModal from '../../components/common/LogoutModal';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert } from '../../utils/alertService';
 
 const SettingsScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const { logout } = useAuthContext();
+  const { logout, user } = useAuthContext();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [biometric, setBiometric] = useState(false);
@@ -129,15 +130,7 @@ const SettingsScreen = ({ navigation }) => {
           subtitle: t('settings.signOutAccount'),
           type: 'destructive',
           onPress: () => {
-            showAlert({
-              type: 'warning',
-              title: t('settings.confirmLogout'),
-              message: '',
-              buttons: [
-                { text: t('common.cancel'), style: 'cancel' },
-                { text: t('settings.confirmLogoutConfirm'), onPress: logout },
-              ],
-            });
+            setShowLogoutModal(true);
           },
         },
       ],
@@ -203,6 +196,17 @@ const SettingsScreen = ({ navigation }) => {
           <Text style={styles.versionBuild}>{t('settings.build')} 2024.03.01</Text>
         </Card>
       </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        visible={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={async () => {
+          await logout();
+          setShowLogoutModal(false);
+        }}
+        userName={user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.name}
+      />
     </View>
   );
 };

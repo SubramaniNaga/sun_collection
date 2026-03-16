@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LogoutModal from '../../components/common/LogoutModal';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert } from '../../utils/alertService';
 
 const SideDrawer = ({ isVisible, onClose, navigation }) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthContext();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const menuItems = [
     {
@@ -44,21 +45,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
       title: t('settings.logout'),
       icon: '🚪',
       onPress: () => {
-        showAlert({
-          type: 'warning',
-          title: t('settings.confirmLogout'),
-          message: '',
-          buttons: [
-            { text: t('common.cancel'), style: 'cancel' },
-            {
-              text: t('settings.confirmLogoutConfirm'),
-              onPress: async () => {
-                await logout();
-                onClose();
-              },
-            },
-          ],
-        });
+        setShowLogoutModal(true);
       },
       isDestructive: true,
     },
@@ -118,6 +105,18 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
           </Text>
         </View>
       </View>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        visible={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={async () => {
+          await logout();
+          setShowLogoutModal(false);
+          onClose();
+        }}
+        userName={user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.name}
+      />
     </View>
   );
 };

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,16 +7,17 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LogoutModal from '../../components/common/LogoutModal';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert } from '../../utils/alertService';
 
 const CustomDrawerContent = (props) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthContext();
   const { navigation, state } = props;
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const menuItems = [
     {
@@ -33,15 +35,7 @@ const CustomDrawerContent = (props) => {
   ];
 
   const handleLogout = () => {
-    showAlert({
-      type: 'warning',
-      title: t('settings.confirmLogout'),
-      message: '',
-      buttons: [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('settings.confirmLogoutConfirm'), onPress: async () => await logout() },
-      ],
-    });
+    setShowLogoutModal(true);
   };
 
   const getInitials = (name) => {
@@ -111,6 +105,17 @@ const CustomDrawerContent = (props) => {
       <View style={styles.footer}>
         <Text style={styles.versionText}>{t('settings.version')} 1.0.0</Text>
       </View>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        visible={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={async () => {
+          await logout();
+          setShowLogoutModal(false);
+        }}
+        userName={user?.name}
+      />
     </View>
   );
 };

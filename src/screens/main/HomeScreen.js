@@ -108,19 +108,19 @@ const HomeScreen = ({ navigation }) => {
       >
         {/* Dashboard Section */}
         <View style={styles.dashboardSection}>
-          <Text style={styles.dashboardTitle}>Today's Statistics</Text>
+          <Text style={styles.dashboardTitle}>{t('home.todaysStatistics')}</Text>
           
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.loadingText}>Loading dashboard...</Text>
+              <Text style={styles.loadingText}>{t('home.loadingDashboard')}</Text>
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
               <Ionicons name="alert-circle-outline" size={24} color={COLORS.error} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.errorText}>{error || t('home.failedToLoadDashboard')}</Text>
               <TouchableOpacity onPress={fetchDashboardData} style={styles.retryButton}>
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : dashboardData ? (
@@ -129,40 +129,40 @@ const HomeScreen = ({ navigation }) => {
               <View style={[styles.dashboardCard, styles.frontcashCard]}>
                 <View style={styles.cardHeader}>
                   <Ionicons name="wallet" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>Frontcash</Text>
+                  <Text style={styles.cardHeaderText}>{t('home.frontcash')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedFrontcashAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.frontcash.count} transactions</Text>
+                <Text style={styles.cardCount}>{dashboardData.frontcash.count} {t('home.transactions')}</Text>
               </View>
 
               {/* Loans Given Card */}
               <View style={[styles.dashboardCard, styles.loansCard]}>
                 <View style={styles.cardHeader}>
                   <Ionicons name="document-text" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>Loans Given</Text>
+                  <Text style={styles.cardHeaderText}>{t('home.loansGiven')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedLoansGivenAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.loansGiven.count} loans</Text>
+                <Text style={styles.cardCount}>{dashboardData.loansGiven.count} {t('home.loans')}</Text>
               </View>
 
               {/* Collections Card */}
               <View style={[styles.dashboardCard, styles.collectionsCard]}>
                 <View style={styles.cardHeader}>
                   <Ionicons name="cash" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>Collections</Text>
+                  <Text style={styles.cardHeaderText}>{t('home.collections')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedCollectionsAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.collections.count} collections</Text>
+                <Text style={styles.cardCount}>{dashboardData.collections.count} {t('home.collectionsCount')}</Text>
               </View>
 
               {/* Expenses Card */}
               <View style={[styles.dashboardCard, styles.expensesCard]}>
                 <View style={styles.cardHeader}>
                   <Ionicons name="card" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>Expenses</Text>
+                  <Text style={styles.cardHeaderText}>{t('home.expenses')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedExpensesAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.expenses.count} expenses</Text>
+                <Text style={styles.cardCount}>{dashboardData.expenses.count} {t('home.expensesCount')}</Text>
               </View>
 
               {/* Tracking Card - Full Width 

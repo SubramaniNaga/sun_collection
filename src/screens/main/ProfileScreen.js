@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
@@ -21,6 +21,17 @@ const ProfileScreen = ({ navigation }) => {
   const [branchId, setBranchId] = useState(null);
   const [lineId, setLineId] = useState(null);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -57,6 +68,82 @@ const ProfileScreen = ({ navigation }) => {
     setShowLanguageModal(false);
   };
 
+  const handlePasswordChange = () => {
+    // Validate passwords
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: t('profile.allFieldsRequired') || 'All fields are required',
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: t('profile.passwordsDoNotMatch') || 'New password and confirm password do not match',
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: t('profile.passwordMinLength') || 'Password must be at least 6 characters',
+      });
+      return;
+    }
+
+    // TODO: Call API to change password
+    console.log('Changing password...', {
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword,
+    });
+
+    showAlert({
+      type: 'success',
+      title: t('common.success'),
+      message: t('profile.passwordChanged') || 'Password changed successfully',
+    });
+
+    // Reset form and close modal
+    setPasswordData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setShowPasswordModal(false);
+  };
+
+  const handlePrivacyPress = () => {
+    // Privacy policy URL - you can replace this with your actual privacy policy URL
+    const privacyPolicyUrl = 'https://www.example.com/privacy-policy';
+    
+    Linking.canOpenURL(privacyPolicyUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(privacyPolicyUrl);
+        } else {
+          showAlert({
+            type: 'error',
+            title: t('common.error'),
+            message: t('profile.cannotOpenBrowser') || 'Cannot open browser',
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Error opening privacy policy:', err);
+        showAlert({
+          type: 'error',
+          title: t('common.error'),
+          message: t('profile.cannotOpenBrowser') || 'Cannot open browser',
+        });
+      });
+  };
+
   const languages = [
     { code: 'en', name: t('profile.english'), nativeName: 'English' },
     { code: 'ta', name: t('profile.tamil'), nativeName: 'தமிழ்' },
@@ -76,14 +163,16 @@ const ProfileScreen = ({ navigation }) => {
       id: 'change-password',
       title: t('profile.changePassword'),
       icon: 'lock-closed-outline',
-      onPress: () => console.log('Navigate to change password'),
+      onPress: () => {
+        setShowPasswordModal(true);
+      },
     },
    
     {
       id: 'privacy',
       title: t('profile.privacySettings'),
       icon: 'shield-checkmark-outline',
-      onPress: () => console.log('Navigate to privacy'),
+      onPress: handlePrivacyPress,
     },
     {
       id: 'help',
@@ -302,6 +391,148 @@ const ProfileScreen = ({ navigation }) => {
                 );
               })}
             </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPasswordModal(false)}
+        >
+          <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="lock-closed" size={28} color={COLORS.primary} />
+                </View>
+                <Text style={styles.modalTitle}>{t('profile.changePassword')}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPasswordData({
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: '',
+                  });
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.passwordModalContent} showsVerticalScrollIndicator={false}>
+              {/* Current Password */}
+              <View style={styles.passwordInputContainer}>
+                <Text style={styles.passwordLabel}>{t('profile.currentPassword') || 'Current Password'}</Text>
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder={t('profile.enterCurrentPassword') || 'Enter current password'}
+                    placeholderTextColor={COLORS.text.tertiary}
+                    value={passwordData.currentPassword}
+                    onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
+                    secureTextEntry={!showPasswords.current}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                  >
+                    <Ionicons 
+                      name={showPasswords.current ? "eye-outline" : "eye-off-outline"} 
+                      size={22} 
+                      color={COLORS.text.tertiary} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* New Password */}
+              <View style={styles.passwordInputContainer}>
+                <Text style={styles.passwordLabel}>{t('profile.newPassword') || 'New Password'}</Text>
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder={t('profile.enterNewPassword') || 'Enter new password'}
+                    placeholderTextColor={COLORS.text.tertiary}
+                    value={passwordData.newPassword}
+                    onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
+                    secureTextEntry={!showPasswords.new}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                  >
+                    <Ionicons 
+                      name={showPasswords.new ? "eye-outline" : "eye-off-outline"} 
+                      size={22} 
+                      color={COLORS.text.tertiary} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Confirm Password */}
+              <View style={styles.passwordInputContainer}>
+                <Text style={styles.passwordLabel}>{t('profile.confirmPassword') || 'Confirm Password'}</Text>
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder={t('profile.confirmNewPassword') || 'Confirm new password'}
+                    placeholderTextColor={COLORS.text.tertiary}
+                    value={passwordData.confirmPassword}
+                    onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
+                    secureTextEntry={!showPasswords.confirm}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                  >
+                    <Ionicons 
+                      name={showPasswords.confirm ? "eye-outline" : "eye-off-outline"} 
+                      size={22} 
+                      color={COLORS.text.tertiary} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.passwordButtonRow}>
+                <TouchableOpacity
+                  style={[styles.passwordButton, styles.passwordButtonCancel]}
+                  onPress={() => {
+                    setShowPasswordModal(false);
+                    setPasswordData({
+                      currentPassword: '',
+                      newPassword: '',
+                      confirmPassword: '',
+                    });
+                  }}
+                >
+                  <Text style={styles.passwordButtonCancelText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.passwordButton, styles.passwordButtonSubmit]}
+                  onPress={handlePasswordChange}
+                >
+                  <Text style={styles.passwordButtonSubmitText}>{t('common.save')}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -642,6 +873,69 @@ const styles = StyleSheet.create({
   checkmarkContainerSelected: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
+  },
+  passwordModalContent: {
+    padding: SIZES.padding * 1.5,
+    maxHeight: 500,
+  },
+  passwordInputContainer: {
+    marginBottom: SIZES.margin * 1.5,
+  },
+  passwordLabel: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: SIZES.base,
+  },
+  passwordInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius * 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SIZES.padding,
+    height: 50,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: SIZES.body2,
+    color: COLORS.text.primary,
+    paddingVertical: 0,
+  },
+  eyeIcon: {
+    padding: SIZES.base / 2,
+  },
+  passwordButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SIZES.margin * 2,
+    gap: SIZES.margin,
+  },
+  passwordButton: {
+    flex: 1,
+    paddingVertical: SIZES.padding,
+    borderRadius: SIZES.radius * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passwordButtonCancel: {
+    backgroundColor: COLORS.lightGray,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  passwordButtonCancelText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  passwordButtonSubmit: {
+    backgroundColor: COLORS.primary,
+  },
+  passwordButtonSubmitText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.white,
   },
 });
 
