@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
@@ -20,6 +20,7 @@ const ProfileScreen = ({ navigation }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [branchId, setBranchId] = useState(null);
   const [lineId, setLineId] = useState(null);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -51,17 +52,15 @@ const ProfileScreen = ({ navigation }) => {
   const displayBranch = user?.branch ?? user?.branch_id ?? branchId ?? 'N/A';
   const displayLine = user?.line ?? user?.line_name ?? lineId ?? 'N/A';
 
-  const handleLanguageChange = (newLanguage) => {
-    showAlert({
-      type: 'info',
-      title: t('profile.selectLanguage'),
-      message: t('profile.selectLanguage'),
-      buttons: [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('common.ok'), onPress: () => changeLanguage(newLanguage) },
-      ],
-    });
+  const handleLanguageSelect = (newLanguage) => {
+    changeLanguage(newLanguage);
+    setShowLanguageModal(false);
   };
+
+  const languages = [
+    { code: 'en', name: t('profile.english'), nativeName: 'English' },
+    { code: 'ta', name: t('profile.tamil'), nativeName: 'தமிழ்' },
+  ];
 
   const menuItems = [
    
@@ -70,16 +69,7 @@ const ProfileScreen = ({ navigation }) => {
       title: t('profile.language'),
       icon: 'language-outline',
       onPress: () => {
-        showAlert({
-          type: 'info',
-          title: t('profile.selectLanguage'),
-          message: '',
-          buttons: [
-            { text: t('common.cancel'), style: 'cancel' },
-            { text: t('profile.english'), onPress: () => changeLanguage('en') },
-            { text: t('profile.tamil'), onPress: () => changeLanguage('ta') },
-          ],
-        });
+        setShowLanguageModal(true);
       },
     },
     {
@@ -230,6 +220,91 @@ const ProfileScreen = ({ navigation }) => {
           ))}
         </View>
       </ScrollView>
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLanguageModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="language" size={28} color={COLORS.primary} />
+                </View>
+                <Text style={styles.modalTitle}>{t('profile.selectLanguage')}</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={() => setShowLanguageModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.languageOptions}>
+              {languages.map((lang, index) => {
+                const isSelected = language === lang.code;
+                return (
+                  <TouchableOpacity
+                    key={lang.code}
+                    style={[
+                      styles.languageOption,
+                      isSelected && styles.languageOptionSelected,
+                      index === languages.length - 1 && styles.languageOptionLast
+                    ]}
+                    onPress={() => handleLanguageSelect(lang.code)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.languageContent}>
+                      <View style={[
+                        styles.languageIconContainer,
+                        isSelected && styles.languageIconContainerSelected
+                      ]}>
+                        <Ionicons 
+                          name={lang.code === 'en' ? "globe-outline" : "book-outline"} 
+                          size={28} 
+                          color={isSelected ? COLORS.white : COLORS.primary} 
+                        />
+                      </View>
+                      <View style={styles.languageTextContainer}>
+                        <Text style={[
+                          styles.languageName,
+                          isSelected && styles.languageNameSelected
+                        ]}>
+                          {lang.name}
+                        </Text>
+                        <Text style={[
+                          styles.languageNativeName,
+                          isSelected && styles.languageNativeNameSelected
+                        ]}>
+                          {lang.nativeName}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[
+                      styles.checkmarkContainer,
+                      isSelected && styles.checkmarkContainerSelected
+                    ]}>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color={COLORS.white} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -419,6 +494,154 @@ const styles = StyleSheet.create({
   menuArrow: {
     fontSize: SIZES.h2,
     color: COLORS.text.tertiary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.padding * 2,
+  },
+  modalContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius * 3,
+    width: '100%',
+    maxWidth: 420,
+    overflow: 'hidden',
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.padding * 1.5,
+    paddingVertical: SIZES.padding * 1.5,
+    backgroundColor: COLORS.lightGray,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SIZES.margin,
+  },
+  modalTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    flex: 1,
+  },
+  closeButton: {
+    padding: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+  },
+  languageOptions: {
+    padding: SIZES.padding,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SIZES.padding * 1.5,
+    paddingVertical: SIZES.padding * 1.5,
+    marginBottom: SIZES.margin,
+    borderRadius: SIZES.radius * 2,
+    backgroundColor: COLORS.lightGray,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  languageOptionSelected: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+    borderWidth: 2,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  languageOptionLast: {
+    marginBottom: 0,
+  },
+  languageContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  languageIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SIZES.margin,
+    borderWidth: 2,
+    borderColor: COLORS.primary + '30',
+  },
+  languageIconContainerSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  languageTextContainer: {
+    flex: 1,
+  },
+  languageName: {
+    fontSize: SIZES.body1,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: SIZES.base / 2,
+  },
+  languageNameSelected: {
+    fontWeight: '700',
+    color: COLORS.primary,
+    fontSize: SIZES.body1 + 1,
+  },
+  languageNativeName: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.tertiary,
+    fontWeight: '500',
+  },
+  languageNativeNameSelected: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  checkmarkContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkmarkContainerSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
 });
 

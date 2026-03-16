@@ -38,6 +38,9 @@ export const ENDPOINTS = {
     CREATE: '/expense',
     LIST: '/expense',
   },
+  DASHBOARD: {
+    TODAY: '/frontcash/dashboard/today',
+  },
 };
 
 export default ENDPOINTS;

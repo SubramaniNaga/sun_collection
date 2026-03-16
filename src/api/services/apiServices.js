@@ -622,6 +622,21 @@ export const apiServices = {
         throw error;
       }
     }
+  },
+
+  // Dashboard Services
+  dashboard: {
+    getTodayStats: async () => {
+      try {
+        console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY);
+        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY);
+        console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('Get today dashboard stats error:', error);
+        throw error;
+      }
+    }
   }
 };
 
