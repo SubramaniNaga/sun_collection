@@ -3,24 +3,26 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Linking,
+    Modal,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
+import { isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError } from '../../utils/alertService';
+import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
@@ -196,20 +198,66 @@ const LoanCustomerListScreen = ({ navigation }) => {
   };
 
   const getStatusColor = (loan) => {
+    // Handle NIP status (status 7 or NIP name)
+    if (loan?.loan_status === '7' || (loan?.loan_status_name && String(loan.loan_status_name).toUpperCase() === 'NIP')) {
+      return COLORS.error || '#EF4444';
+    }
+    
+    // Handle all 8 loan statuses based on both loan_status and loan_status_name
+    const status = loan?.loan_status;
+    const statusName = loan?.loan_status_name;
+    
+    // Status 1: Pending - Orange
+    if (status === '1' || statusName === 'Pending') {
+      return '#F59E0B';
+    }
+    
+    // Status 2: Approved - Green  
+    if (status === '2' || statusName === 'Approved') {
+      return COLORS.success || '#10B981';
+    }
+    
+    // Status 3: Active - Green
+    if (status === '3' || statusName === 'Active') {
+      return COLORS.success || '#10B981';
+    }
+    
+    // Status 4: Loan Given - Blue
+    if (status === '4' || statusName === 'Loan Given') {
+      return '#3B82F6';
+    }
+    
+    // Status 5: Rejected - Red
+    if (status === '5' || statusName === 'Rejected') {
+      return COLORS.error || '#EF4444';
+    }
+    
+    // Status 6: Closed - Gray
+    if (status === '6' || statusName === 'Closed') {
+      return COLORS.text?.tertiary || '#6B7280';
+    }
+    
+    // Status 7: NIP - Red (already handled above)
+    
+    // Status 8: Completed - Purple
+    if (status === '8' || statusName === 'Completed') {
+      return '#8B5CF6';
+    }
+    
+    // Fallback for any other status
     const label = getStatusLabel(loan);
     if (label === 'Approved') return COLORS.success || '#10B981';
     if (label === 'Active') return COLORS.success || '#10B981';
     if (label === 'Rejected') return COLORS.error || '#EF4444';
     if (label === 'Closed') return COLORS.text?.tertiary || '#6B7280';
-    if (label === 'Pending') return '#F59E0B'; // Orange
+    if (label === 'Pending') return '#F59E0B';
+    
     return COLORS.primary || '#1d7ee2';
   };
 
-  const formatAmount = (val) => {
-    if (val == null || val === '') return '—';
-    const num = parseFloat(val);
-    return isNaN(num) ? val : `₹${num.toLocaleString('en-IN')}`;
-  };
+  const isNipStatus = (loan) =>
+    loan?.loan_status === '7' || (loan?.loan_status_name && String(loan.loan_status_name).toUpperCase() === 'NIP');
+
 
   const openPhotoModal = (imagePath) => {
     const uri = getImageUrl(imagePath);
@@ -219,9 +267,12 @@ const LoanCustomerListScreen = ({ navigation }) => {
     }
   };
 
-  const renderLoanItem = ({ item }) => (
+  const renderLoanItem = ({ item }) => {
+    const isPending = isPendingBorder(item?.is_pending ?? item?.isPending ?? item?.ispending);
+    const isNip = isNipStatus(item);
+    return (
     <TouchableOpacity
-      style={styles.loanCard}
+      style={[styles.loanCard, isPending && styles.loanCardPending, isNip && styles.loanCardNip]}
       onPress={() => handleCustomerSelect(item)}
       activeOpacity={0.7}
     >
@@ -242,7 +293,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
             />
           ) : (
             <Image
-              source={{ uri: 'https://www.kambaa.com/favicon.png' }}
+              source={require('../../../assets/images/favicon.png')}
               style={styles.loanCardPhoto}
               resizeMode="cover"
             />
@@ -251,21 +302,21 @@ const LoanCustomerListScreen = ({ navigation }) => {
         <Text style={styles.loanCardNameLine} numberOfLines={1}>
           {(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
         </Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
-          <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
+          <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
         </View>
       </View>
       <View style={styles.loanCardDivider} />
       <View style={styles.loanCardRow}>
         <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
-        <Text style={styles.loanCardValueAmount}>{formatAmount(item?.loan_amount)}</Text>
+        <Text style={styles.loanCardValueAmount}>{formatCurrency(item?.loan_amount)}</Text>
       </View>
       {item?.approved_amount != null && item?.approved_amount !== '' && (
         <View style={styles.loanCardRow}>
           <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
           <Text style={styles.loanCardLabel}>{t('loan.approved')}</Text>
-          <Text style={styles.loanCardValue}>{formatAmount(item?.approved_amount)}</Text>
+          <Text style={styles.loanCardValue}>{formatCurrency(item?.approved_amount)}</Text>
         </View>
       )}
       <View style={styles.loanCardRow}>
@@ -277,9 +328,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.loanCardLabel}>{t('loan.loanPeriod')}</Text>
         <Text style={styles.loanCardValue} numberOfLines={1}>
-          {item?.loan_type_name || '—'}
+          {item?.loanPeriod ?? item?.loan_period ?? '—'}/{item?.loanTypeName ?? item?.loan_type_name ?? '—'}
         </Text>
       </View>
+      {(item?.completed_collection_count != null || item?.completed_weeks != null || item?.total_period != null) && (
+        <View style={styles.loanCardRow}>
+          <Ionicons name="calendar-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.loanCardLabel}>{t('loan.loanDueStatus')}</Text>
+          <Text style={styles.loanCardValue} numberOfLines={1}>
+            {item?.completed_collection_count ?? 0}({item?.pending_collection_count ?? 0})/{item?.total_period ?? 0}
+          </Text>
+        </View>
+      )}
       <View style={styles.loanCardFooter}>
         <Text style={styles.loanCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requested_date)}</Text>
         <View style={styles.loanCardFooterIcons}>
@@ -310,6 +370,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
       </View>
     </TouchableOpacity>
   );
+  };
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -549,6 +610,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  loanCardPending: {
+    borderColor: '#F5D000',
+    borderWidth: 2,
+  },
+  loanCardNip: {
+    borderColor: COLORS.error,
+    borderWidth: 2,
+  },
   loanCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -561,7 +630,7 @@ const styles = StyleSheet.create({
   },
   loanCardNameLine: {
     flex: 1,
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body2,
     fontWeight: '700',
     color: COLORS.text?.primary || COLORS.primary,
     // marginHorizontal: SIZES.base,
@@ -658,12 +727,15 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: SIZES.base,
     paddingVertical: SIZES.base * 0.25,
-    borderRadius: 8,
+    borderRadius: 2,
   },
   statusText: {
     fontSize: SIZES.body4 || 12,
     fontWeight: '600',
     color: COLORS.white,
+  },
+  statusTextRed: {
+    color: COLORS.error,
   },
   footerLoader: {
     paddingVertical: SIZES.padding,

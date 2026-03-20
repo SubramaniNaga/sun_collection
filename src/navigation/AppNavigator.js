@@ -5,9 +5,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import CustomDrawerContent from '../components/navigation/CustomDrawerContent';
 import { COLORS, SIZES } from '../constants/theme';
-import SplashScreen from '../screens/auth/SplashScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import SplashScreen from '../screens/auth/SplashScreen';
 import AddCustomerScreen from '../screens/main/AddCustomerScreen';
 import CollectionDetailsScreen from '../screens/main/CollectionDetailsScreen';
 import CollectionHistoryScreen from '../screens/main/CollectionHistoryScreen';
@@ -18,6 +18,7 @@ import ExpensesScreen from '../screens/main/ExpensesScreen';
 import HomeScreen from '../screens/main/HomeScreen';
 import LoanCustomerListScreen from '../screens/main/LoanCustomerListScreen';
 import LoanScreen from '../screens/main/LoanScreen';
+import NIPCollectionDetailsScreen from '../screens/main/NIPCollectionDetailsScreen';
 import NIPScreen from '../screens/main/NIPScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
@@ -178,6 +179,13 @@ const HomeStack = () => (
     <Stack.Screen 
       name="NIP" 
       component={NIPScreen} 
+      options={{ 
+        headerShown: false,
+      }}
+    />
+    <Stack.Screen 
+      name="NIPCollectionDetails" 
+      component={NIPCollectionDetailsScreen} 
       options={{ 
         headerShown: false,
       }}

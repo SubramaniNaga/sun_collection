@@ -20,6 +20,11 @@ export const apiServices = {
           // device_id: "12345678"
         };
 
+        // Add language to payload if provided
+        if (credentials.language) {
+          requestPayload.language = credentials.language;
+        }
+
         console.log('🔑 AUTH LOGIN - Request Payload:', JSON.stringify(requestPayload, null, 2));
 
         // Real API call
@@ -38,6 +43,13 @@ export const apiServices = {
           await AsyncStorage.setItem('authToken', token);
           await AsyncStorage.setItem('userData', JSON.stringify(data));
 
+          // Store language preference if provided in response or request
+          const languagePreference = data.language || data.lang || credentials.language;
+          if (languagePreference) {
+            await AsyncStorage.setItem('@app_language', languagePreference);
+            console.log('🔑 AUTH LOGIN - Language preference stored:', languagePreference);
+          }
+
           // Temporary: if branch_id or line_id is null/string, store 1 for both
           const rawBranchId = data.branch_id;
           const rawLineId = data.line_id;
@@ -53,6 +65,10 @@ export const apiServices = {
           await AsyncStorage.setItem('lineId', lineId);
           await AsyncStorage.setItem('branchId', branchId);
           await AsyncStorage.setItem('userDevice', data.device || '');
+          
+          // Store loan_type and loan_period for CustomerWithLoanScreen
+          await AsyncStorage.setItem('loanType', data.loan_type?.toString() || '');
+          await AsyncStorage.setItem('loanPeriod', data.loan_period?.toString() || '');
 
           console.log('🔑 AUTH LOGIN - All auth data stored successfully');
         }
@@ -378,6 +394,20 @@ export const apiServices = {
       }
     },
 
+    createNIPCollection: async (payload) => {
+      try {
+        console.log('🌱 API: createNIPCollection - Payload:', JSON.stringify(payload, null, 2));
+
+        const response = await apiClient.post(ENDPOINTS.LOAN.NIP_COLLECTION, payload);
+
+        console.log('🌱 API: createNIPCollection - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('Create NIP collection error:', error);
+        throw error;
+      }
+    },
+
     updateLoanGiven: async (loanId, formData) => {
       try {
         const path = ENDPOINTS.LOAN.GIVEN_UPDATE(loanId);
@@ -567,10 +597,222 @@ export const apiServices = {
 
     updateAmount: async (collectionId, payload) => {
       try {
-        const url = ENDPOINTS.COLLECTION.UPDATE_AMOUNT(collectionId);
-        console.log('📋 API: updateCollectionAmount - PATCH', url, '| payload:', JSON.stringify(payload, null, 2));
-        const response = await apiClient.patch(url, payload);
+        const path = ENDPOINTS.COLLECTION.UPDATE_AMOUNT(collectionId);
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const token = await AsyncStorage.getItem('authToken');
+
+        console.log('📋 API: updateCollectionAmount - PUT', fullUrl, '| payload:', JSON.stringify(payload, null, 2));
+
+        const response = await fetch(fullUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+
+        return data;
+      } catch (error) {
+        console.error('Update collection amount error:', error);
+        throw error;
+      }
+    },
+
+    getCollectionHistory: async (params = {}) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const {
+          from_date = '',
+          to_date = '',
+          page = 1,
+          limit = 10,
+        } = params;
+        const requestParams = {
+          ...(from_date && { from_date }),
+          ...(to_date && { to_date }),
+          page,
+          limit,
+        };
+        console.log('📋 API: getCollectionHistory - GET', ENDPOINTS.COLLECTION.HISTORY, '| params:', JSON.stringify(requestParams, null, 2));
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.HISTORY, {
+          params: requestParams,
+        });
+        const data = response.data?.data || {};
+        console.log('📋 API: getCollectionHistory - Response: collections length:', Array.isArray(data?.collections) ? data.collections.length : 'N/A', '| stats:', JSON.stringify(data?.stats ?? {}), '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
         return response.data;
+      } catch (error) {
+        console.error('Get collection history error:', error);
+        throw error;
+      }
+    },
+  },
+
+  // App Services
+  app: {
+    getVersion: async () => {
+      try {
+        console.log('📱 API: getVersion - GET', ENDPOINTS.APP.VERSION);
+        const response = await apiClient.get(ENDPOINTS.APP.VERSION);
+        console.log('📱 API: getVersion - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('App version check error:', error);
+        throw error;
+      }
+    }
+  },
+
+  // Dashboard Services
+  dashboard: {
+    getTodayStats: async () => {
+      try {
+        console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY);
+        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY);
+        console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+      }
+    },
+
+    create: async (payload) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        const lineId = await AsyncStorage.getItem('lineId');
+        const token = await AsyncStorage.getItem('authToken');
+
+        const formData = new FormData();
+        formData.append('title', String(payload.title ?? ''));
+        formData.append('category', String(payload.category ?? ''));
+        formData.append('amount', String(payload.amount ?? ''));
+        formData.append('date', String(payload.date ?? ''));
+        formData.append('description', String(payload.description ?? ''));
+        formData.append('branch_id', String(branchId ?? '1'));
+        formData.append('line_id', String(lineId ?? '1'));
+
+        if (payload.receiptImageUri) {
+          const uri = typeof payload.receiptImageUri === 'object' ? payload.receiptImageUri?.uri : payload.receiptImageUri;
+          if (uri) {
+            const name = uri.split('/').pop()?.split('?')[0] || 'receipt_image.png';
+            const type = (uri || '').toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg';
+            formData.append('receipt_image', { uri, name, type });
+          }
+        }
+
+        const path = ENDPOINTS.EXPENSE.CREATE;
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(fullUrl, {
+          method: 'POST',
+          headers,
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+        return data;
+      } catch (error) {
+        console.error('Create expense error:', error);
+        if (error.name === 'AbortError') {
+          console.error('Create expense - request timed out');
+        }
+        throw error;
+      }
+    },
+  },
+
+  // Collection Services
+  collection: {
+    getCollectionList: async (params = {}) => {
+      try {
+        const branchId = await AsyncStorage.getItem('branchId');
+        console.log('💰 API: getCollectionList - branchId:', branchId);
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const { customer_phone = '', customer_name = '', collection_date = '' } = params;
+        const requestParams = {
+          branch_id: branchId,
+          ...(customer_phone && { customer_phone }),
+          ...(customer_name && { customer_name }),
+          ...(collection_date && { collection_date }),
+        };
+        console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', JSON.stringify(requestParams, null, 2));
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.LIST, {
+          params: requestParams,
+        });
+        const list = response.data?.response ?? response.data?.data ?? response.data;
+        console.log('📋 API: getCollectionList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| full:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('Get collection list error:', error);
+        throw error;
+      }
+    },
+
+    // updateAmount: async (collectionId, payload) => {
+    //   try {
+    //     const url = ENDPOINTS.COLLECTION.UPDATE_AMOUNT(collectionId);
+    //     console.log('📋 API: updateCollectionAmount - PATCH', url, '| payload:', JSON.stringify(payload, null, 2));
+    //     const response = await apiClient.patch(url, payload);
+    //     return response.data;
+    //   } catch (error) {
+    //     console.error('Update collection amount error:', error);
+    //     throw error;
+    //   }
+    // },
+
+    updateAmount: async (collectionId, payload) => {
+      try {
+        const path = ENDPOINTS.COLLECTION.UPDATE_AMOUNT(collectionId);
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const token = await AsyncStorage.getItem('authToken');
+
+        console.log('📋 API: updateCollectionAmount - PUT', fullUrl, '| payload:', JSON.stringify(payload, null, 2));
+
+        const response = await fetch(fullUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+
+        return data;
       } catch (error) {
         console.error('Update collection amount error:', error);
         throw error;
@@ -637,7 +879,24 @@ export const apiServices = {
         throw error;
       }
     }
-  }
+  },
+
+  upfrontCash: {
+    getUpfrontCashList: async (params = {}) => {
+      try {
+        console.log('🔗 API: getUpfrontCashList - GET', ENDPOINTS.UPFRONT_CASH.LIST, '| params:', JSON.stringify(params, null, 2));
+
+        const response = await apiClient.get(ENDPOINTS.UPFRONT_CASH.LIST, { params });
+
+        console.log('🔗 API: getUpfrontCashList - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('Get upfront cash list error:', error);
+        throw error;
+      }
+    },
+  },
+
 };
 
 // Export individual services for backward compatibility
@@ -645,5 +904,6 @@ export const authService = apiServices.auth;
 export const customerService = apiServices.customer;
 export const collectionService = apiServices.collection;
 export const loanService = apiServices.loan;
+export const upfrontCashService = apiServices.upfrontCash;
 
 export default apiServices;

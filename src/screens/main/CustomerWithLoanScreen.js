@@ -21,7 +21,7 @@ const SEARCH_DEBOUNCE_MS = 400;
 const CustomerWithLoanScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  
+
   // New vs Existing
   const [customerType, setCustomerType] = useState('New');
   const [existingSearch, setExistingSearch] = useState('');
@@ -29,7 +29,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [searchResult, setSearchResult] = useState(null);
   const [searchError, setSearchError] = useState(null);
   const searchDebounceRef = useRef(null);
-  
+
   // Form states
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -43,12 +43,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   // Loan types from API (for dropdown)
   const [loanTypeOptions, setLoanTypeOptions] = useState([]);
   const [loanTypesLoading, setLoanTypesLoading] = useState(false);
+  const [isLoanTypeDisabled, setIsLoanTypeDisabled] = useState(false);
+  const [isLoanPeriodDisabled, setIsLoanPeriodDisabled] = useState(false);
 
   // File states
   const [aadharImage, setAadharImage] = useState(null);
   const [customerPhoto, setCustomerPhoto] = useState(null);
   const [addressProof, setAddressProof] = useState(null);
-  
+
   // UI states
   const [loading, setLoading] = useState(false);
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
@@ -63,12 +65,53 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       .getLoanTypes()
       .then((list) => {
         if (!cancelled && Array.isArray(list)) {
-          setLoanTypeOptions(
-            list.map((item) => ({
-              label: item.loan_type ?? String(item.id),
-              value: String(item.id),
-            }))
-          );
+          const options = list.map((item) => ({
+            label: item.loan_type ?? String(item.id),
+            value: String(item.id),
+          }));
+          setLoanTypeOptions(options);
+
+          // Load stored loan type and period from AsyncStorage
+          const loadStoredLoanData = async () => {
+            try {
+              const storedLoanType = await AsyncStorage.getItem('loanType');
+              const storedLoanPeriod = await AsyncStorage.getItem('loanPeriod');
+              
+              if (storedLoanType) {
+                setLoanTypeId(storedLoanType);
+                setIsLoanTypeDisabled(true); // Disable the field when stored value is used
+              } else {
+                // Set default to "Daily" if available (fallback)
+                const dailyOption = options.find(option =>
+                  option.label.toLowerCase() === 'daily'
+                );
+                if (dailyOption) {
+                  setLoanTypeId(dailyOption.value);
+                }
+                setIsLoanTypeDisabled(false); // Keep field enabled when no stored value
+              }
+              
+              if (storedLoanPeriod) {
+                setLoanPeriod(storedLoanPeriod);
+                setIsLoanPeriodDisabled(true); // Disable the field when stored value is used
+              } else {
+                setIsLoanPeriodDisabled(false); // Keep field enabled when no stored value
+              }
+            } catch (error) {
+              console.error('Error loading stored loan data:', error);
+              // Fallback to "Daily" if available
+              const dailyOption = options.find(option =>
+                option.label.toLowerCase() === 'daily'
+              );
+              if (dailyOption) {
+                setLoanTypeId(dailyOption.value);
+              }
+              setIsLoanTypeDisabled(false); // Keep field enabled on error
+              setIsLoanPeriodDisabled(false); // Keep field enabled on error
+            }
+          };
+          
+          loadStoredLoanData();
         }
       })
       .catch((err) => {
@@ -124,11 +167,21 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const hasOpenLoans = Array.isArray(openLoans) && openLoans.length > 0;
   const canSubmitLoanForExisting = searchResult && !hasOpenLoans;
 
+  // Period unit for Loan Period label (e.g. "days", "weeks", "months") from selected loan type
+  const selectedLoanTypeLabel = loanTypeOptions.find((o) => o.value === loanTypeId)?.label ?? '';
+  const periodUnit = (() => {
+    const lower = String(selectedLoanTypeLabel).toLowerCase();
+    if (lower === 'daily') return t('loan.days') || 'days';
+    if (lower === 'weekly') return t('loan.weeks') || 'weeks';
+    if (lower === 'monthly') return t('loan.months') || 'months';
+    return t('loan.months') || 'months';
+  })();
+
   // Handle phone input change (same as LoginScreen)
   const handlePhoneChange = (text) => {
     // Remove any non-numeric characters
     const numericValue = text.replace(/[^0-9]/g, '');
-    
+
     // Enforce that first digit must be above 5 (6, 7, 8, or 9)
     if (numericValue.length > 0) {
       const firstDigit = parseInt(numericValue[0]);
@@ -136,7 +189,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         return; // Don't allow if first digit is 0-5
       }
     }
-    
+
     // Limit to 10 digits
     if (numericValue.length <= 10) {
       setCustomerPhone(numericValue);
@@ -246,7 +299,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       // Get branch_id and line_id from storage (keys match login: branchId, lineId)
       const storedBranchId = await AsyncStorage.getItem('branchId');
       const storedLineId = await AsyncStorage.getItem('lineId');
-      
+
       if (!storedBranchId || !storedLineId) {
         showError(t('common.error'), t('errors.unauthorized'));
         setLoading(false);
@@ -314,7 +367,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const response = await apiServices.customer.createCustomerWithLoan(formData);
       const success = response?.success !== false && (response?.status !== 400 && response?.status !== 500);
       const message = response?.message || 'Customer and loan created successfully!';
-      
+
       if (success) {
         showSuccess(t('common.success'), message || t('success.customerCreated'), [
           { text: 'OK', onPress: () => navigation.goBack() },
@@ -336,8 +389,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       {image ? (
         <View style={styles.imagePreview}>
           <Image source={{ uri: image.uri }} style={styles.image} />
-          <TouchableOpacity 
-            style={styles.removeImageButton} 
+          <TouchableOpacity
+            style={styles.removeImageButton}
             onPress={() => {
               switch (imageType) {
                 case 'aadhar':
@@ -357,15 +410,15 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         </View>
       ) : (
         <View style={styles.imageOptions}>
-          <TouchableOpacity 
-            style={styles.imageOptionButton} 
+          <TouchableOpacity
+            style={styles.imageOptionButton}
             onPress={() => handleImagePick(imageType, 'camera')}
           >
             <Ionicons name="camera" size={30} color={COLORS.primary} />
             <Text style={styles.imageOptionText}>{t('customer.takePhoto')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.imageOptionButton} 
+          <TouchableOpacity
+            style={styles.imageOptionButton}
             onPress={() => handleImagePick(imageType, 'gallery')}
           >
             <Ionicons name="image-outline" size={30} color={COLORS.primary} />
@@ -382,11 +435,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
-      
-      <Header 
-        title={t('customer.createCustomerWithLoan')} 
+
+      <Header
+        title={t('customer.createCustomerWithLoan')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()} 
+        onBackPress={() => navigation.goBack()}
       />
 
       {/* New / Existing radio */}
@@ -411,11 +464,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -423,71 +476,73 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         >
           {customerType === 'New' && (
             <>
-          <Input
-            label={t('customer.customerPhone')}
-            value={customerPhone}
-            onChangeText={handlePhoneChange}
-            placeholder={t('auth.enterPhone')}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-            maxLength={10}
-            error={errors.customerPhone}
-            required
-          />
+              <Input
+                label={t('customer.customerPhone')}
+                value={customerPhone}
+                onChangeText={handlePhoneChange}
+                placeholder={t('auth.enterPhone')}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                maxLength={10}
+                error={errors.customerPhone}
+                required
+              />
 
-          <Input
-            label={t('customer.customerName')}
-            value={customerName}
-            onChangeText={setCustomerName}
-            placeholder={t('customer.customerName')}
-            error={errors.customerName}
-            required
-          />
+              <Input
+                label={t('customer.customerName')}
+                value={customerName}
+                onChangeText={setCustomerName}
+                placeholder={t('customer.customerName')}
+                error={errors.customerName}
+                required
+              />
 
-          <Input
-            label={t('customer.customerAddress')}
-            value={customerAddress}
-            onChangeText={setCustomerAddress}
-            placeholder={t('customer.customerAddress')}
-            multiline
-            numberOfLines={3}
-            error={errors.customerAddress}
-            required
-          />
+              <Input
+                label={t('customer.customerAddress')}
+                value={customerAddress}
+                onChangeText={setCustomerAddress}
+                placeholder={t('customer.customerAddress')}
+                multiline
+                numberOfLines={3}
+                error={errors.customerAddress}
+                required
+              />
 
-          <Input
-            label={t('customer.loanAmount')}
-            value={loanAmount}
-            onChangeText={setLoanAmount}
-            placeholder={t('customer.enterLoanAmount')}
-            keyboardType="numeric"
-            error={errors.loanAmount}
-            required
-          />
+              <Input
+                label={t('customer.loanAmount')}
+                value={loanAmount}
+                onChangeText={setLoanAmount}
+                placeholder={t('customer.enterLoanAmount')}
+                keyboardType="numeric"
+                error={errors.loanAmount}
+                required
+              />
 
-          <FormPicker
-            label={t('customer.loanType')}
-            value={loanTypeId}
-            onValueChange={setLoanTypeId}
-            items={loanTypeOptions}
-            placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : t('customer.selectLoanType')}
-            error={errors.loanTypeId}
-          />
+              <FormPicker
+                label={t('customer.loanType')}
+                value={loanTypeId}
+                onValueChange={setLoanTypeId}
+                items={loanTypeOptions}
+                placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : t('customer.selectLoanType')}
+                error={errors.loanTypeId}
+                editable={!isLoanTypeDisabled}
+              />
 
-          <Input
-            label={`${t('customer.loanPeriod')} (${t('loan.months')})`}
-            value={loanPeriod}
-            onChangeText={setLoanPeriod}
-            placeholder={t('customer.enterLoanPeriod')}
-            keyboardType="numeric"
-            error={errors.loanPeriod}
-            required
-          />
+              <Input
+                label={`${t('customer.loanPeriod')} (${periodUnit})`}
+                value={loanPeriod}
+                onChangeText={setLoanPeriod}
+                placeholder={t('customer.enterLoanPeriod')}
+                keyboardType="numeric"
+                error={errors.loanPeriod}
+                disabled={isLoanPeriodDisabled}
+                required
+              />
 
 
-          {renderImageSection(t('customer.aadharImage'), aadharImage, 'aadhar')}
-          {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer')}
-          {renderImageSection(t('customer.addressProof'), addressProof, 'address')}
+              {renderImageSection(t('customer.aadharImage'), aadharImage, 'aadhar')}
+              {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer')}
+              {renderImageSection(t('customer.addressProof'), addressProof, 'address')}
             </>
           )}
 
@@ -596,7 +651,7 @@ const styles = StyleSheet.create({
   },
   radioLabel: {
     fontSize: SIZES.body2,
-    color: COLORS.text.secondary,
+    color: COLORS.primary,
     marginLeft: SIZES.base,
   },
   radioLabelActive: {
@@ -608,7 +663,7 @@ const styles = StyleSheet.create({
   },
   existingSearchLabel: {
     fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
+    color: COLORS.primary,
     marginBottom: SIZES.base,
   },
   searchInputWrap: {
@@ -628,7 +683,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: SIZES.padding,
     fontSize: SIZES.body2,
-    color: COLORS.text.primary,
+    color: COLORS.black,
   },
   searchLoader: {
     marginLeft: SIZES.base,
@@ -703,7 +758,7 @@ const styles = StyleSheet.create({
   imageLabel: {
     fontSize: SIZES.body2,
     fontWeight: '500',
-    color: COLORS.text.primary,
+    color: COLORS.primary,
     marginBottom: SIZES.base / 2,
   },
   imagePreview: {

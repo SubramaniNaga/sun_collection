@@ -52,16 +52,22 @@ const HomeScreen = ({ navigation }) => {
       onPress: () => navigation.navigate('Collection'),
     },
     {
-      id: 'loan',
-      title: t('home.loanManagement'),
-      icon: 'document-text-outline',
-      onPress: () => navigation.navigate('Loan'),
+      id: 'nip',
+      title: t('home.nip'),
+      icon: 'link-outline',
+      onPress: () => navigation.navigate('NIP'),
     },
     {
       id: 'expenses',
       title: t('home.expenses'),
       icon: 'card-outline',
       onPress: () => navigation.navigate('Expenses'),
+    },
+    {
+      id: 'loan',
+      title: t('home.loanManagement'),
+      icon: 'document-text-outline',
+      onPress: () => navigation.navigate('Loan'),
     },
     {
       id: 'upfront-cash',
@@ -75,24 +81,19 @@ const HomeScreen = ({ navigation }) => {
       icon: 'bar-chart-outline',
       onPress: () => navigation.navigate('CollectionHistory'),
     },
-    {
-      id: 'nip',
-      title: t('home.nip'),
-      icon: 'link-outline',
-      onPress: () => navigation.navigate('NIP'),
-    },
+
   ];
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
-      
-      <Header 
-        title={t('home.title')} 
+
+      <Header
+        title={t('home.title')}
         showMenuButton={true}
         onMenuPress={() => navigation.openDrawer()}
         rightComponent={
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleNotificationPress}
             style={styles.notificationButton}
           >
@@ -109,7 +110,7 @@ const HomeScreen = ({ navigation }) => {
         {/* Dashboard Section */}
         <View style={styles.dashboardSection}>
           <Text style={styles.dashboardTitle}>{t('home.todaysStatistics')}</Text>
-          
+
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={COLORS.primary} />
@@ -238,13 +239,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: SIZES.margin * 2,
+    // marginTop: SIZES.margin * 2,
   },
   menuCard: {
-    width: '48%',
+    width: '30%',
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius * 1.5,
-    padding: SIZES.padding,
+    padding: SIZES.base,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -261,7 +262,7 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.margin,
   },
   cardTitle: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body4,
     fontWeight: '600',
     color: COLORS.text.primary,
     textAlign: 'center',

@@ -3,14 +3,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
@@ -19,6 +19,7 @@ import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { formatDisplayDate } from '../../utils/dateFormatter';
+import { formatCurrency } from '../../utils/amountFormatters';
 
 const LIMIT = 10;
 
@@ -31,11 +32,6 @@ const STATUS_CONFIG = {
 
 
 
-const formatAmount = (val) => {
-  if (val == null || val === '') return '₹0';
-  const num = parseFloat(val);
-  return isNaN(num) ? String(val) : `₹${num.toLocaleString('en-IN')}`;
-};
 
 const ExpensesScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -152,7 +148,7 @@ const ExpensesScreen = ({ navigation }) => {
               </View>
             </View>
             <View style={styles.expenseAmountContainer}>
-              <Text style={styles.amountText}>{formatAmount(amountVal)}</Text>
+              <Text style={styles.amountText}>{formatCurrency(amountVal)}</Text>
             </View>
           </View>
         </View>

@@ -24,13 +24,22 @@ const formatLoanAmount = (val) => {
 
 const LoanScreen = ({ navigation, route }) => {
   const { t } = useLanguage();
-  
+
+  // Helper function to get period unit based on loan type name
+  const getPeriodUnit = (loanTypeName) => {
+    const lowerTypeName = String(loanTypeName || '').toLowerCase();
+    if (lowerTypeName === 'daily') return t('loan.days');
+    if (lowerTypeName === 'weekly') return t('loan.weeks');
+    if (lowerTypeName === 'monthly') return t('loan.months');
+    return t('loan.months'); // Default to months
+  };
+
   const getLoanStatusLabel = (loan) => {
     // Use the dynamic status_name from API response if available, fallback to status_id logic
     if (loan?.loan_status_name) {
       return loan.loan_status_name;
     }
-    
+
     // Fallback logic for backward compatibility
     const approval = loan?.approval_status;
     const loanStatus = loan?.loan_status;
@@ -43,12 +52,60 @@ const LoanScreen = ({ navigation, route }) => {
   };
 
   const getLoanStatusColor = (loan) => {
+    // Handle NIP status (status 7 or NIP name)
+    if (loan?.loan_status === '7' || (loan?.loan_status_name && String(loan.loan_status_name).toUpperCase() === 'NIP')) {
+      return COLORS.error || '#EF4444';
+    }
+
+    // Handle all 8 loan statuses based on both loan_status and loan_status_name
+    const status = loan?.loan_status;
+    const statusName = loan?.loan_status_name;
+
+    // Status 1: Pending - Orange
+    if (status === '1' || statusName === 'Pending') {
+      return '#F59E0B';
+    }
+
+    // Status 2: Approved - Green  
+    if (status === '2' || statusName === 'Approved') {
+      return COLORS.success || '#10B981';
+    }
+
+    // Status 3: Active - Green
+    if (status === '3' || statusName === 'Active') {
+      return COLORS.success || '#10B981';
+    }
+
+    // Status 4: Loan Given - Blue
+    if (status === '4' || statusName === 'Loan Given') {
+      return '#3B82F6';
+    }
+
+    // Status 5: Rejected - Red
+    if (status === '5' || statusName === 'Rejected') {
+      return COLORS.error || '#EF4444';
+    }
+
+    // Status 6: Closed - Gray
+    if (status === '6' || statusName === 'Closed') {
+      return COLORS.text?.tertiary || '#6B7280';
+    }
+
+    // Status 7: NIP - Red (already handled above)
+
+    // Status 8: Completed - Purple
+    if (status === '8' || statusName === 'Completed') {
+      return '#8B5CF6';
+    }
+
+    // Fallback for any other status
     const label = getLoanStatusLabel(loan);
     if (label === 'Approved') return COLORS.success || '#10B981';
     if (label === 'Active') return COLORS.success || '#10B981';
     if (label === 'Rejected') return COLORS.error || '#EF4444';
     if (label === 'Closed') return COLORS.text?.tertiary || '#6B7280';
-    if (label === 'Pending') return '#F59E0B'; // Orange
+    if (label === 'Pending') return '#F59E0B';
+
     return COLORS.primary || '#1d7ee2';
   };
 
@@ -66,6 +123,13 @@ const LoanScreen = ({ navigation, route }) => {
     loan.loan_status_name === 'Approved' &&
     loan.approval_status !== '2' &&
     loan.loan_status !== '4'
+  );
+
+  // Conditional rendering rule for Update and Process Renewal buttons
+  const shouldShowActionButtons = Boolean(
+    loan &&
+    loan.loan_status_name === 'Approved' &&
+    loan.loan_status === '3'
   );
   const [paymentType, setPaymentType] = useState('cash');
   const [loanGivenPhoto, setLoanGivenPhoto] = useState(null);
@@ -311,7 +375,7 @@ const LoanScreen = ({ navigation, route }) => {
     // Try Google Maps app first, fallback to web
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     const googleMapsAppUrl = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}`;
-    
+
     Linking.canOpenURL(googleMapsAppUrl)
       .then((supported) => {
         if (supported) {
@@ -459,12 +523,12 @@ const LoanScreen = ({ navigation, route }) => {
           {(loan || loanDetails) && (
             <View style={styles.loanDetailsCard}>
               <View style={styles.detailRow}>
-              <Text style={styles.loanDetailsTitle}>{t('loan.loanDetails')}</Text>
-              <View style={[styles.loanDetailsBadge, { backgroundColor: getLoanStatusColor(loanDetails || loan) }]}>
-                <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loanDetails || loan)}</Text>
+                <Text style={styles.loanDetailsTitle}>{t('loan.loanDetails')}</Text>
+                <View style={[styles.loanDetailsBadge, { backgroundColor: getLoanStatusColor(loanDetails || loan) }]}>
+                  <Text style={styles.loanDetailsBadgeText}>{getLoanStatusLabel(loanDetails || loan)}</Text>
+                </View>
               </View>
-</View>
-            
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('customer.customer')}</Text>
                 <Text style={styles.detailValue}>{(loanDetails?.customer_name || loan?.customer_name) ?? '—'}</Text>
@@ -544,7 +608,7 @@ const LoanScreen = ({ navigation, route }) => {
               {(loanDetails?.loan_period || loan?.loan_period) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.loanPeriod')}</Text>
-                  <Text style={styles.detailValue}>{`${loanDetails?.loan_period || loan?.loan_period} ${t('loan.months')}`}</Text>
+                  <Text style={styles.detailValue}>{`${loanDetails?.loan_period || loan?.loan_period} ${getPeriodUnit(loanDetails?.loan_type_name || loan?.loan_type_name)}`}</Text>
                 </View>
               )}
               {(loanDetails?.loan_closed_on || loan?.loan_closed_on) != null && (
@@ -767,22 +831,24 @@ const LoanScreen = ({ navigation, route }) => {
         </ScrollView>
       </KeyboardAvoidingView>
       {/* Fixed Bottom Button */}
-      <SafeAreaView style={styles.fixedBottomContainer} edges={['bottom']}>
-        <TouchableOpacity
-          style={[styles.submitButton, !isSubmitEnabled() && styles.disabledButton]}
-          onPress={handleSubmit}
-          disabled={!isSubmitEnabled() || isSubmitting}
-        >
-          {isSubmitting || isCapturingLocation ? (
-            <View style={styles.buttonContent}>
-              <ActivityIndicator size="small" color={COLORS.white} />
-              <Text style={styles.submitButtonText}>{t('common.processing')}</Text>
-            </View>
-          ) : (
-            <Text style={styles.submitButtonText}>{loan && isLoanApproved ? (t('loan.update') || 'Update') : t('loan.processRenewal')}</Text>
-          )}
-        </TouchableOpacity>
-      </SafeAreaView>
+      {shouldShowActionButtons && (
+        <SafeAreaView style={styles.fixedBottomContainer} edges={['bottom']}>
+          <TouchableOpacity
+            style={[styles.submitButton, !isSubmitEnabled() && styles.disabledButton]}
+            onPress={handleSubmit}
+            disabled={!isSubmitEnabled() || isSubmitting}
+          >
+            {isSubmitting || isCapturingLocation ? (
+              <View style={styles.buttonContent}>
+                <ActivityIndicator size="small" color={COLORS.white} />
+                <Text style={styles.submitButtonText}>{t('common.processing')}</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitButtonText}>{loan && isLoanApproved ? (t('loan.update') || 'Update') : t('loan.processRenewal')}</Text>
+            )}
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
 
       {/* Full Image Viewer Modal */}
       <Modal

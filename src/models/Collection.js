@@ -1,4 +1,17 @@
 import { formatDisplayDate } from '../utils/dateFormatter';
+import { formatCurrency } from '../utils/amountFormatters';
+
+/**
+ * Returns true if ispending should show yellow border: number >= 1 or array length >= 1. Null, 0, or empty array = false.
+ * @param {*} val - is_pending / isPending / ispending from API
+ * @returns {boolean}
+ */
+export function isPendingBorder(val) {
+  if (val == null) return false;
+  if (Array.isArray(val)) return val.length >= 1;
+  const num = Number(val);
+  return !Number.isNaN(num) && num >= 1;
+}
 
 /**
  * Collection Model
@@ -32,6 +45,12 @@ class Collection {
     this.loanPeriod = data.loan_period ?? null;
     this.loanTypeName = data.loan_type_name || null;
     this.approvalStatus = data.approval_status || null;
+    this.isPending = isPendingBorder(data.is_pending ?? data.isPending ?? data.ispending);
+    this.completedCount = data.completed_count ?? null;
+    this.pendingCount = data.pending_count ?? null;
+    this.totalCount = data.total_count ?? null;
+    this.pendingWeeks = data.pending_weeks ?? null;
+    this.pendingDays = data.pending_days ?? null;
 
     // Branch and Line fields
     this.branchName = data.branch_name || null;
@@ -56,8 +75,7 @@ class Collection {
    * @returns {string}
    */
   getFormattedAmountPaid() {
-    const amount = parseFloat(this.amountPaid) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.amountPaid);
   }
 
   /**
@@ -65,8 +83,7 @@ class Collection {
    * @returns {string}
    */
   getFormattedBalanceAmount() {
-    const amount = parseFloat(this.balanceAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.balanceAmount);
   }
 
   /**

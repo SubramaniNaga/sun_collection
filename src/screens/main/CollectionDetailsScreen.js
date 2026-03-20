@@ -8,12 +8,8 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
 import { formatDateTimeDisplay } from '../../utils/dateFormatter';
+import { formatCurrency } from '../../utils/amountFormatters';
 
-const formatAmount = (val) => {
-  if (val == null || val === '') return '—';
-  const num = parseFloat(val);
-  return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
-};
 
 const DetailRow = ({ label, value }) => (
   <View style={styles.detailRow}>
@@ -123,8 +119,8 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
             {/* <DetailRow label="Collection ID" value={item.id != null ? String(item.id) : null} /> */}
             <DetailRow label="Collection Week" value={item.collection_week != null ? `Week ${item.collection_week}` : null} />
             <DetailRow label="Collection Date" value={item.collection_date ? formatDateTimeDisplay(item.collection_date) : null} />
-            <DetailRow label="Amount Paid" value={formatAmount(item.amount_paid)} />
-            <DetailRow label="Balance Amount" value={formatAmount(item.balance_amount)} />
+            <DetailRow label="Amount Paid" value={formatCurrency(item.amount_paid)} />
+            <DetailRow label="Balance Amount" value={formatCurrency(item.balance_amount)} />
             {(item.notes != null && item.notes !== '') && <DetailRow label="Notes" value={item.notes} />}
           </View>
 
@@ -132,8 +128,8 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Loan</Text>
             <DetailRow label="Loan ID" value={item.loan_id != null ? String(item.loan_id) : null} />
-            <DetailRow label="Loan Amount" value={formatAmount(item.loan_amount)} />
-            <DetailRow label="Approved Amount" value={formatAmount(item.approved_amount)} />
+            <DetailRow label="Loan Amount" value={formatCurrency(item.loan_amount)} />
+            <DetailRow label="Approved Amount" value={formatCurrency(item.approved_amount)} />
             <DetailRow label="Loan Period" value={item.loan_period != null ? `${item.loan_period} months` : null} />
             <DetailRow label="Approval Status" value={item.approval_status != null ? String(item.approval_status) : null} />
           </View>

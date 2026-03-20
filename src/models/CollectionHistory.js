@@ -1,4 +1,5 @@
 import { formatDisplayDate } from '../utils/dateFormatter';
+import { formatCurrency } from '../utils/amountFormatters';
 
 /**
  * Collection History Model
@@ -53,8 +54,7 @@ class CollectionHistory {
    * @returns {string}
    */
   getFormattedAmountPaid() {
-    const amount = parseFloat(this.amountPaid) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.amountPaid);
   }
 
   /**
@@ -62,8 +62,7 @@ class CollectionHistory {
    * @returns {string}
    */
   getFormattedBalanceAmount() {
-    const amount = parseFloat(this.balanceAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.balanceAmount);
   }
 
   /**

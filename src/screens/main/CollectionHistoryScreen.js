@@ -25,13 +25,16 @@ const CollectionHistoryScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Stats from API
   const [stats, setStats] = useState({
     total_count: 0,
     total_amount: 0,
     cash_count: 0,
     non_cash_count: 0,
+    collected_amount: 0,
+    expenses_spent: 0,
+    loan_given_amount: 0,
   });
 
   // Pagination state
@@ -49,10 +52,10 @@ const CollectionHistoryScreen = ({ navigation }) => {
     const newErrors = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
-    
+
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     // Clear time part for accurate date comparison
     start.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
@@ -61,7 +64,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
     if (start > end) {
       newErrors.dateRange = t('validation.startDateGreater');
     }
-    
+
     // Check if end date is beyond current date
     if (end > today) {
       newErrors.dateRange = t('validation.endDateBeyond');
@@ -125,9 +128,12 @@ const CollectionHistoryScreen = ({ navigation }) => {
 
       setStats({
         total_count: statsData.total_count || 0,
-        total_amount: statsData.total_amount || 0,
+        total_amount: statsData.collected_amount ?? statsData.total_amount ?? 0,
         cash_count: statsData.cash_count || 0,
         non_cash_count: statsData.non_cash_count || 0,
+        collected_amount: statsData.collected_amount ?? 0,
+        expenses_spent: statsData.expenses_spent ?? 0,
+        loan_given_amount: statsData.loan_given_amount ?? 0,
       });
 
       setPagination({
@@ -157,16 +163,16 @@ const CollectionHistoryScreen = ({ navigation }) => {
   // Filter collection history by payment type
   const filteredCollectionHistory = collectionHistory.filter((item) => {
     if (selectedPaymentType === null) return true; // Show all
-    
+
     const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
     const paymentType = history.paymentType?.toLowerCase();
-    
+
     if (selectedPaymentType === 'cash') {
       return paymentType === 'cash';
     } else if (selectedPaymentType === 'online') {
       return paymentType === 'online' || paymentType === 'non_cash';
     }
-    
+
     return true;
   });
 
@@ -257,12 +263,12 @@ const CollectionHistoryScreen = ({ navigation }) => {
         </View>
       );
     }
-    const filterText = selectedPaymentType === null 
-      ? t('collectionHistory.inSelectedDateRange') 
-      : selectedPaymentType === 'cash' 
-        ? t('collectionHistory.forCashPayments') 
+    const filterText = selectedPaymentType === null
+      ? t('collectionHistory.inSelectedDateRange')
+      : selectedPaymentType === 'cash'
+        ? t('collectionHistory.forCashPayments')
         : t('collectionHistory.forOnlinePayments');
-    
+
     return (
       <View style={styles.noDataContainer}>
         <Text style={styles.noDataText}>{t('collectionHistory.noCollectionsFound')} {filterText}</Text>
@@ -320,7 +326,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
               )}
             </View>
 
-            {/* Summary Card */}
+            {/* Summary Card (Cash Receipts / Total Amount + Cash Summary when Cash selected) */}
             <View style={styles.summaryCard}>
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
@@ -334,6 +340,43 @@ const CollectionHistoryScreen = ({ navigation }) => {
                   <Text style={styles.summaryValue}>{formatCurrency(filteredStats.total_amount)}</Text>
                 </View>
               </View>
+              {selectedPaymentType === 'cash' && (
+                <>
+                  <View style={styles.summaryDivider} />
+                  {/* <Text style={styles.cashStatsTitleInCard}>{t('common.cash')} {t('collectionHistory.summary')}</Text> */}
+                  <View style={styles.cashStatsHorizontalRow}>
+                    <View style={styles.cashStatsColumn}>
+                      {/* <View style={styles.cashStatsIconWrap}>
+                        <Ionicons name="wallet-outline" size={22} color={COLORS.primary} />
+                      </View> */}
+                      <View style={styles.cashStatsLabelWrap}>
+                        <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.collectedAmount')}</Text>
+                      </View>
+                      <Text style={styles.cashStatValue}>{formatCurrency(stats.collected_amount)}</Text>
+                    </View>
+                    <View style={styles.cashStatsColumnDivider} />
+                    <View style={styles.cashStatsColumn}>
+                      {/* <View style={styles.cashStatsIconWrap}>
+                        <Ionicons name="card-outline" size={22} color={COLORS.text.secondary} />
+                      </View> */}
+                      <View style={styles.cashStatsLabelWrap}>
+                        <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.expensesSpent')}</Text>
+                      </View>
+                      <Text style={styles.cashStatValue}>{formatCurrency(stats.expenses_spent)}</Text>
+                    </View>
+                    <View style={styles.cashStatsColumnDivider} />
+                    <View style={styles.cashStatsColumn}>
+                      {/* <View style={styles.cashStatsIconWrap}>
+                        <Ionicons name="business-outline" size={22} color={COLORS.primary} />
+                      </View> */}
+                      <View style={styles.cashStatsLabelWrap}>
+                        <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.loanGivenAmount')}</Text>
+                      </View>
+                      <Text style={styles.cashStatValue}>{formatCurrency(stats.loan_given_amount)}</Text>
+                    </View>
+                  </View>
+                </> 
+              )}
               {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
                 <View style={styles.summaryRow}>
                   <View style={styles.summaryItem}>
@@ -469,14 +512,14 @@ const styles = StyleSheet.create({
   },
   filterSection: {
     backgroundColor: COLORS.white,
-    padding: SIZES.padding * 0.3,
+    padding: SIZES.padding * 0.2,
     borderRadius: SIZES.radius,
-    marginBottom: SIZES.margin / 3,
+    marginBottom: SIZES.margin / 10,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   sectionTitle: {
-    fontSize: SIZES.h3,
+    fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: SIZES.margin / 3,
@@ -484,11 +527,11 @@ const styles = StyleSheet.create({
   dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SIZES.margin / 3,
+    marginBottom: SIZES.margin / 100,
   },
   datePickerContainer: {
     flex: 1,
-    marginHorizontal: SIZES.base / 2,
+    marginHorizontal: SIZES.base / 3,
   },
   errorText: {
     color: 'red',
@@ -497,7 +540,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: COLORS.white,
-    padding: SIZES.padding,
+    padding: SIZES.base,
     borderRadius: SIZES.radius,
     marginBottom: SIZES.margin / 3,
     borderWidth: 1,
@@ -526,6 +569,99 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.text.secondary,
+  },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginVertical: SIZES.base,
+  },
+  cashStatsTitleInCard: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: SIZES.base * 0.75,
+  },
+  cashStatsHorizontalRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    // paddingVertical: SIZES.base,
+    minHeight: 70,
+  },
+  cashStatsColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingHorizontal: SIZES.base * 0.25,
+  },
+  cashStatsIconWrap: {
+    height: 28,
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  cashStatsLabelWrap: {
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+    width: '100%',
+  },
+  cashStatsColumnDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginVertical: 0,
+  },
+  cashStatsRowInCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SIZES.base * 0.75,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  cashStatsCard: {
+    backgroundColor: COLORS.white,
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.margin / 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  cashStatsTitle: {
+    fontSize: SIZES.body1,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: SIZES.base,
+  },
+  cashStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SIZES.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  cashStatsRowLast: {
+    borderBottomWidth: 0,
+  },
+  cashStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cashStatIcon: {
+    marginRight: SIZES.base,
+  },
+  cashStatLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  cashStatValue: {
+    fontSize: SIZES.body1,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    textAlign: 'center',
   },
   listSection: {
     backgroundColor: COLORS.white,

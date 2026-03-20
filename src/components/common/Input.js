@@ -97,9 +97,9 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.margin,
   },
   label: {
-    fontSize: SIZES.body4,
+    fontSize: SIZES.body2,
     fontWeight: '600',
-    color: COLORS.black,
+    color: COLORS.primary,
     marginBottom: SIZES.base / 2,
   },
   inputContainer: {

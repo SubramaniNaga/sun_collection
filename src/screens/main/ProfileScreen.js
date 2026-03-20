@@ -60,6 +60,35 @@ const ProfileScreen = ({ navigation }) => {
     AsyncStorage.getItem('lineId').then(setLineId);
   }, []);
 
+  // Auto-set language based on login data
+  useEffect(() => {
+    const setLanguageFromLogin = async () => {
+      try {
+        // Check if language is stored in user data or AsyncStorage from login
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          const parsedUser = JSON.parse(userData);
+          const loginLanguage = parsedUser.language || parsedUser.lang;
+          
+          if (loginLanguage && (loginLanguage === 'en' || loginLanguage === 'ta' || loginLanguage === 'tn')) {
+            // Normalize 'tn' to 'ta' for Tamil
+            const normalizedLanguage = loginLanguage === 'tn' ? 'ta' : loginLanguage;
+            
+            // Only change language if it's different from current
+            if (language !== normalizedLanguage) {
+              await changeLanguage(normalizedLanguage);
+              console.log('Language automatically set from login data:', normalizedLanguage);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error setting language from login data:', error);
+      }
+    };
+
+    setLanguageFromLogin();
+  }, [user, language, changeLanguage]);
+
   const displayBranch = user?.branch ?? user?.branch_id ?? branchId ?? 'N/A';
   const displayLine = user?.line ?? user?.line_name ?? lineId ?? 'N/A';
 

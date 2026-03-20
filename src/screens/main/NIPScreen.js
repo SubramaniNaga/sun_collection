@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Linking,
+    Modal,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
@@ -21,6 +21,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import NIPLoan from '../../models/NIPLoan';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError } from '../../utils/alertService';
+import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const LIMIT = 20;
@@ -174,15 +175,15 @@ const NIPScreen = ({ navigation }) => {
 
   const filteredList = searchQuery.trim()
     ? nipList.filter(
-        (loan) =>
-          loan.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          loan.customerPhone?.includes(searchQuery) ||
-          loan.customerNo?.includes(searchQuery)
-      )
+      (loan) =>
+        loan.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        loan.customerPhone?.includes(searchQuery) ||
+        loan.customerNo?.includes(searchQuery)
+    )
     : nipList;
 
   const handleCustomerSelect = (loan) => {
-    navigation.navigate('LoanScreen', { loan });
+    navigation.navigate('NIPCollectionDetails', { loan });
   };
 
   const handlePhonePress = (phoneNumber) => {
@@ -215,7 +216,7 @@ const NIPScreen = ({ navigation }) => {
 
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     const googleMapsAppUrl = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}`;
-    
+
     Linking.canOpenURL(googleMapsAppUrl)
       .then((supported) => {
         if (supported) {
@@ -251,11 +252,6 @@ const NIPScreen = ({ navigation }) => {
     }
   };
 
-  const formatAmount = (val) => {
-    if (val == null || val === '') return '—';
-    const num = parseFloat(val);
-    return isNaN(num) ? val : `₹${num.toLocaleString('en-IN')}`;
-  };
 
   const openPhotoModal = (imagePath) => {
     const uri = getImageUrl(imagePath);
@@ -291,14 +287,14 @@ const NIPScreen = ({ navigation }) => {
             />
           ) : (
             <Image
-              source={{ uri: 'https://www.kambaa.com/favicon.png' }}
+              source={require('../../../assets/images/favicon.png')}
               style={styles.nipCardPhoto}
               resizeMode="cover"
             />
           )}
         </TouchableOpacity>
         <Text style={styles.nipCardNameLine} numberOfLines={1}>
-         {getCustomerIdDisplay(item)}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
+          {getCustomerIdDisplay(item)}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
         </Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
           <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
@@ -308,27 +304,37 @@ const NIPScreen = ({ navigation }) => {
       <View style={styles.nipCardRow}>
         <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.nipCardLabel}>{t('loan.loanAmount')}</Text>
-        <Text style={styles.nipCardValueAmount}>{formatAmount(item?.loanAmount)}</Text>
+        <Text style={styles.nipCardValueAmount}>{formatCurrency(item?.loanAmount)}</Text>
       </View>
-      {item?.approvedAmount != null && item?.approvedAmount !== '' && (
-        <View style={styles.nipCardRow}>
-          <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-          <Text style={styles.nipCardLabel}>{t('loan.approved')}</Text>
-          <Text style={styles.nipCardValue}>{formatAmount(item?.approvedAmount)}</Text>
-        </View>
-      )}
+
       {item?.balanceAmount != null && item?.balanceAmount !== '' && (
         <View style={styles.nipCardRow}>
           <Ionicons name="wallet-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
           <Text style={styles.nipCardLabel}>{t('loan.balance')}</Text>
-          <Text style={styles.nipCardValue}>{formatAmount(item?.balanceAmount)}</Text>
+          <Text style={styles.nipCardValue}>{formatCurrency(item?.balanceAmount)}</Text>
         </View>
       )}
+      <View style={styles.nipCardRow}>
+        <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+        <Text style={styles.nipCardLabel}>{t('loan.loanPeriod')}</Text>
+        <Text style={styles.nipCardValue} numberOfLines={1}>
+          {item?.loanPeriod ?? item?.loan_period ?? '—'}/{item?.loanTypeName ?? item?.loan_type_name ?? '—'}
+        </Text>
+      </View>
+      <View style={styles.nipCardRow}>
+        <Ionicons name="pie-chart-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+        <Text style={styles.nipCardLabel}>{t('loan.loanDueStatus')}</Text>
+        <Text style={styles.nipCardValue}>
+          {item?.completed_count ?? 0}({item?.pending_count ?? 0})/{(item?.completed_count ?? 0) + (item?.pending_count ?? 0)}
+        </Text>
+      </View>
+
       <View style={styles.nipCardRow}>
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
         <Text style={styles.nipCardLabel}>{t('loan.branch')}</Text>
         <Text style={styles.nipCardValue} numberOfLines={1}>{item?.branchName ?? '—'}</Text>
       </View>
+
       <View style={styles.nipCardFooter}>
         <Text style={styles.nipCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requestedDate)}</Text>
         <View style={styles.nipCardFooterIcons}>
@@ -408,11 +414,11 @@ const NIPScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
-      
-      <Header 
-        title={t('nip.title')} 
+
+      <Header
+        title={t('nip.title')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()} 
+        onBackPress={() => navigation.goBack()}
       />
 
       <View style={styles.searchSection}>
@@ -439,20 +445,20 @@ const NIPScreen = ({ navigation }) => {
       </View>
 
       <FlatList
-          data={filteredList}
-          keyExtractor={(item) => String(item?.id ?? Math.random())}
-          renderItem={renderNIPItem}
-          contentContainerStyle={
-            filteredList.length === 0
-              ? styles.nipListContainerEmpty
-              : styles.nipListContainer
-          }
-          showsVerticalScrollIndicator={false}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.3}
-          ListEmptyComponent={renderEmpty}
-          ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
-        />
+        data={filteredList}
+        keyExtractor={(item) => String(item?.id ?? Math.random())}
+        renderItem={renderNIPItem}
+        contentContainerStyle={
+          filteredList.length === 0
+            ? styles.nipListContainerEmpty
+            : styles.nipListContainer
+        }
+        showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
+      />
 
       <Modal
         visible={photoModalVisible}
@@ -540,7 +546,7 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.error,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,

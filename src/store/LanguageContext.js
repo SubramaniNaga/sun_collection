@@ -16,6 +16,11 @@ export const LanguageProvider = ({ children }) => {
     loadLanguage();
   }, []);
 
+  // Also check for language from login data when app starts
+  useEffect(() => {
+    checkLanguageFromLoginData();
+  }, []);
+
   const loadLanguage = async () => {
     try {
       const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
@@ -26,6 +31,30 @@ export const LanguageProvider = ({ children }) => {
       console.error('Error loading language:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkLanguageFromLoginData = async () => {
+    try {
+      // Check if language is stored in user data from login
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        const loginLanguage = parsedUser.language || parsedUser.lang;
+        
+        if (loginLanguage && (loginLanguage === 'en' || loginLanguage === 'ta' || loginLanguage === 'tn')) {
+          // Normalize 'tn' to 'ta' for Tamil
+          const normalizedLanguage = loginLanguage === 'tn' ? 'ta' : loginLanguage;
+          
+          // Only change if different from current language
+          if (language !== normalizedLanguage) {
+            await changeLanguage(normalizedLanguage);
+            console.log('Language automatically set from login data:', normalizedLanguage);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking language from login data:', error);
     }
   };
 

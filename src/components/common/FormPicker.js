@@ -23,8 +23,8 @@ const FormPicker = ({
       {label && (
         <Text style={{
           fontSize: SIZES.body2,
-          fontWeight: '500',
-          color: COLORS.text.primary,
+          fontWeight: '600',
+          color: COLORS.primary,
           marginBottom: SIZES.base,
         }}>
           {label}

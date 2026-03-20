@@ -1,4 +1,5 @@
 import { formatDisplayDate } from '../utils/dateFormatter';
+import { formatCurrency } from '../utils/amountFormatters';
 
 /**
  * NIP Loan Model
@@ -19,8 +20,10 @@ class NIPLoan {
     this.processingFees = data.processing_fees || null;
     this.paymentType = data.payment_type || null;
     this.loantypeId = data.loantype_id || null;
+    this.loanTypeName = data.loan_type_name || null;
     this.loanPeriod = data.loan_period || null;
     this.approvalStatus = data.approval_status || null;
+    this.loanStatusName = data.loan_status_name || null;
     this.loanStatus = data.loan_status || null;
     this.requestedDate = data.requested_date || null;
     this.approvedDate = data.approved_date || null;
@@ -57,8 +60,7 @@ class NIPLoan {
    */
   getFormattedLoanAmount() {
     if (!this.loanAmount) return '—';
-    const num = parseFloat(this.loanAmount);
-    return isNaN(num) ? this.loanAmount : `₹${num.toLocaleString('en-IN')}`;
+    return formatCurrency(this.loanAmount);
   }
 
   /**
@@ -67,8 +69,7 @@ class NIPLoan {
    */
   getFormattedApprovedAmount() {
     if (!this.approvedAmount) return '—';
-    const num = parseFloat(this.approvedAmount);
-    return isNaN(num) ? this.approvedAmount : `₹${num.toLocaleString('en-IN')}`;
+    return formatCurrency(this.approvedAmount);
   }
 
   /**
@@ -77,8 +78,7 @@ class NIPLoan {
    */
   getFormattedBalanceAmount() {
     if (!this.balanceAmount) return '—';
-    const num = parseFloat(this.balanceAmount);
-    return isNaN(num) ? this.balanceAmount : `₹${num.toLocaleString('en-IN')}`;
+    return formatCurrency(this.balanceAmount);
   }
 
   /**

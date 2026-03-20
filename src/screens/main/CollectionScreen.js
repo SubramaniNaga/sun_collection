@@ -4,8 +4,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
@@ -39,7 +39,7 @@ const CollectionScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const searchDebounceRef = useRef(null);
-  
+
   // Payment collection modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState(null);
@@ -48,6 +48,13 @@ const CollectionScreen = ({ navigation }) => {
   const [remarks, setRemarks] = useState('');
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const shouldAllowPaymentWhenBalanceZero = (collection) => {
+    const balanceAmount = parseFloat(collection?.balanceAmount) || 0;
+    const paidAmount = parseFloat(collection?.amountPaid) || 0;
+    const completedCount = parseInt(collection?.completedCount) || 0;
+    return balanceAmount === 0 && paidAmount === 0 && completedCount === 0;
+  };
 
   const fetchCollectionData = useCallback(async (searchQuery = '', collectionDate = null) => {
     try {
@@ -144,8 +151,10 @@ const CollectionScreen = ({ navigation }) => {
 
     const balanceAmount = parseFloat(collection.balanceAmount) || 0;
     if (balanceAmount <= 0) {
-      showError(t('common.error'), t('collection.noBalanceToCollect'));
-      return;
+      if (!shouldAllowPaymentWhenBalanceZero(collection)) {
+        showError(t('common.error'), t('collection.noBalanceToCollect'));
+        return;
+      }
     }
 
     if (collection.isPaid()) {
@@ -159,8 +168,10 @@ const CollectionScreen = ({ navigation }) => {
             text: 'Yes',
             onPress: () => {
               if ((parseFloat(collection.balanceAmount) || 0) <= 0) {
-                showError(t('common.error'), t('collection.noBalanceToCollect'));
-                return;
+                if (!shouldAllowPaymentWhenBalanceZero(collection)) {
+                  showError(t('common.error'), t('collection.noBalanceToCollect'));
+                  return;
+                }
               }
               openPaymentModal(collection);
             },
@@ -195,11 +206,11 @@ const CollectionScreen = ({ navigation }) => {
 
     // Encode the address for URL
     const encodedAddress = encodeURIComponent(address.trim());
-    
+
     // Try Google Maps app first, fallback to web
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
     const googleMapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
-    
+
     // Try to open Google Maps app, fallback to web
     Linking.canOpenURL(googleMapsAppUrl)
       .then((supported) => {
@@ -221,7 +232,7 @@ const CollectionScreen = ({ navigation }) => {
 
   const validatePaymentForm = () => {
     const errors = {};
-    
+
     if (!collectedAmount || collectedAmount.trim() === '') {
       errors.collectedAmount = t('collection.collectedAmountRequired');
     } else {
@@ -231,12 +242,13 @@ const CollectionScreen = ({ navigation }) => {
       } else if (selectedCollection) {
         // Check if collected amount exceeds balance amount
         const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
-        if (amount > balanceAmount) {
+        const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
+        if (!allowExceedWhenInitialPayment && amount > balanceAmount) {
           errors.collectedAmount = `${t('collection.collectedAmountExceed')} (${selectedCollection.getFormattedBalanceAmount()})`;
         }
       }
     }
-    
+
     setPaymentErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -265,7 +277,7 @@ const CollectionScreen = ({ navigation }) => {
             ],
           });
         });
-        
+
         if (userAction === 'cancel') {
           throw new Error('Location services are disabled - user cancelled');
         } else if (userAction === 'retry' && retryCount < 3) {
@@ -287,7 +299,7 @@ const CollectionScreen = ({ navigation }) => {
 
       // Request location permissions
       const { status } = await Location.requestForegroundPermissionsAsync();
-      
+
       if (status !== 'granted') {
         const userAction = await new Promise((resolve) => {
           showAlert({
@@ -307,7 +319,7 @@ const CollectionScreen = ({ navigation }) => {
             ],
           });
         });
-        
+
         if (userAction === 'cancel') {
           throw new Error('Location permission denied - user cancelled');
         } else {
@@ -365,7 +377,7 @@ const CollectionScreen = ({ navigation }) => {
       // Get current location
       let latitude = null;
       let longitude = null;
-      
+
       try {
         const location = await getCurrentLocation();
         latitude = location.latitude;
@@ -373,7 +385,7 @@ const CollectionScreen = ({ navigation }) => {
       } catch (locationError) {
         // Check if user cancelled or if it's a permission/service issue
         const isUserCancelled = locationError.message?.includes('user cancelled');
-        
+
         if (!isUserCancelled) {
           // Ask user if they want to continue without location
           const shouldContinue = await new Promise((resolve) => {
@@ -401,7 +413,7 @@ const CollectionScreen = ({ navigation }) => {
 
       const payload = {
         amount_paid: parseFloat(collectedAmount),
-        payment_mode: paymentMode, // Add payment mode (Cash or Online)
+        payment_type: paymentMode, // Add payment mode (Cash or Online)
       };
 
       // Add location if available
@@ -416,7 +428,7 @@ const CollectionScreen = ({ navigation }) => {
       }
 
       await apiServices.collection.updateAmount(selectedCollection.id, payload);
-      
+
       showSuccess(t('common.success'), t('success.collectionUpdated'), [
         {
           text: t('common.ok'),
@@ -544,7 +556,7 @@ const CollectionScreen = ({ navigation }) => {
               return (
                 <TouchableOpacity
                   key={collection.id}
-                  style={styles.listItem}
+                  style={[styles.listItem, collection.isPending && styles.listItemPending]}
                   onPress={() => handleItemPress(collection)}
                 >
                   <View style={styles.itemRow}>
@@ -555,7 +567,7 @@ const CollectionScreen = ({ navigation }) => {
                       />
                     ) : (
                       <Image
-                        source={{ uri: 'https://www.kambaa.com/favicon.png' }}
+                        source={require('../../../assets/images/favicon.png')}
                         style={styles.itemCustomerPhoto}
                       />
                     )}
@@ -600,6 +612,14 @@ const CollectionScreen = ({ navigation }) => {
                     <Text style={styles.itemMetaLeft}>{t('loan.loanPeriod')}:</Text>
                     <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
                   </View>
+                  {(collection.completedCount != null || collection.pendingCount != null || collection.totalCount != null) && (
+                    <View style={styles.itemRow}>
+                      <Text style={styles.itemMetaLeft}>{t('collection.loanDueStatus')}:</Text>
+                      <Text style={styles.itemMetaRight}>
+                        {collection.completedCount ?? 0}({collection.pendingCount ?? 0})/{collection.totalCount ?? 0}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.itemRow}>
                     <Text style={styles.itemMetaLeft}>Paid: {collection.getFormattedAmountPaid()}</Text>
                     <Text style={styles.itemMetaRight}>Balance: {collection.getFormattedBalanceAmount()}</Text>
@@ -626,154 +646,151 @@ const CollectionScreen = ({ navigation }) => {
         </ScrollView>
       </View>
 
-      {/* Payment Collection Bottom Sheet Modal */}
       <Modal
         visible={showPaymentModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={handleClosePaymentModal}
       >
-        <KeyboardAvoidingView
-          style={styles.paymentModalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <Pressable
-            style={styles.paymentModalOverlayInner}
+        <View style={styles.centeredModalOverlay}>
+          <Pressable 
+            style={styles.centeredModalBackdrop} 
             onPress={handleClosePaymentModal}
-          >
-            <Pressable
-              style={styles.paymentModalContent}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <SafeAreaView edges={['bottom']}>
-                <View style={styles.paymentModalHeader}>
-                  <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
-                  <TouchableOpacity onPress={handleClosePaymentModal}>
-                    <Ionicons name="close" size={24} color={COLORS.text.secondary} />
+          />
+          <View style={styles.centeredModalContainer}>
+            <View style={styles.centeredModalHeader}>
+              <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
+              <TouchableOpacity onPress={handleClosePaymentModal} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedCollection && (
+              <View style={styles.centeredModalBody}>
+                <KeyboardAwareScrollView
+                  style={styles.centeredModalScrollView}
+                  contentContainerStyle={styles.centeredModalContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={true}
+                  enableOnAndroid={true}
+                  enableAutomaticScroll={true}
+                  extraScrollHeight={100}
+                  keyboardOpeningTime={0}
+                >
+                  <View style={styles.customerInfo}>
+                    <Text style={styles.customerInfoName}>
+                      {selectedCollection.customerNo} - {selectedCollection.customerName}
+                    </Text>
+                    <Text style={styles.customerInfoBalance}>
+                      {t('collection.balanceAmount')}: {selectedCollection.getFormattedBalanceAmount()}
+                    </Text>
+                  </View>
+
+                  {/* Payment Mode Radio Buttons */}
+                  <View style={styles.paymentModeContainer}>
+                    <Text style={styles.fieldLabel}>{t('collection.paymentMode')}</Text>
+                    <View style={styles.radioButtonContainer}>
+                      <TouchableOpacity
+                        style={styles.radioButton}
+                        onPress={() => setPaymentMode('Cash')}
+                      >
+                        <View style={styles.radioButtonCircle}>
+                          {paymentMode === 'Cash' && <View style={styles.radioButtonInner} />}
+                        </View>
+                        <Text style={styles.radioButtonLabel}>{t('common.cash')}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.radioButton}
+                        onPress={() => setPaymentMode('Online')}
+                      >
+                        <View style={styles.radioButtonCircle}>
+                          {paymentMode === 'Online' && <View style={styles.radioButtonInner} />}
+                        </View>
+                        <Text style={styles.radioButtonLabel}>{t('common.online')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Collected Amount Input */}
+                  <View style={styles.inputFieldContainer}>
+                    <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
+                    <TextInput
+                      style={[
+                        styles.inputField,
+                        paymentErrors.collectedAmount && styles.inputFieldError,
+                      ]}
+                      placeholder={t('collection.enterAmount')}
+                      placeholderTextColor={COLORS.text.tertiary}
+                      value={collectedAmount}
+                      keyboardType="numeric"
+                      onChangeText={(text) => {
+                        // Remove non-digits
+                        const digitsOnly = text.replace(/[^0-9]/g, '');
+
+                        // If there's a balance amount, restrict input
+                        if (selectedCollection && digitsOnly) {
+                          const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
+                          const enteredAmount = parseFloat(digitsOnly);
+                          const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
+
+                          // If entered amount exceeds balance, cap it at balance
+                          if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                            // Set to balance amount
+                            setCollectedAmount(String(balanceAmount));
+                            // Show error message
+                            setPaymentErrors({
+                              ...paymentErrors,
+                              collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
+                            });
+                            return;
+                          }
+                        }
+
+                        // Update amount
+                        setCollectedAmount(digitsOnly);
+
+                        // Clear error if amount is valid
+                        if (paymentErrors.collectedAmount) {
+                          setPaymentErrors({ ...paymentErrors, collectedAmount: '' });
+                        }
+                      }}
+                    />
+                    {paymentErrors.collectedAmount && (
+                      <Text style={styles.errorTextSmall}>{paymentErrors.collectedAmount}</Text>
+                    )}
+                  </View>
+
+                  {/* Remarks Input */}
+                  <View style={styles.inputFieldContainer}>
+                    <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
+                    <TextInput
+                      style={[styles.inputField, styles.textArea]}
+                      placeholder={t('collection.enterRemarks')}
+                      placeholderTextColor={COLORS.text.tertiary}
+                      value={remarks}
+                      onChangeText={setRemarks}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+                </KeyboardAwareScrollView>
+
+                {/* Fixed Submit Button at Bottom */}
+                <View style={styles.submitButtonFixed}>
+                  <TouchableOpacity
+                    style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+                    onPress={handleSubmitPayment}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {isSubmitting ? t('common.loading') : t('common.submit')}
+                    </Text>
                   </TouchableOpacity>
                 </View>
-
-                {selectedCollection && (
-                  <ScrollView
-                    style={styles.paymentModalScrollView}
-                    contentContainerStyle={styles.paymentModalBody}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
-                  >
-                    <View style={styles.customerInfo}>
-                      <Text style={styles.customerInfoName}>
-                        {selectedCollection.customerNo} - {selectedCollection.customerName}
-                      </Text>
-                      <Text style={styles.customerInfoBalance}>
-                        {t('collection.balanceAmount')}: {selectedCollection.getFormattedBalanceAmount()}
-                      </Text>
-                    </View>
-
-                    {/* Payment Mode Radio Buttons */}
-                    <View style={styles.paymentModeContainer}>
-                      <Text style={styles.fieldLabel}>{t('collection.paymentMode')}</Text>
-                      <View style={styles.radioButtonContainer}>
-                        <TouchableOpacity
-                          style={styles.radioButton}
-                          onPress={() => setPaymentMode('Cash')}
-                        >
-                          <View style={styles.radioButtonCircle}>
-                            {paymentMode === 'Cash' && <View style={styles.radioButtonInner} />}
-                          </View>
-                          <Text style={styles.radioButtonLabel}>{t('common.cash')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.radioButton}
-                          onPress={() => setPaymentMode('Online')}
-                        >
-                          <View style={styles.radioButtonCircle}>
-                            {paymentMode === 'Online' && <View style={styles.radioButtonInner} />}
-                          </View>
-                          <Text style={styles.radioButtonLabel}>{t('common.online')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {/* Collected Amount Input */}
-                    <View style={styles.inputFieldContainer}>
-                      <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
-                      <TextInput
-                        style={[
-                          styles.inputField,
-                          paymentErrors.collectedAmount && styles.inputFieldError,
-                        ]}
-                        placeholder={t('collection.enterAmount')}
-                        placeholderTextColor={COLORS.text.tertiary}
-                        value={collectedAmount}
-                        keyboardType="numeric"
-                        onChangeText={(text) => {
-                          // Remove non-digits
-                          const digitsOnly = text.replace(/[^0-9]/g, '');
-                          
-                          // If there's a balance amount, restrict input
-                          if (selectedCollection && digitsOnly) {
-                            const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
-                            const enteredAmount = parseFloat(digitsOnly);
-                            
-                            // If entered amount exceeds balance, cap it at balance
-                            if (!isNaN(enteredAmount) && enteredAmount > balanceAmount) {
-                              // Set to balance amount
-                              setCollectedAmount(String(balanceAmount));
-                              // Show error message
-                              setPaymentErrors({
-                                ...paymentErrors,
-                                collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
-                              });
-                              return;
-                            }
-                          }
-                          
-                          // Update amount
-                          setCollectedAmount(digitsOnly);
-                          
-                          // Clear error if amount is valid
-                          if (paymentErrors.collectedAmount) {
-                            setPaymentErrors({ ...paymentErrors, collectedAmount: '' });
-                          }
-                        }}
-                      />
-                      {paymentErrors.collectedAmount && (
-                        <Text style={styles.errorTextSmall}>{paymentErrors.collectedAmount}</Text>
-                      )}
-                    </View>
-
-                    {/* Remarks Input */}
-                    <View style={styles.inputFieldContainer}>
-                      <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
-                      <TextInput
-                        style={[styles.inputField, styles.textArea]}
-                        placeholder={t('collection.enterRemarks')}
-                        placeholderTextColor={COLORS.text.tertiary}
-                        value={remarks}
-                        onChangeText={setRemarks}
-                        multiline
-                        numberOfLines={3}
-                      />
-                    </View>
-
-                    {/* Submit Button */}
-                    <TouchableOpacity
-                      style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-                      onPress={handleSubmitPayment}
-                      disabled={isSubmitting}
-                    >
-                      <Text style={styles.submitButtonText}>
-                        {isSubmitting ? t('common.loading') : t('common.submit')}
-                      </Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                )}
-              </SafeAreaView>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
+              </View>
+            )}
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -815,6 +832,7 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.padding / 2,
   },
   datePickerButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
@@ -848,6 +866,10 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.base,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  listItemPending: {
+    borderColor: '#F5D000',
+    borderWidth: 2,
   },
   itemCustomerPhoto: {
     width: 36,
@@ -1006,26 +1028,38 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
   },
-  // Payment Modal Styles
-  paymentModalOverlay: {
+  // Centered Modal Styles
+  centeredModalOverlay: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
-  paymentModalOverlayInner: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+  centeredModalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  paymentModalContent: {
+  centeredModalContainer: {
+    width: '90%',
+    maxWidth: 400,
+    height: '75%',
+    maxHeight: '75%',
     backgroundColor: COLORS.white,
-    borderTopLeftRadius: SIZES.radius * 2,
-    borderTopRightRadius: SIZES.radius * 2,
-    maxHeight: '90%',
-    width: '100%',
+    borderRadius: SIZES.radius * 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    overflow: 'hidden',
   },
-  paymentModalScrollView: {
-    maxHeight: 600,
-  },
-  paymentModalHeader: {
+  centeredModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1033,15 +1067,35 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.padding,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  closeButton: {
+    padding: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
   },
   paymentModalTitle: {
     fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.black,
   },
-  paymentModalBody: {
-    padding: SIZES.padding,
-    paddingBottom: SIZES.padding * 2,
+  centeredModalBody: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  centeredModalScrollView: {
+    flex: 1,
+  },
+  centeredModalContent: {
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: SIZES.base,
+  },
+  submitButtonFixed: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.white,
   },
   customerInfo: {
     backgroundColor: COLORS.lightGray,
@@ -1119,10 +1173,11 @@ const styles = StyleSheet.create({
   submitButton: {
     backgroundColor: COLORS.primary,
     borderRadius: SIZES.radius,
-    paddingVertical: SIZES.padding,
+    height: 48,
+    minHeight: 48,
+    maxHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: SIZES.margin,
   },
   submitButtonDisabled: {
     opacity: 0.6,

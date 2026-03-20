@@ -27,6 +27,7 @@ export const ENDPOINTS = {
   LOAN: {
     LIST: '/loan',
     NIP: '/loan/nip',
+    NIP_COLLECTION: '/nip-collection',
     GIVEN_UPDATE: (id) => `/loan/given/${id}`,
     TYPES: '/loan-type/active/list',
     DETAILS: (id) => `/loan/details/${id}`,
@@ -37,6 +38,9 @@ export const ENDPOINTS = {
   EXPENSE: {
     CREATE: '/expense',
     LIST: '/expense',
+  },
+  UPFRONT_CASH: {
+    LIST: '/frontcash',
   },
   DASHBOARD: {
     TODAY: '/frontcash/dashboard/today',
