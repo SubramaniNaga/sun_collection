@@ -41,6 +41,7 @@ export const ENDPOINTS = {
   },
   UPFRONT_CASH: {
     LIST: '/frontcash',
+    OPENING_BALANCE: '/frontcash/openingbalance',
   },
   DASHBOARD: {
     TODAY: '/frontcash/dashboard/today',

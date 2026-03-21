@@ -539,7 +539,7 @@ const LoanScreen = ({ navigation, route }) => {
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('customer.customerNo')}</Text>
-                <Text style={styles.detailValue}>{(loanDetails?.customer_no || loan?.customer_no) ?? '—'}</Text>
+                <Text style={[styles.detailValue, { numberOfLines: 1 }]}>{(loanDetails?.customer_no || loan?.customer_no) ?? '—'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('loan.branch')}</Text>
@@ -551,7 +551,7 @@ const LoanScreen = ({ navigation, route }) => {
               </View>
               {(loanDetails?.loantype_id || loan?.loantype_id) != null && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Loan Type</Text>
+                  <Text style={styles.detailLabel}>{t('loan.loanType')}</Text>
                   <Text style={styles.detailValue}>{(loanDetails?.loan_type_name || loan?.loan_type_name) ?? '—'}</Text>
                 </View>
               )}
@@ -743,14 +743,17 @@ const LoanScreen = ({ navigation, route }) => {
                   <View style={styles.formRow}>
                     <Text style={styles.formLabel}>{t('loan.paymentType')}</Text>
                     <View style={styles.paymentTypeRow}>
-                      {['cash', 'upi'].map((type) => (
+                      {[
+                        { key: 'cash', label: t('common.cash') },
+                        { key: 'upi', label: 'UPI' }
+                      ].map((item) => (
                         <TouchableOpacity
-                          key={type}
-                          style={[styles.paymentTypeChip, paymentType === type && styles.paymentTypeChipActive]}
-                          onPress={() => setPaymentType(type)}
+                          key={item.key}
+                          style={[styles.paymentTypeChip, paymentType === item.key && styles.paymentTypeChipActive]}
+                          onPress={() => setPaymentType(item.key)}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.paymentTypeChipText, paymentType === type && styles.paymentTypeChipTextActive]}>{type}</Text>
+                          <Text style={[styles.paymentTypeChipText, paymentType === item.key && styles.paymentTypeChipTextActive]}>{item.label}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -920,7 +923,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   loanDetailsTitle: {
-    fontSize: SIZES.h3,
+    fontSize: SIZES.body3, // Reduced from SIZES.h3
     fontWeight: '700',
     color: COLORS.text?.primary || COLORS.primary,
     marginBottom: SIZES.margin,
@@ -938,7 +941,7 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   detailSectionTitle: {
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body3, // Reduced from SIZES.body1
     fontWeight: '600',
     color: COLORS.text?.secondary || '#333',
     marginTop: SIZES.margin,
@@ -1010,7 +1013,7 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.margin * 0.5,
   },
   customerInfoTitle: {
-    fontSize: SIZES.h4,
+    fontSize: SIZES.body2, // Reduced from SIZES.h4
     fontWeight: '600',
     color: COLORS.text.primary,
   },

@@ -4,6 +4,50 @@ import { clearSession } from '../../utils/sessionManager';
 import apiClient from '../apiClient';
 import ENDPOINTS from '../endpoints';
 
+// Helper function to read and format line_id and branch_id for API calls
+const getLineAndBranchIds = async () => {
+  try {
+    const branchId = await AsyncStorage.getItem('user_branch_id');
+    const lineIdsJson = await AsyncStorage.getItem('user_line_ids');
+
+    let lineIds = ['1']; // Default fallback
+    if (lineIdsJson) {
+      try {
+        const parsed = JSON.parse(lineIdsJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          lineIds = parsed;
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse line_ids JSON:', parseError);
+        // Fallback to old single value
+        const oldLineId = await AsyncStorage.getItem('lineId');
+        if (oldLineId) {
+          lineIds = [oldLineId];
+        }
+      }
+    } else {
+      // Fallback to old single value
+      const oldLineId = await AsyncStorage.getItem('lineId');
+      if (oldLineId) {
+        lineIds = [oldLineId];
+      }
+    }
+
+    return {
+      branchId: branchId || '1',
+      lineIds: lineIds || ['1'],
+      lineIdsString: lineIds.join(',') // For query params: "1,2,3"
+    };
+  } catch (error) {
+    console.error('Error reading line/branch IDs:', error);
+    return {
+      branchId: '1',
+      lineIds: ['1'],
+      lineIdsString: '1'
+    };
+  }
+};
+
 export const apiServices = {
   // Authentication Services
   auth: {
@@ -50,11 +94,45 @@ export const apiServices = {
             console.log('🔑 AUTH LOGIN - Language preference stored:', languagePreference);
           }
 
-          // Temporary: if branch_id or line_id is null/string, store 1 for both
-          const rawBranchId = data.branch_id;
-          const rawLineId = data.line_id;
-          const branchId = (rawBranchId != null && typeof rawBranchId === 'number') ? String(rawBranchId) : '1';
-          const lineId = (rawLineId != null && typeof rawLineId === 'number') ? String(rawLineId) : '1';
+          // Parse and store line_id and branch_id from login response
+          let parsedLineIds = ['1']; // Default fallback
+          let branchIdToStore = '1'; // Default fallback
+
+          try {
+            // Parse line_id - it's a JSON stringified array like "[\"1\"]" or "[\"1\",\"2\",\"3\"]"
+            if (data.line_id != null && data.line_id !== '') {
+              if (typeof data.line_id === 'string') {
+                const parsed = JSON.parse(data.line_id);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  parsedLineIds = parsed;
+                } else {
+                  parsedLineIds = [data.line_id]; // Fallback to single value if parsing fails
+                }
+              } else if (Array.isArray(data.line_id)) {
+                parsedLineIds = data.line_id;
+              } else {
+                parsedLineIds = [String(data.line_id)];
+              }
+            }
+
+            // Handle branch_id - can be null or a value
+            if (data.branch_id != null && data.branch_id !== '') {
+              branchIdToStore = String(data.branch_id);
+            }
+          } catch (error) {
+            console.warn('🔑 AUTH LOGIN - Error parsing line_id/branch_id:', error);
+            // Use defaults if parsing fails
+            parsedLineIds = ['1'];
+            branchIdToStore = '1';
+          }
+
+          // Store the parsed line_id array and branch_id
+          await AsyncStorage.setItem('user_line_ids', JSON.stringify(parsedLineIds));
+          await AsyncStorage.setItem('user_branch_id', branchIdToStore);
+
+          // Also store as single values for backward compatibility
+          await AsyncStorage.setItem('lineId', parsedLineIds[0]); // First line_id for compatibility
+          await AsyncStorage.setItem('branchId', branchIdToStore);
 
           // Store additional fields individually for easy access in API calls
           await AsyncStorage.setItem('userId', data.id?.toString() || '');
@@ -62,10 +140,8 @@ export const apiServices = {
           await AsyncStorage.setItem('userPhone', data.phone || '');
           await AsyncStorage.setItem('userRole', data.role || '');
           await AsyncStorage.setItem('userRoleId', data.roleid?.toString() || '');
-          await AsyncStorage.setItem('lineId', lineId);
-          await AsyncStorage.setItem('branchId', branchId);
           await AsyncStorage.setItem('userDevice', data.device || '');
-          
+
           // Store loan_type and loan_period for CustomerWithLoanScreen
           await AsyncStorage.setItem('loanType', data.loan_type?.toString() || '');
           await AsyncStorage.setItem('loanPeriod', data.loan_period?.toString() || '');
@@ -304,10 +380,9 @@ export const apiServices = {
   loan: {
     getLoanList: async (params = {}) => {
       try {
-        const branchId = await AsyncStorage.getItem('branchId');
-        const lineId = await AsyncStorage.getItem('lineId');
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
 
-        if (!branchId || !lineId) {
+        if (!branchId || !lineIdsString) {
           throw new Error('Branch ID or Line ID not found. Please log in again.');
         }
         const {
@@ -319,7 +394,7 @@ export const apiServices = {
         } = params;
         const requestParams = {
           branch_id: branchId || 1,
-          line_id: lineId || 1,
+          line_id: lineIdsString,
           customer_id: customer_id || '',
           approval_status: approval_status || '',
           loan_status: loan_status || '',
@@ -339,10 +414,9 @@ export const apiServices = {
 
     getNIPList: async (params = {}) => {
       try {
-        const branchId = await AsyncStorage.getItem('branchId');
-        const lineId = await AsyncStorage.getItem('lineId');
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
 
-        if (!branchId || !lineId) {
+        if (!branchId || !lineIdsString) {
           throw new Error('Branch ID or Line ID not found. Please log in again.');
         }
         const {
@@ -352,7 +426,7 @@ export const apiServices = {
         } = params;
         const requestParams = {
           branch_id: branchId || 1,
-          line_id: lineId || 1,
+          line_id: lineIdsString,
           ...(search && { search }),
           page,
           limit,
@@ -570,14 +644,15 @@ export const apiServices = {
   collection: {
     getCollectionList: async (params = {}) => {
       try {
-        const branchId = await AsyncStorage.getItem('branchId');
-        console.log('💰 API: getCollectionList - branchId:', branchId);
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
+
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
         const { customer_phone = '', customer_name = '', collection_date = '' } = params;
         const requestParams = {
           branch_id: branchId,
+          line_id: lineIdsString,
           ...(customer_phone && { customer_phone }),
           ...(customer_name && { customer_name }),
           ...(collection_date && { collection_date }),
@@ -630,7 +705,7 @@ export const apiServices = {
 
     getCollectionHistory: async (params = {}) => {
       try {
-        const branchId = await AsyncStorage.getItem('branchId');
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
@@ -641,6 +716,8 @@ export const apiServices = {
           limit = 10,
         } = params;
         const requestParams = {
+          branch_id: branchId,
+          line_id: lineIdsString,
           ...(from_date && { from_date }),
           ...(to_date && { to_date }),
           page,
@@ -749,14 +826,15 @@ export const apiServices = {
   collection: {
     getCollectionList: async (params = {}) => {
       try {
-        const branchId = await AsyncStorage.getItem('branchId');
-        console.log('💰 API: getCollectionList - branchId:', branchId);
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
+
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
         const { customer_phone = '', customer_name = '', collection_date = '' } = params;
         const requestParams = {
           branch_id: branchId,
+          line_id: lineIdsString,
           ...(customer_phone && { customer_phone }),
           ...(customer_name && { customer_name }),
           ...(collection_date && { collection_date }),
@@ -821,7 +899,7 @@ export const apiServices = {
 
     getCollectionHistory: async (params = {}) => {
       try {
-        const branchId = await AsyncStorage.getItem('branchId');
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
@@ -832,6 +910,8 @@ export const apiServices = {
           limit = 10,
         } = params;
         const requestParams = {
+          branch_id: branchId,
+          line_id: lineIdsString,
           ...(from_date && { from_date }),
           ...(to_date && { to_date }),
           page,
@@ -882,16 +962,37 @@ export const apiServices = {
   },
 
   upfrontCash: {
-    getUpfrontCashList: async (params = {}) => {
+    getOpeningBalance: async (params = {}) => {
       try {
-        console.log('🔗 API: getUpfrontCashList - GET', ENDPOINTS.UPFRONT_CASH.LIST, '| params:', JSON.stringify(params, null, 2));
+        const agentId = await AsyncStorage.getItem('userId');
+        
+        if (!agentId) {
+          throw new Error('Agent ID not found. Please log in again.');
+        }
 
-        const response = await apiClient.get(ENDPOINTS.UPFRONT_CASH.LIST, { params });
+        const {
+          from_date = '',
+          to_date = '',
+          page = 1,
+          limit = 20,
+        } = params;
 
-        console.log('🔗 API: getUpfrontCashList - Response:', JSON.stringify(response.data, null, 2));
-        return response.data;
+        const requestParams = {
+          agent_id: agentId,
+          ...(from_date && { from_date }),
+          ...(to_date && { to_date }),
+          page,
+          limit,
+        };
+
+        console.log('💰 API: getOpeningBalance - GET', ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE, '| params:', JSON.stringify(requestParams, null, 2));
+
+        const response = await apiClient.get(ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE, { params: requestParams });
+
+        console.log('💰 API: getOpeningBalance - Response:', JSON.stringify(response.data, null, 2));
+        return response.data; // Return response.data to match the pattern used by other services
       } catch (error) {
-        console.error('Get upfront cash list error:', error);
+        console.error('Get opening balance error:', error);
         throw error;
       }
     },

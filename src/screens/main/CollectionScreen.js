@@ -4,8 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
@@ -51,9 +52,15 @@ const CollectionScreen = ({ navigation }) => {
 
   const shouldAllowPaymentWhenBalanceZero = (collection) => {
     const balanceAmount = parseFloat(collection?.balanceAmount) || 0;
-    const paidAmount = parseFloat(collection?.amountPaid) || 0;
     const completedCount = parseInt(collection?.completedCount) || 0;
-    return balanceAmount === 0 && paidAmount === 0 && completedCount === 0;
+
+    // If balance is not zero, always allow payment
+    if (balanceAmount !== 0) {
+      return true;
+    }
+
+    // If balance is zero, only allow payment if completed_count is 0
+    return completedCount === 0;
   };
 
   const fetchCollectionData = useCallback(async (searchQuery = '', collectionDate = null) => {
@@ -556,7 +563,7 @@ const CollectionScreen = ({ navigation }) => {
               return (
                 <TouchableOpacity
                   key={collection.id}
-                  style={[styles.listItem, collection.isPending && styles.listItemPending]}
+                  style={[styles.listItem, collection.isPending && styles.listItemPending, collection.isHighPendingCount && styles.listItemHighPending]}
                   onPress={() => handleItemPress(collection)}
                 >
                   <View style={styles.itemRow}>
@@ -602,7 +609,7 @@ const CollectionScreen = ({ navigation }) => {
                   <View style={styles.itemDivider} />
                   <View style={styles.itemRow}>
                     <Text style={styles.itemAssets}>
-                      Week {collection.collectionWeek ?? '—'} · {collection.getFormattedCollectionDate()}
+                      {t('loan.week')} {collection.collectionWeek ?? '—'} · {collection.getFormattedCollectionDate()}
                     </Text>
                     <View style={[styles.statusBadge, { backgroundColor: collection.getStatusColor() }]}>
                       <Text style={styles.statusText}>{collection.getStatusText()}</Text>
@@ -612,17 +619,20 @@ const CollectionScreen = ({ navigation }) => {
                     <Text style={styles.itemMetaLeft}>{t('loan.loanPeriod')}:</Text>
                     <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
                   </View>
-                  {(collection.completedCount != null || collection.pendingCount != null || collection.totalCount != null) && (
-                    <View style={styles.itemRow}>
-                      <Text style={styles.itemMetaLeft}>{t('collection.loanDueStatus')}:</Text>
-                      <Text style={styles.itemMetaRight}>
-                        {collection.completedCount ?? 0}({collection.pendingCount ?? 0})/{collection.totalCount ?? 0}
-                      </Text>
-                    </View>
-                  )}
+
                   <View style={styles.itemRow}>
-                    <Text style={styles.itemMetaLeft}>Paid: {collection.getFormattedAmountPaid()}</Text>
-                    <Text style={styles.itemMetaRight}>Balance: {collection.getFormattedBalanceAmount()}</Text>
+                    <Text style={styles.itemMetaLeft}>{t('collection.loanDueStatus')}:</Text>
+                    <Text style={styles.itemMetaRight}>
+                      {(() => {
+                     
+                        return `${collection.completed_collection_count ?? collection.completedCount ?? 0}(${collection.pending_collection_count ?? collection.pendingCount ?? 0})/${collection.current_collection_due_count ?? collection.totalCount ?? 0}`;
+                      })()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.itemRow}>
+                    <Text style={styles.itemMetaLeft}>{t('loan.paid')}: {collection.getFormattedAmountPaid()}</Text>
+                    <Text style={styles.itemMetaRight}>{t('loan.balance')}: {collection.getFormattedBalanceAmount()}</Text>
                   </View>
                   {/*{collection.locality && (
                     <View style={[styles.itemRow, styles.itemRowLast]}>
@@ -653,8 +663,8 @@ const CollectionScreen = ({ navigation }) => {
         onRequestClose={handleClosePaymentModal}
       >
         <View style={styles.centeredModalOverlay}>
-          <Pressable 
-            style={styles.centeredModalBackdrop} 
+          <Pressable
+            style={styles.centeredModalBackdrop}
             onPress={handleClosePaymentModal}
           />
           <View style={styles.centeredModalContainer}>
@@ -830,6 +840,7 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius,
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding / 2,
+    height: 44, // Consistent height for both components
   },
   datePickerButton: {
     flex: 1,
@@ -842,6 +853,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     gap: SIZES.base / 2,
+    height: 44, // Consistent height for both components
   },
   datePickerText: {
     fontSize: SIZES.body3,
@@ -854,6 +866,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: SIZES.body2,
     color: COLORS.black,
+    height: 44, // Match container height
   },
   listContainer: {
     flex: 1,
@@ -862,13 +875,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
     paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    marginBottom: SIZES.base,
+    paddingVertical: SIZES.padding / 2, // Reduced from 16px to 8px for more compact layout
+    marginBottom: SIZES.base / 2, // Reduced from 8px to 4px for more compact layout
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   listItemPending: {
     borderColor: '#F5D000',
+    borderWidth: 2,
+  },
+  listItemHighPending: {
+    borderColor: '#FED7AA',
     borderWidth: 2,
   },
   itemCustomerPhoto: {
@@ -890,14 +907,14 @@ const styles = StyleSheet.create({
   itemDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: COLORS.border,
-    marginVertical: SIZES.base,
+    marginVertical: SIZES.base / 2, // Reduced from 8px to 4px for more compact layout
     marginLeft: 0,
   },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.base,
+    marginBottom: SIZES.base / 2, // Reduced from 8px to 4px for more compact layout
     minHeight: 24,
   },
   itemRowLast: {

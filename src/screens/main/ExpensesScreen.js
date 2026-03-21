@@ -18,8 +18,8 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { formatDisplayDate } from '../../utils/dateFormatter';
 import { formatCurrency } from '../../utils/amountFormatters';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
 
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   expenseTitle: {
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body2,
     fontWeight: '600',
     color: COLORS.text.primary,
   },
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
   },
   amountText: {
-    fontSize: SIZES.body2,
+    fontSize: SIZES.body3,
     fontWeight: '700',
     color: COLORS.primary,
   },

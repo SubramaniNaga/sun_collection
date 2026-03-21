@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   sectionTitle: {
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body2, // Reduced from SIZES.body1
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: SIZES.margin / 3,
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   cashStatsTitle: {
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body2, // Reduced from SIZES.body1
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: SIZES.base,
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   cashStatValue: {
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body2, // Reduced from SIZES.body1
     fontWeight: '700',
     color: COLORS.text.primary,
     textAlign: 'center',
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     marginTop: SIZES.base / 4,
   },
   receiptNumber: {
-    fontSize: SIZES.body2,
+    fontSize: SIZES.body3, // Reduced from SIZES.body2
     fontWeight: '600',
     color: COLORS.text.primary,
   },

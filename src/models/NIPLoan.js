@@ -1,5 +1,5 @@
-import { formatDisplayDate } from '../utils/dateFormatter';
 import { formatCurrency } from '../utils/amountFormatters';
+import { formatDisplayDate } from '../utils/dateFormatter';
 
 /**
  * NIP Loan Model
@@ -47,6 +47,11 @@ class NIPLoan {
     this.branchName = data.branch_name || data.branch || null;
     this.lineName = data.line_name || null;
     this.locality = data.locality || null;
+
+    // Collection count fields
+    this.completedCount = data.completed_collection_count ?? null;
+    this.pendingCount = data.pending_collection_count ?? null;
+    this.totalCount = data.current_collection_due_count ?? null;
 
     // Loan given fields
     this.loangivenPhoto = data.loangiven_photo || null;

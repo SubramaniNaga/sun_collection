@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import apiClient from '../../api/apiClient';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import Header from '../../components/common/Header';
@@ -60,41 +61,57 @@ const ProfileScreen = ({ navigation }) => {
     AsyncStorage.getItem('lineId').then(setLineId);
   }, []);
 
-  // Auto-set language based on login data
-  useEffect(() => {
-    const setLanguageFromLogin = async () => {
-      try {
-        // Check if language is stored in user data or AsyncStorage from login
-        const userData = await AsyncStorage.getItem('userData');
-        if (userData) {
-          const parsedUser = JSON.parse(userData);
-          const loginLanguage = parsedUser.language || parsedUser.lang;
-          
-          if (loginLanguage && (loginLanguage === 'en' || loginLanguage === 'ta' || loginLanguage === 'tn')) {
-            // Normalize 'tn' to 'ta' for Tamil
-            const normalizedLanguage = loginLanguage === 'tn' ? 'ta' : loginLanguage;
-            
-            // Only change language if it's different from current
-            if (language !== normalizedLanguage) {
-              await changeLanguage(normalizedLanguage);
-              console.log('Language automatically set from login data:', normalizedLanguage);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error setting language from login data:', error);
-      }
-    };
-
-    setLanguageFromLogin();
-  }, [user, language, changeLanguage]);
-
   const displayBranch = user?.branch ?? user?.branch_id ?? branchId ?? 'N/A';
   const displayLine = user?.line ?? user?.line_name ?? lineId ?? 'N/A';
+  const truncateText = (value, maxLength = 24) => {
+    if (!value) return '';
+    return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+  };
 
-  const handleLanguageSelect = (newLanguage) => {
-    changeLanguage(newLanguage);
-    setShowLanguageModal(false);
+  const handleLanguageSelect = async (newLanguage) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const storedUserId = await AsyncStorage.getItem('userId');
+      const userId = user?.id || storedUserId;
+
+      if (!token || !userId) {
+        showAlert({
+          type: 'error',
+          title: t('common.error'),
+          message: t('profile.updateFailed') || 'Unable to update language. Please login again.',
+        });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('language', newLanguage);
+
+      await apiClient.put(`/user/${userId}`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      await AsyncStorage.setItem('@app_language', newLanguage);
+      await AsyncStorage.setItem('login_language', newLanguage);
+      await changeLanguage(newLanguage);
+      updateUser({ language: newLanguage, lang: newLanguage });
+      setShowLanguageModal(false);
+
+      showAlert({
+        type: 'success',
+        title: t('common.success'),
+        message: t('profile.language') || 'Language updated successfully',
+      });
+    } catch (error) {
+      console.error('Error changing language:', error);
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: error?.response?.data?.message || 'Failed to change language. Please try again.',
+      });
+    }
   };
 
   const handlePasswordChange = () => {
@@ -442,7 +459,9 @@ const ProfileScreen = ({ navigation }) => {
                 <View style={styles.modalIconContainer}>
                   <Ionicons name="lock-closed" size={28} color={COLORS.primary} />
                 </View>
-                <Text style={styles.modalTitle}>{t('profile.changePassword')}</Text>
+                <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="tail">
+                  {truncateText(t('profile.changePassword') || 'Change Password', 18)}
+                </Text>
               </View>
               <TouchableOpacity 
                 style={styles.closeButton} 
@@ -463,11 +482,13 @@ const ProfileScreen = ({ navigation }) => {
             <ScrollView style={styles.passwordModalContent} showsVerticalScrollIndicator={false}>
               {/* Current Password */}
               <View style={styles.passwordInputContainer}>
-                <Text style={styles.passwordLabel}>{t('profile.currentPassword') || 'Current Password'}</Text>
+                <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
+                  {truncateText(t('profile.currentPassword') || 'Current Password', 24)}
+                </Text>
                 <View style={styles.passwordInputWrapper}>
                   <TextInput
                     style={styles.passwordInput}
-                    placeholder={t('profile.enterCurrentPassword') || 'Enter current password'}
+                    placeholder={truncateText(t('profile.enterCurrentPassword') || 'Enter current password', 18)}
                     placeholderTextColor={COLORS.text.tertiary}
                     value={passwordData.currentPassword}
                     onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
@@ -489,11 +510,13 @@ const ProfileScreen = ({ navigation }) => {
 
               {/* New Password */}
               <View style={styles.passwordInputContainer}>
-                <Text style={styles.passwordLabel}>{t('profile.newPassword') || 'New Password'}</Text>
+                <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
+                  {truncateText(t('profile.newPassword') || 'New Password', 24)}
+                </Text>
                 <View style={styles.passwordInputWrapper}>
                   <TextInput
                     style={styles.passwordInput}
-                    placeholder={t('profile.enterNewPassword') || 'Enter new password'}
+                    placeholder={truncateText(t('profile.enterNewPassword') || 'Enter new password', 18)}
                     placeholderTextColor={COLORS.text.tertiary}
                     value={passwordData.newPassword}
                     onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
@@ -515,11 +538,13 @@ const ProfileScreen = ({ navigation }) => {
 
               {/* Confirm Password */}
               <View style={styles.passwordInputContainer}>
-                <Text style={styles.passwordLabel}>{t('profile.confirmPassword') || 'Confirm Password'}</Text>
+                <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
+                  {truncateText(t('profile.confirmPassword') || 'Confirm Password', 24)}
+                </Text>
                 <View style={styles.passwordInputWrapper}>
                   <TextInput
                     style={styles.passwordInput}
-                    placeholder={t('profile.confirmNewPassword') || 'Confirm new password'}
+                    placeholder={truncateText(t('profile.confirmNewPassword') || 'Confirm new password', 18)}
                     placeholderTextColor={COLORS.text.tertiary}
                     value={passwordData.confirmPassword}
                     onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
@@ -651,7 +676,7 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: SIZES.body3,
     color: COLORS.text.tertiary,
-    width: 90,
+    width: 110,
   },
   detailValue: {
     flex: 1,
@@ -806,6 +831,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text.primary,
     flex: 1,
+    marginRight: SIZES.base,
   },
   closeButton: {
     padding: SIZES.base / 2,
@@ -930,7 +956,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: SIZES.body2,
     color: COLORS.text.primary,
-    paddingVertical: 0,
+    paddingVertical: SIZES.base,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   eyeIcon: {
     padding: SIZES.base / 2,

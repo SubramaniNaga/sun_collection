@@ -1,5 +1,5 @@
-import { formatDisplayDate } from '../utils/dateFormatter';
 import { formatCurrency } from '../utils/amountFormatters';
+import { formatDisplayDate } from '../utils/dateFormatter';
 
 /**
  * Returns true if ispending should show yellow border: number >= 1 or array length >= 1. Null, 0, or empty array = false.
@@ -11,6 +11,25 @@ export function isPendingBorder(val) {
   if (Array.isArray(val)) return val.length >= 1;
   const num = Number(val);
   return !Number.isNaN(num) && num >= 1;
+}
+
+/**
+ * Returns true if collection has high pending count based on loan type:
+ * - Daily loans: pending_days >= 3
+ * - Weekly loans: pending_weeks >= 3
+ * @param {string} loanTypeName - loan_type_name from API
+ * @param {number|null} pendingDays - pending_days from API
+ * @param {number|null} pendingWeeks - pending_weeks from API
+ * @returns {boolean}
+ */
+export function isHighPendingCount(loanTypeName, pendingDays, pendingWeeks) {
+  if (loanTypeName === 'Daily') {
+    return pendingDays != null && pendingDays >= 3;
+  }
+  if (loanTypeName === 'Weekly') {
+    return pendingWeeks != null && pendingWeeks >= 3;
+  }
+  return false;
 }
 
 /**
@@ -26,7 +45,7 @@ class Collection {
     this.employeeId = data.employee_id || null;
     this.collectionDate = data.collection_date || null;
     this.amountPaid = data.amount_paid || '0';
-    this.balanceAmount = data.balance_amount || '0';
+    this.balanceAmount = data.loanbalanceamount || '0';
     this.collectionWeek = data.collection_week || null;
     this.notes = data.notes || null;
     this.createdAt = data.created_at || null;
@@ -46,11 +65,12 @@ class Collection {
     this.loanTypeName = data.loan_type_name || null;
     this.approvalStatus = data.approval_status || null;
     this.isPending = isPendingBorder(data.is_pending ?? data.isPending ?? data.ispending);
-    this.completedCount = data.completed_count ?? null;
-    this.pendingCount = data.pending_count ?? null;
-    this.totalCount = data.total_count ?? null;
+    this.completedCount = data.completed_collection_count ?? null;
+    this.pendingCount = data.pending_collection_count ?? null;
+    this.totalCount = data.current_collection_due_count ?? null;
     this.pendingWeeks = data.pending_weeks ?? null;
     this.pendingDays = data.pending_days ?? null;
+    this.isHighPendingCount = isHighPendingCount(data.loan_type_name, data.pending_days, data.pending_weeks);
 
     // Branch and Line fields
     this.branchName = data.branch_name || null;

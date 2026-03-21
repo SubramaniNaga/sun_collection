@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useReducer } from 'react';
 import { setLogoutCallback } from '../api/apiClient';
 import apiServices from '../api/services/apiServices';
@@ -96,6 +97,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await apiServices.auth.login(credentials);
       
+      // Handle language detection and setting from login first
+      await handleLanguageFromLogin(credentials, data.user);
+      
       dispatch({
         type: 'AUTH_SUCCESS',
         payload: { user: data.user, token: data.token },
@@ -108,6 +112,32 @@ export const AuthProvider = ({ children }) => {
         payload: error.message,
       });
       throw error;
+    }
+  };
+
+  const handleLanguageFromLogin = async (credentials, user) => {
+    try {
+      // The API service already stores the language preference from the response
+      // We just need to ensure it's properly set for the LanguageContext
+      
+      const apiLanguage = user?.language || user?.lang || credentials.language;
+      
+      if (apiLanguage && (apiLanguage === 'en' || apiLanguage === 'ta' || apiLanguage === 'tn')) {
+        // Normalize 'tn' to 'ta' for Tamil
+        const normalizedLanguage = apiLanguage === 'tn' ? 'ta' : apiLanguage;
+        
+        // Store login language preference for LanguageContext priority
+        await AsyncStorage.setItem('login_language', normalizedLanguage);
+        
+        // Ensure the main language storage is updated
+        await AsyncStorage.setItem('@app_language', normalizedLanguage);
+        
+        console.log('🌐 Language set from login API:', normalizedLanguage);
+        return normalizedLanguage;
+      }
+      
+    } catch (error) {
+      console.error('Error handling language from login:', error);
     }
   };
 

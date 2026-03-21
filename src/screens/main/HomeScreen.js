@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.padding,
   },
   cardHeaderText: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body4,
     fontWeight: '600',
     color: COLORS.white,
     marginLeft: SIZES.base,

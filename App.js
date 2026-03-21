@@ -1,17 +1,17 @@
-import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { setLoadingContext } from './src/api/apiClient';
 import GlobalLoader from './src/components/common/GlobalLoader';
 import { COLORS } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
-import { AuthProvider, useAuthContext } from './src/store/AuthContext';
 import AlertProvider from './src/store/AlertContext';
+import { AuthProvider, useAuthContext } from './src/store/AuthContext';
 import { LanguageProvider } from './src/store/LanguageContext';
 import { LoadingProvider, useLoading } from './src/store/LoadingContext';
 import {
-  registerForPushNotificationsAsync,
-  setNotificationHandler,
+    registerForPushNotificationsAsync,
+    setNotificationHandler,
 } from './src/utils/notifications';
 
 // How notifications appear when app is in foreground
@@ -26,6 +26,18 @@ const AppContent = () => {
   // Set loading context for API clients
   useEffect(() => {
     setLoadingContext(loading);
+  }, [loading]);
+
+  // Hide splash screen when app is ready
+  useEffect(() => {
+    const hideSplash = async () => {
+      // Only hide splash screen when loading is complete
+      if (!loading) {
+        await SplashScreen.hideAsync();
+      }
+    };
+    
+    hideSplash();
   }, [loading]);
 
   // Register for push when user is logged in; listen for notifications

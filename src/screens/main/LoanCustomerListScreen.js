@@ -3,23 +3,23 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    Linking,
-    Modal,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
-import { isPendingBorder } from '../../models/Collection';
+import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
@@ -112,6 +112,12 @@ const LoanCustomerListScreen = ({ navigation }) => {
     )
     : loanList;
 
+  // Function to truncate placeholder text to 20 characters with ellipsis
+  const getTruncatedPlaceholder = (text) => {
+    if (!text) return text;
+    return text.length > 20 ? text.substring(0, 20) + '...' : text;
+  };
+
   const handleCustomerSelect = (loan) => {
     navigation.navigate('LoanScreen', {
       loan,
@@ -185,7 +191,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
     if (loan?.loan_status_name) {
       return loan.loan_status_name;
     }
-    
+
     // Fallback logic for backward compatibility
     const approval = loan?.approval_status;
     const loanStatus = loan?.loan_status;
@@ -202,48 +208,48 @@ const LoanCustomerListScreen = ({ navigation }) => {
     if (loan?.loan_status === '7' || (loan?.loan_status_name && String(loan.loan_status_name).toUpperCase() === 'NIP')) {
       return COLORS.error || '#EF4444';
     }
-    
+
     // Handle all 8 loan statuses based on both loan_status and loan_status_name
     const status = loan?.loan_status;
     const statusName = loan?.loan_status_name;
-    
+
     // Status 1: Pending - Orange
     if (status === '1' || statusName === 'Pending') {
       return '#F59E0B';
     }
-    
+
     // Status 2: Approved - Green  
     if (status === '2' || statusName === 'Approved') {
       return COLORS.success || '#10B981';
     }
-    
+
     // Status 3: Active - Green
     if (status === '3' || statusName === 'Active') {
       return COLORS.success || '#10B981';
     }
-    
+
     // Status 4: Loan Given - Blue
     if (status === '4' || statusName === 'Loan Given') {
       return '#3B82F6';
     }
-    
+
     // Status 5: Rejected - Red
     if (status === '5' || statusName === 'Rejected') {
       return COLORS.error || '#EF4444';
     }
-    
+
     // Status 6: Closed - Gray
     if (status === '6' || statusName === 'Closed') {
       return COLORS.text?.tertiary || '#6B7280';
     }
-    
+
     // Status 7: NIP - Red (already handled above)
-    
+
     // Status 8: Completed - Purple
     if (status === '8' || statusName === 'Completed') {
       return '#8B5CF6';
     }
-    
+
     // Fallback for any other status
     const label = getStatusLabel(loan);
     if (label === 'Approved') return COLORS.success || '#10B981';
@@ -251,7 +257,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
     if (label === 'Rejected') return COLORS.error || '#EF4444';
     if (label === 'Closed') return COLORS.text?.tertiary || '#6B7280';
     if (label === 'Pending') return '#F59E0B';
-    
+
     return COLORS.primary || '#1d7ee2';
   };
 
@@ -270,106 +276,107 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const renderLoanItem = ({ item }) => {
     const isPending = isPendingBorder(item?.is_pending ?? item?.isPending ?? item?.ispending);
     const isNip = isNipStatus(item);
+    const isHighPending = isHighPendingCount(item?.loan_type_name, item?.pending_days, item?.pending_weeks);
     return (
-    <TouchableOpacity
-      style={[styles.loanCard, isPending && styles.loanCardPending, isNip && styles.loanCardNip]}
-      onPress={() => handleCustomerSelect(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.loanCardHeader}>
-        <TouchableOpacity
-          style={styles.loanCardPhotoWrap}
-          onPress={(e) => {
-            e.stopPropagation();
-            openPhotoModal(item?.customer_photo);
-          }}
-          activeOpacity={0.8}
-        >
-          {item?.customer_photo ? (
-            <Image
-              source={{ uri: getImageUrl(item.customer_photo) }}
-              style={styles.loanCardPhoto}
-              resizeMode="cover"
-            />
-          ) : (
-            <Image
-              source={require('../../../assets/images/favicon.png')}
-              style={styles.loanCardPhoto}
-              resizeMode="cover"
-            />
-          )}
-        </TouchableOpacity>
-        <Text style={styles.loanCardNameLine} numberOfLines={1}>
-          {(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
-        </Text>
-        <View style={[styles.statusBadge, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
-          <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+      <TouchableOpacity
+        style={[styles.loanCard, isPending && styles.loanCardPending, isNip && styles.loanCardNip, isHighPending && styles.loanCardHighPending]}
+        onPress={() => handleCustomerSelect(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.loanCardHeader}>
+          <TouchableOpacity
+            style={styles.loanCardPhotoWrap}
+            onPress={(e) => {
+              e.stopPropagation();
+              openPhotoModal(item?.customer_photo);
+            }}
+            activeOpacity={0.8}
+          >
+            {item?.customer_photo ? (
+              <Image
+                source={{ uri: getImageUrl(item.customer_photo) }}
+                style={styles.loanCardPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={require('../../../assets/images/favicon.png')}
+                style={styles.loanCardPhoto}
+                resizeMode="cover"
+              />
+            )}
+          </TouchableOpacity>
+          <Text style={styles.loanCardNameLine} numberOfLines={1}>
+            {(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
+          </Text>
+          <View style={[styles.statusBadge, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
+            <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+          </View>
         </View>
-      </View>
-      <View style={styles.loanCardDivider} />
-      <View style={styles.loanCardRow}>
-        <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
-        <Text style={styles.loanCardValueAmount}>{formatCurrency(item?.loan_amount)}</Text>
-      </View>
-      {item?.approved_amount != null && item?.approved_amount !== '' && (
+        <View style={styles.loanCardDivider} />
         <View style={styles.loanCardRow}>
-          <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-          <Text style={styles.loanCardLabel}>{t('loan.approved')}</Text>
-          <Text style={styles.loanCardValue}>{formatCurrency(item?.approved_amount)}</Text>
+          <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
+          <Text style={styles.loanCardValueAmount}>{formatCurrency(item?.loan_amount)}</Text>
         </View>
-      )}
-      <View style={styles.loanCardRow}>
-        <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>{t('loan.balanceAmount')}</Text>
-        <Text style={styles.loanCardValue} numberOfLines={1}>{item?.balance_amount ?? '—'}</Text>
-      </View>
-      <View style={styles.loanCardRow}>
-        <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-        <Text style={styles.loanCardLabel}>{t('loan.loanPeriod')}</Text>
-        <Text style={styles.loanCardValue} numberOfLines={1}>
-          {item?.loanPeriod ?? item?.loan_period ?? '—'}/{item?.loanTypeName ?? item?.loan_type_name ?? '—'}
-        </Text>
-      </View>
-      {(item?.completed_collection_count != null || item?.completed_weeks != null || item?.total_period != null) && (
+        {item?.approved_amount != null && item?.approved_amount !== '' && (
+          <View style={styles.loanCardRow}>
+            <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+            <Text style={styles.loanCardLabel}>{t('loan.approved')}</Text>
+            <Text style={styles.loanCardValue}>{formatCurrency(item?.approved_amount)}</Text>
+          </View>
+        )}
         <View style={styles.loanCardRow}>
-          <Ionicons name="calendar-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-          <Text style={styles.loanCardLabel}>{t('loan.loanDueStatus')}</Text>
+          <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.loanCardLabel}>{t('loan.balanceAmount')}</Text>
+          <Text style={styles.loanCardValue} numberOfLines={1}>{item?.balance_amount ?? '—'}</Text>
+        </View>
+        <View style={styles.loanCardRow}>
+          <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.loanCardLabel}>{t('loan.loanPeriod')}</Text>
           <Text style={styles.loanCardValue} numberOfLines={1}>
-            {item?.completed_collection_count ?? 0}({item?.pending_collection_count ?? 0})/{item?.total_period ?? 0}
+            {item?.loanPeriod ?? item?.loan_period ?? '—'}/{item?.loanTypeName ?? item?.loan_type_name ?? '—'}
           </Text>
         </View>
-      )}
-      <View style={styles.loanCardFooter}>
-        <Text style={styles.loanCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requested_date)}</Text>
-        <View style={styles.loanCardFooterIcons}>
-          {item?.address_latitude && item?.address_longitude && (
-            <TouchableOpacity
-              style={styles.loanCardIconButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleMapPress(item.address_latitude, item.address_longitude);
-              }}
-            >
-              <Ionicons name="map-outline" size={18} color={COLORS.primary} />
-            </TouchableOpacity>
-          )}
-          {item?.customer_phone && (
-            <TouchableOpacity
-              style={styles.loanCardIconButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handlePhonePress(item.customer_phone);
-              }}
-            >
-              <Ionicons name="call" size={18} color={COLORS.primary} />
-            </TouchableOpacity>
-          )}
-          <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+        {(item?.completed_collection_count != null || item?.completed_weeks != null || item?.total_period != null) && (
+          <View style={styles.loanCardRow}>
+            <Ionicons name="calendar-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+            <Text style={styles.loanCardLabel}>{t('loan.loanDueStatus')}</Text>
+            <Text style={styles.loanCardValue} numberOfLines={1}>
+              {item?.completed_collection_count ?? 0}({item?.pending_collection_count ?? 0})/{item?.current_collection_due_count ?? 0}
+            </Text>
+          </View>
+        )}
+        <View style={styles.loanCardFooter}>
+          <Text style={styles.loanCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requested_date)}</Text>
+          <View style={styles.loanCardFooterIcons}>
+            {item?.address_latitude && item?.address_longitude && (
+              <TouchableOpacity
+                style={styles.loanCardIconButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleMapPress(item.address_latitude, item.address_longitude);
+                }}
+              >
+                <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+              </TouchableOpacity>
+            )}
+            {item?.customer_phone && (
+              <TouchableOpacity
+                style={styles.loanCardIconButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handlePhonePress(item.customer_phone);
+                }}
+              >
+                <Ionicons name="call" size={18} color={COLORS.primary} />
+              </TouchableOpacity>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
   };
 
   const renderFooter = () => {
@@ -439,12 +446,17 @@ const LoanCustomerListScreen = ({ navigation }) => {
           <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder={t('loan.searchPlaceholder')}
+            placeholder={getTruncatedPlaceholder(t('loan.searchPlaceholder'))}
             placeholderTextColor={COLORS.text.secondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
             clearButtonMode="while-editing"
             returnKeyType="search"
+            numberOfLines={1}
+            multiline={false}
+            ellipsizeMode="tail"
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.8}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity
@@ -523,17 +535,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
     borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base / 2,
+    paddingHorizontal: SIZES.base / 6, // Very minimal padding
+    paddingVertical: SIZES.base / 6, // Very minimal padding
     borderWidth: 1,
     borderColor: COLORS.border,
+    height: 45, // Reduced height
   },
   searchInput: {
     flex: 1,
-    padding: SIZES.base,
-    fontSize: SIZES.body2,
+    padding: 0, // No padding
+    fontSize: SIZES.body3,
     color: COLORS.text.primary,
     backgroundColor: 'transparent',
+    textAlign: 'left',
+    height: 35, // Reduced height
+    lineHeight: 18, // Reduced line height
+    maxHeight: 35, // Force max height
   },
   searchIcon: {
     marginRight: SIZES.base,
@@ -616,6 +633,10 @@ const styles = StyleSheet.create({
   },
   loanCardNip: {
     borderColor: COLORS.error,
+    borderWidth: 2,
+  },
+  loanCardHighPending: {
+    borderColor: '#FED7AA',
     borderWidth: 2,
   },
   loanCardHeader: {
