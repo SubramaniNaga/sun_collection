@@ -964,35 +964,49 @@ export const apiServices = {
   upfrontCash: {
     getOpeningBalance: async (params = {}) => {
       try {
-        const agentId = await AsyncStorage.getItem('userId');
-        
-        if (!agentId) {
-          throw new Error('Agent ID not found. Please log in again.');
-        }
-
         const {
           from_date = '',
           to_date = '',
+          agent_id = '4',
           page = 1,
           limit = 20,
         } = params;
 
         const requestParams = {
-          agent_id: agentId,
+          agent_id,
           ...(from_date && { from_date }),
           ...(to_date && { to_date }),
           page,
           limit,
         };
 
-        console.log('💰 API: getOpeningBalance - GET', ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE, '| params:', JSON.stringify(requestParams, null, 2));
+        console.log('💰 API: getOpeningBalance - Starting request');
+        console.log('💰 API: Endpoint:', ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE);
+        console.log('💰 API: Full URL:', apiClient.defaults?.baseURL + ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE);
+        console.log('💰 API: Request Params:', JSON.stringify(requestParams, null, 2));
+        console.log('💰 API: Query String:', new URLSearchParams(requestParams).toString());
+        
+        // Validate no undefined/null params
+        Object.keys(requestParams).forEach(key => {
+          if (requestParams[key] === undefined || requestParams[key] === null) {
+            console.warn('⚠️ API Warning: Param', key, 'is', requestParams[key]);
+          }
+        });
 
         const response = await apiClient.get(ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE, { params: requestParams });
 
-        console.log('💰 API: getOpeningBalance - Response:', JSON.stringify(response.data, null, 2));
-        return response.data; // Return response.data to match the pattern used by other services
+        console.log('💰 API: Response Status:', response.status);
+        console.log('💰 API: Response Headers:', response.headers);
+        console.log('💰 API: Response Data:', JSON.stringify(response.data, null, 2));
+        console.log('💰 API: Records Count:', response.data?.data?.length ?? response.data?.length ?? 'N/A');
+        
+        return response.data;
       } catch (error) {
-        console.error('Get opening balance error:', error);
+        console.error('❌ API: getOpeningBalance - Error Details:');
+        console.error('❌ Error Message:', error.message);
+        console.error('❌ Error Status:', error.response?.status);
+        console.error('❌ Error Data:', error.response?.data);
+        console.error('❌ Error Config:', error.config);
         throw error;
       }
     },

@@ -1,8 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useFocusEffect } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
@@ -13,147 +10,144 @@ import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const UpfrontCashScreen = ({ navigation }) => {
-  const { t } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const isLoadingRef = useRef(false);
+  const { t, language } = useLanguage();
+  const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState([]);
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    totalPages: 1,
-    totalRecords: 0,
-    limit: 20,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  });
   const [fromDate, setFromDate] = useState(new Date());
   const [toDate, setToDate] = useState(new Date());
   const [showFromDatePicker, setShowFromDatePicker] = useState(false);
   const [showToDatePicker, setShowToDatePicker] = useState(false);
 
-  const fetchData = useCallback(async (page = 1) => {
-    // Prevent multiple simultaneous calls
-    if (isLoadingRef.current) {
-      console.log('📊 UpfrontCash - Already loading, skipping request');
-      return;
-    }
-    
-    isLoadingRef.current = true;
+  // Local date formatter to avoid UTC conversion issues
+  const formatDate = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Test date formatting on component mount
+  console.log('🧪 UpfrontCashScreen - Component mounted');
+  console.log('🧪 Today\'s date (local):', formatDate(new Date()));
+  console.log('🧪 Today\'s date (toISOString):', new Date().toISOString().split('T')[0]);
+  console.log('🧪 Initial fromDate:', formatDate(fromDate));
+  console.log('🧪 Initial toDate:', formatDate(toDate));
+
+  // API call function
+  const fetchOpeningBalance = useCallback(async (fromDateParam, toDateParam) => {
     setLoading(true);
-    console.log('📊 UpfrontCash - Starting fetch for page:', page);
     try {
-      const formattedFromDate = fromDate.toISOString().split('T')[0];
-      const formattedToDate = toDate.toISOString().split('T')[0];
+      const formattedFromDate = formatDate(fromDateParam);
+      const formattedToDate = formatDate(toDateParam);
       
-      const response = await apiServices.upfrontCash.getOpeningBalance({
+      // Log API params before call
+      console.log('🌐 API Params:', {
         from_date: formattedFromDate,
         to_date: formattedToDate,
-        page: page,
+        agent_id: '4',
+        page: 1,
+        limit: 20
+      });
+      
+      const requestParams = {
+        from_date: formattedFromDate,
+        to_date: formattedToDate,
+        agent_id: '4',
+        page: 1,
         limit: 20,
-      });
+      };
+      
+      // Log final API request parameters
+      console.log('🌐 API Request Params:', JSON.stringify(requestParams, null, 2));
+      console.log('🌐 Expected URL: /api/v1/frontcash/openingbalance?' + new URLSearchParams(requestParams).toString());
+      
+      const response = await apiServices.upfrontCash.getOpeningBalance(requestParams);
 
-      // Handle paginated response - the API returns { data: [...], pagination: {...} }
       const responseData = response?.data || [];
-      const paginationData = response?.pagination || {};
-      
-      console.log('📊 UpfrontCash - Response data:', responseData);
-      console.log('📊 UpfrontCash - Pagination data:', paginationData);
-      console.log('📊 UpfrontCash - Data length:', responseData.length);
-      
+      console.log('📊 API Response - Records count:', responseData.length);
       setRecords(responseData);
-      setPagination({
-        currentPage: paginationData.currentPage || page,
-        totalPages: paginationData.totalPages || 1,
-        totalRecords: paginationData.totalRecords || 0,
-        limit: paginationData.limit || 20,
-        hasNextPage: paginationData.hasNextPage || false,
-        hasPreviousPage: paginationData.hasPreviousPage || false,
-      });
-      console.log('📊 UpfrontCash - Data loaded successfully');
 
     } catch (error) {
-      console.error('Opening balance fetch error:', error);
+      console.error('❌ Opening balance fetch error:', error);
+      console.error('❌ Error response status:', error.response?.status);
+      console.error('❌ Error response data:', error.response?.data);
+      console.error('❌ Error config:', error.config);
       setRecords([]);
-      setPagination({
-        currentPage: 1,
-        totalPages: 1,
-        totalRecords: 0,
-        limit: 20,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      });
     } finally {
-      console.log('📊 UpfrontCash - Setting loading to false');
-      isLoadingRef.current = false;
       setLoading(false);
     }
-  }, [fromDate, toDate]);
+  }, []); // Keep empty dependency array to prevent recreation
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('📊 UpfrontCash - useFocusEffect triggered, isLoadingRef:', isLoadingRef.current);
-      if (!isLoadingRef.current) {
-        fetchData();
-      }
-    }, [fetchData])
-  );
+  // API call when dates change (handles both initial load and subsequent changes)
+  useEffect(() => {
+    if (fromDate && toDate) {
+      console.log('🔄 Dates changed, triggering API call');
+      console.log('🔄 fromDate:', formatDate(fromDate));
+      console.log('🔄 toDate:', formatDate(toDate));
+      fetchOpeningBalance(fromDate, toDate);
+    }
+  }, [fromDate, toDate]); // Remove fetchOpeningBalance from dependencies to prevent infinite loop
 
+
+  // Updated date picker handlers (no immediate API calls)
   const handleFromDateChange = (event, selectedDate) => {
     setShowFromDatePicker(false);
     if (selectedDate) {
+      console.log('📅 Date picker - From date selected:', selectedDate);
+      console.log('📅 Date picker - Formatted from date:', formatDate(selectedDate));
       setFromDate(selectedDate);
-      // Automatically set to_date to current date when from_date is selected
-      setToDate(new Date());
-      // Reset to page 1 and fetch data with new date range
-      setTimeout(() => fetchData(1), 0);
+      // API call will be triggered by useEffect
     }
   };
 
   const handleToDateChange = (event, selectedDate) => {
     setShowToDatePicker(false);
     if (selectedDate) {
+      console.log('📅 Date picker - To date selected:', selectedDate);
+      console.log('📅 Date picker - Formatted to date:', formatDate(selectedDate));
       setToDate(selectedDate);
-      // Reset to page 1 and fetch data with new date range
-      setTimeout(() => fetchData(1), 0);
+      // API call will be triggered by useEffect
     }
   };
 
-  const handlePageChange = (newPage) => {
-    fetchData(newPage);
-  };
-
   const renderRecordCard = (record) => {
+    // Use full text for both English and Tamil - no tooltips, single line
     const fields = [
-      { key: 'opening_balance', label: t('upfrontCash.openingBalance') },
-      { key: 'total_expeses', label: t('upfrontCash.totalExpenses') }, // Using exact API key
-      { key: 'total_frontcash', label: t('upfrontCash.totalFrontCash') },
-      { key: 'total_collection', label: t('upfrontCash.totalCollection') },
-      { key: 'total_loangiven', label: t('upfrontCash.totalLoanGiven') },
-      { key: 'closing_balance', label: t('upfrontCash.closingBalance') },
+      { 
+        key: 'opening_balance', 
+        label: language === 'en' ? 'Opening Balance' : 'துவக்க இருப்பு' 
+      },
+      { 
+        key: 'total_expeses', 
+        label: language === 'en' ? 'Total Expenses' : 'மொத்த செலவுகள்' 
+      },
+      { 
+        key: 'total_frontcash', 
+        label: language === 'en' ? 'Total Front Cash' : 'மொத்த முன் பணம்' 
+      },
+      { 
+        key: 'total_collection', 
+        label: language === 'en' ? 'Total Collection' : 'மொத்த சேகரிப்பு' 
+      },
+      { 
+        key: 'total_loangiven', 
+        label: language === 'en' ? 'Total Loan Given' : 'மொத்த கடன் வழங்கப்பட்டது' 
+      },
+      { 
+        key: 'closing_balance', 
+        label: language === 'en' ? 'Closing Balance' : 'மூடுதல் இருப்பு' 
+      },
     ];
-
-    // Format crondate for display
-    const formattedDate = record.crondate ? 
-      new Date(record.crondate).toLocaleDateString('en-US', { 
-        day: 'numeric', 
-        month: 'short', 
-        year: 'numeric' 
-      }) : '';
 
     return (
       <View style={styles.recordCard}>
-        {/* Card Header */}
-        {/* <View style={styles.cardHeader}>
-          <Text style={styles.cardHeaderText}>{formattedDate}</Text>
-          <Text style={styles.cardHeaderText}>{record.agent_name || 'Unknown Agent'}</Text>
-        </View> */}
-        
-        {/* Fields as Label-Value Rows */}
         <View style={styles.fieldsContainer}>
           {fields.map((field, index) => (
             <View key={field.key} style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>{field.label}</Text>
+              <Text style={styles.fieldLabel} numberOfLines={1}>{field.label}</Text>
               <View style={styles.fieldValueContainer}>
-                <Text style={styles.fieldValue}>
+                <Text style={styles.fieldValue} numberOfLines={1}>
                   {formatCurrency(record[field.key] || '0')}
                 </Text>
               </View>
@@ -175,9 +169,7 @@ const UpfrontCashScreen = ({ navigation }) => {
     }
     return (
       <View style={styles.emptyState}>
-        <Ionicons name="wallet-outline" size={48} color={COLORS.text.tertiary} />
         <Text style={styles.emptyStateText}>{t('upfrontCash.noUpfrontCash')}</Text>
-        <Text style={styles.emptyStateSubText}>{t('upfrontCash.tapToAdd')}</Text>
       </View>
     );
   };
@@ -192,59 +184,13 @@ const UpfrontCashScreen = ({ navigation }) => {
     }
     
     return (
-      <View style={styles.contentContainer}>
-      
-        <FlatList
-          data={records}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => renderRecordCard(item)}
-          contentContainerStyle={styles.recordsList}
-          showsVerticalScrollIndicator={false}
-        />
-        
-        {/* Pagination Controls */}
-        {pagination.totalPages > 1 && (
-          <View style={styles.paginationContainer}>
-            <TouchableOpacity
-              style={[
-                styles.paginationButton,
-                !pagination.hasPreviousPage && styles.paginationButtonDisabled
-              ]}
-              onPress={() => handlePageChange(pagination.currentPage - 1)}
-              disabled={!pagination.hasPreviousPage}
-            >
-              <Text style={[
-                styles.paginationButtonText,
-                !pagination.hasPreviousPage && styles.paginationButtonTextDisabled
-              ]}>
-                {t('upfrontCash.previous')}
-              </Text>
-            </TouchableOpacity>
-            
-            <View style={styles.pageInfo}>
-              <Text style={styles.pageInfoText}>
-                {t('upfrontCash.page')} {pagination.currentPage} {t('upfrontCash.of')} {pagination.totalPages}
-              </Text>
-            </View>
-            
-            <TouchableOpacity
-              style={[
-                styles.paginationButton,
-                !pagination.hasNextPage && styles.paginationButtonDisabled
-              ]}
-              onPress={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={!pagination.hasNextPage}
-            >
-              <Text style={[
-                styles.paginationButtonText,
-                !pagination.hasNextPage && styles.paginationButtonTextDisabled
-              ]}>
-                {t('upfrontCash.next')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+      <FlatList
+        data={records}
+        keyExtractor={(item, index) => String(item.id || index)}
+        renderItem={({ item }) => renderRecordCard(item)}
+        contentContainerStyle={styles.recordsList}
+        showsVerticalScrollIndicator={false}
+      />
     );
   };
 
@@ -270,7 +216,6 @@ const UpfrontCashScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       <Header
         title={t('upfrontCash.title')}
         showBackButton={true}
@@ -307,98 +252,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  headerAddButton: {
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: 0,
-    paddingBottom: SIZES.padding,
-  },
-  listEmpty: {
-    flexGrow: 1,
-    paddingBottom: SIZES.padding,
-  },
-  tableHeader: {
-    backgroundColor: COLORS.background,
-    flexDirection: 'row',
-    marginHorizontal: 0,
-    marginTop: SIZES.margin,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  tableHeaderCell: {
+  contentContainer: {
     flex: 1,
-    padding: SIZES.base,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
-    justifyContent: 'center',
-    backgroundColor: COLORS.background,
+    padding: SIZES.margin,
   },
-  idCell: {
-    flex: 0.5,
+  recordsList: {
+    paddingBottom: SIZES.padding,
   },
-  tableHeaderCellLast: {
-    borderRightWidth: 0,
-  },
-  tableRow: {
+  recordCard: {
     backgroundColor: COLORS.white,
-    flexDirection: 'row',
-    marginHorizontal: 0,
-    marginVertical: 0,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderTopWidth: 0,
-    overflow: 'hidden',
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.margin,
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  tableCell: {
-    flex: 1,
+  fieldsContainer: {
     padding: SIZES.base,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SIZES.base / 2,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  fieldLabel: {
+    flex: 1,
+    fontSize: SIZES.body5, // Further reduced font size to fit Tamil text on single line
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+  },
+  fieldValueContainer: {
+    flex: 2,
+    alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  tableCellLast: {
-    borderRightWidth: 0,
-  },
-  tableHeaderText: {
-    fontSize: SIZES.body4,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginBottom: SIZES.base / 2,
-  },
-  tableRowText: {
-    fontSize: SIZES.body4,
+  fieldValue: {
+    fontSize: SIZES.body2,
     fontWeight: '700',
     color: COLORS.black,
-  },
-  tableLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.black,
-    marginBottom: SIZES.base / 4,
-  },
-  tableValue: {
-    fontSize: SIZES.body4,
-    fontWeight: '600',
-    color: COLORS.black,
-  },
-  statusBadge: {
-    paddingHorizontal: SIZES.base / 2,
-    paddingVertical: SIZES.base / 4,
-    borderRadius: SIZES.radius / 2,
-    backgroundColor: COLORS.text.tertiary,
-    alignSelf: 'flex-start',
-  },
-  statusSettled: {
-    backgroundColor: COLORS.success,
-  },
-  statusText: {
-    fontSize: SIZES.body4,
-    fontWeight: '600',
-    color: COLORS.white,
   },
   centerWrap: {
     flex: 1,
@@ -421,124 +319,7 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.text.secondary,
-    marginTop: SIZES.margin,
     textAlign: 'center',
-  },
-  emptyStateSubText: {
-    fontSize: SIZES.body2,
-    color: COLORS.primary,
-    marginTop: SIZES.base,
-    textAlign: 'center',
-  },
-  contentContainer: {
-    flex: 1,
-    padding: SIZES.margin,
-  },
-  recordsInfo: {
-    backgroundColor: COLORS.primary,
-    padding: SIZES.base,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.margin,
-  },
-  recordsInfoText: {
-    fontSize: SIZES.body2,
-    fontWeight: '600',
-    color: COLORS.white,
-    textAlign: 'center',
-  },
-  recordsList: {
-    paddingBottom: SIZES.padding * 2,
-  },
-  recordCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    marginHorizontal: 0,
-    marginBottom: SIZES.margin,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    padding: SIZES.base,
-    borderTopLeftRadius: SIZES.radius,
-    borderTopRightRadius: SIZES.radius,
-  },
-  cardHeaderText: {
-    fontSize: SIZES.body3,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  fieldsContainer: {
-    padding: SIZES.base,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SIZES.base / 2,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  fieldLabel: {
-    flex: 1,
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
-  },
-  fieldValueContainer: {
-    flex: 2,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  fieldValue: {
-    fontSize: SIZES.body2,
-    fontWeight: '700',
-    color: COLORS.black,
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: SIZES.base,
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  paginationButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SIZES.base * 1.5,
-    paddingVertical: SIZES.base,
-    borderRadius: SIZES.radius,
-    minWidth: 80,
-  },
-  paginationButtonDisabled: {
-    backgroundColor: COLORS.border,
-  },
-  paginationButtonText: {
-    fontSize: SIZES.body3,
-    fontWeight: '600',
-    color: COLORS.white,
-    textAlign: 'center',
-  },
-  paginationButtonTextDisabled: {
-    color: COLORS.text.tertiary,
-  },
-  pageInfo: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  pageInfoText: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
   },
   dateFilterContainer: {
     flexDirection: 'row',
