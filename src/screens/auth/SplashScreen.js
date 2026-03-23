@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import { COLORS, SIZES } from '../../constants/theme';
@@ -101,6 +101,11 @@ const SplashScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" backgroundColor={COLORS.statusBar} />
         <View style={styles.content}>
+          <Image 
+            source={require('../../../assets/images/favicon.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>{t('auth.sunCollection')}</Text>
           <Text style={styles.subtitle}>
             {checkingVersion ? t('auth.checkingUpdates') : t('common.loading')}
@@ -122,6 +127,11 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: SIZES.margin,
   },
   title: {
     fontSize: SIZES.h1,

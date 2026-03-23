@@ -77,6 +77,18 @@ export const apiServices = {
         console.log('🔑 AUTH LOGIN - Raw Response:', JSON.stringify(response, null, 2));
         console.log('🔑 AUTH LOGIN - Response Data:', JSON.stringify(response.data, null, 2));
 
+        // Check for device conflict in successful response (code 600)
+        if (response.data?.code === 600) {
+          console.log('🔄 Device conflict detected in successful response');
+          // Create an error object to throw for device conflict
+          const conflictError = new Error(response.data?.message || 'Device conflict detected');
+          conflictError.response = {
+            status: response.status,
+            data: response.data
+          };
+          throw conflictError;
+        }
+
         const { token, data } = response.data;
 
         console.log('🔑 AUTH LOGIN - Extracted Token:', token ? 'TOKEN_RECEIVED' : 'NO_TOKEN');
@@ -163,6 +175,32 @@ export const apiServices = {
         console.error('🔑 AUTH LOGIN - Error Message:', error.message);
         console.error('🔑 AUTH LOGIN - Error Response:', JSON.stringify(error.response?.data, null, 2));
         console.error('🔑 AUTH LOGIN - Error Status:', error.response?.status);
+        throw error;
+      }
+    },
+
+    changeDevice: async (mobileNo, deviceId, token = null) => {
+      try {
+        console.log('🔄 CHANGE DEVICE - Request:', { mobileNo, deviceId, hasToken: !!token });
+        
+        // Prepare headers with authorization if token is provided
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+        
+        const response = await apiClient.post(ENDPOINTS.AUTH.CHANGE_DEVICE, {
+          mobile_no: mobileNo,
+          deviceId: deviceId
+        }, { headers });
+
+        console.log('🔄 CHANGE DEVICE - Response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('🔄 CHANGE DEVICE - Error:', error);
         throw error;
       }
     },

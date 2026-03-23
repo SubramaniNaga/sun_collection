@@ -1,20 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import apiClient from '../../api/apiClient';
+import ENDPOINTS from '../../api/endpoints';
+import apiServices from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showError } from '../../utils/alertService';
+import { showError, showInfo, showWarning } from '../../utils/alertService';
+import { getDeviceId } from '../../utils/deviceId';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [deviceConflictData, setDeviceConflictData] = useState(null);
 
   const { login, loading } = useAuthContext();
   const { t } = useLanguage();
@@ -37,6 +44,268 @@ const LoginScreen = ({ navigation }) => {
       // Clear phone error when user starts typing
       if (errors.phone) {
         setErrors({ ...errors, phone: null });
+      }
+    }
+  };
+
+  /**
+   * Handle device change request
+   * @param {string} mobileNo - User's mobile number
+   * @param {string} deviceId - Current device ID
+   * @param {string} token - Token from login response (if available)
+   */
+  const handleChangeDevice = async (mobileNo, deviceId, token = null) => {
+    try {
+      console.log('🔄 Initiating device change...', { mobileNo, deviceId, hasToken: !!token });
+      
+      // Call change-device API with token if available
+      const response = await apiServices.auth.changeDevice(mobileNo, deviceId, token);
+      
+      console.log('🔄 Device change response:', response);
+      
+      // Check if response indicates admin approval is needed
+      if (response?.code === 200 && response?.message?.includes('admin approves')) {
+        console.log('🔄 Admin approval required, showing message...');
+        
+        // Show the admin approval message
+        showInfo(
+          'Device Update',
+          response.message,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('🔄 User acknowledged admin approval message');
+                setIsLoading(false);
+                setDeviceConflictData(null);
+              }
+            }
+          ]
+        );
+        
+        // Return here - don't retry login until admin approves
+        return;
+      }
+      
+      // If successful device change without admin approval, retry login automatically
+      console.log('🔄 Device change successful, retrying login...');
+      await performLogin();
+      
+    } catch (error) {
+      console.error('🔄 Device change failed:', error);
+      
+      // Show error and reset loading state
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to change device';
+      showError('Error', errorMessage);
+      setIsLoading(false);
+      setDeviceConflictData(null);
+    }
+  };
+
+  /**
+   * Clean reusable function for login API call
+   * @param {string} phone - User phone number
+   * @param {string} password - User password
+   * @param {string} deviceId - Device ID
+   * @returns {Promise} Login response
+   */
+  const callLoginAPI = async (phone, password, deviceId) => {
+    const requestPayload = {
+      phone: phone,
+      password: password,
+      device_id: deviceId
+    };
+
+    console.log('🔑 Calling login API with payload:', JSON.stringify(requestPayload, null, 2));
+    
+    const response = await apiClient.post(ENDPOINTS.AUTH.LOGIN, requestPayload);
+    
+    console.log('🔑 Login API response:', JSON.stringify(response.data, null, 2));
+    
+    return response;
+  };
+
+  /**
+   * Perform actual login with credentials
+   */
+  const performLogin = async () => {
+    try {
+      // Get device ID for API call
+      const deviceId = await getDeviceId();
+      
+      // Call login API directly
+      const response = await callLoginAPI(phone, password, deviceId);
+      
+      // Check for device conflict in response (code 600)
+      if (response.data?.code === 600) {
+        console.log('🔄 Device conflict detected, showing alert...');
+        
+        // Extract token from response if available
+        const conflictToken = response.data?.token || null;
+        const conflictMessage = response.data?.message || 'You are logged in on another device. Do you want to continue on this mobile?';
+        
+        // Store conflict data for later use
+        setDeviceConflictData({
+          phone: phone,
+          deviceId: deviceId,
+          token: conflictToken,
+          message: conflictMessage
+        });
+        
+        // Stop loading and show alert
+        setIsLoading(false);
+        
+        // Show device conflict alert
+        showWarning(
+          'Device Conflict',
+          conflictMessage,
+          [
+            {
+              text: 'No',
+              style: 'cancel',
+              onPress: () => {
+                console.log('🔄 User cancelled device change');
+                setDeviceConflictData(null);
+              }
+            },
+            {
+              text: 'Yes',
+              onPress: async () => {
+                console.log('🔄 User confirmed device change');
+                setIsLoading(true); // Resume loading
+                
+                // Call change-device API with token if available
+                await handleChangeDevice(phone, deviceId, conflictToken);
+              }
+            }
+          ]
+        );
+        
+        // Return here to prevent further processing
+        return;
+      }
+      
+      // Successful login - process response
+      const { token, data } = response.data;
+      
+      if (token && data) {
+        // Store token and user data
+        await AsyncStorage.setItem('authToken', token);
+        await AsyncStorage.setItem('userData', JSON.stringify(data));
+        
+        // Store additional user data
+        const languagePreference = data.language || data.lang;
+        if (languagePreference) {
+          await AsyncStorage.setItem('@app_language', languagePreference);
+        }
+        
+        // Parse and store line_id and branch_id
+        let parsedLineIds = ['1'];
+        let branchIdToStore = '1';
+        
+        try {
+          if (data.line_id != null && data.line_id !== '') {
+            if (typeof data.line_id === 'string') {
+              const parsed = JSON.parse(data.line_id);
+              parsedLineIds = Array.isArray(parsed) && parsed.length > 0 ? parsed : [data.line_id];
+            } else if (Array.isArray(data.line_id)) {
+              parsedLineIds = data.line_id;
+            } else {
+              parsedLineIds = [String(data.line_id)];
+            }
+          }
+          
+          if (data.branch_id != null && data.branch_id !== '') {
+            branchIdToStore = String(data.branch_id);
+          }
+        } catch (error) {
+          console.warn('🔑 Error parsing line_id/branch_id:', error);
+        }
+        
+        await AsyncStorage.setItem('user_line_ids', JSON.stringify(parsedLineIds));
+        await AsyncStorage.setItem('user_branch_id', branchIdToStore);
+        await AsyncStorage.setItem('lineId', parsedLineIds[0]);
+        await AsyncStorage.setItem('branchId', branchIdToStore);
+        
+        // Store additional fields
+        await AsyncStorage.setItem('userId', data.id?.toString() || '');
+        await AsyncStorage.setItem('userName', data.name || '');
+        await AsyncStorage.setItem('userPhone', data.phone || '');
+        await AsyncStorage.setItem('userRole', data.role || '');
+        await AsyncStorage.setItem('userRoleId', data.roleid?.toString() || '');
+        await AsyncStorage.setItem('userDevice', data.device || '');
+        await AsyncStorage.setItem('loanType', data.loan_type?.toString() || '');
+        await AsyncStorage.setItem('loanPeriod', data.loan_period?.toString() || '');
+        
+        console.log('� Login successful and data stored');
+      }
+      
+      // Update auth context
+      await login({ phone, password, device_id: deviceId });
+      
+      // Reset states
+      setIsLoading(false);
+      setDeviceConflictData(null);
+      
+    } catch (error) {
+      console.error('🔑 Login error:', error);
+      
+      // Check if it's a device conflict error (code 600)
+      if (error.response?.data?.code === 600) {
+        console.log('🔄 Device conflict detected from error, showing alert...');
+        
+        // Extract token from error response if available
+        const conflictToken = error.response?.data?.token || null;
+        const conflictMessage = error.response?.data?.message || 'You are logged in on another device. Do you want to continue on this mobile?';
+        
+        // Store conflict data for later use
+        setDeviceConflictData({
+          phone: phone,
+          deviceId: await getDeviceId(),
+          token: conflictToken,
+          message: conflictMessage
+        });
+        
+        // Stop loading and show alert
+        setIsLoading(false);
+        
+        // Show device conflict alert
+        showWarning(
+          'Device Conflict',
+          conflictMessage,
+          [
+            {
+              text: 'No',
+              style: 'cancel',
+              onPress: () => {
+                console.log('🔄 User cancelled device change');
+                setDeviceConflictData(null);
+              }
+            },
+            {
+              text: 'Yes',
+              onPress: async () => {
+                console.log('🔄 User confirmed device change');
+                setIsLoading(true); // Resume loading
+                
+                // Get current device ID
+                const currentDeviceId = await getDeviceId();
+                
+                // Call change-device API with token if available
+                await handleChangeDevice(phone, currentDeviceId, conflictToken);
+              }
+            }
+          ]
+        );
+        
+        // Return here to prevent error from being re-thrown
+        return;
+      } else {
+        // Handle other login errors
+        const message = getLoginErrorMessage(error);
+        setErrors({ general: message });
+        showError('Error', message);
+        setIsLoading(false);
       }
     }
   };
@@ -64,13 +333,26 @@ const LoginScreen = ({ navigation }) => {
       return;
     }
 
+    // Prevent multiple API calls
+    if (isLoading) {
+      console.log('🔄 Login already in progress, ignoring...');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrors({});
+    setDeviceConflictData(null);
+    
     try {
-      await login({ phone, password });
-      // Navigation will be handled automatically by AuthContext state change
+      // Perform login
+      await performLogin();
     } catch (error) {
-      const message = getLoginErrorMessage(error);
-      setErrors({ general: message });
-      showError('Error', message);
+      console.error('🔑 Login error in handleLogin:', error);
+      // Error is already handled in performLogin, but we need to ensure loading stops
+      // if performLogin doesn't handle it properly
+      if (error.response?.data?.code !== 600) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -152,7 +434,7 @@ const LoginScreen = ({ navigation }) => {
           <Button
             title={t('auth.signIn')}
             onPress={handleLogin}
-            loading={loading}
+            loading={isLoading || loading}
             style={styles.loginButton}
           />
 

@@ -107,6 +107,17 @@ export const AuthProvider = ({ children }) => {
       
       return data;
     } catch (error) {
+      console.error('🔑 AuthContext login error:', error);
+      
+      // Check for device conflict error (code 600) - don't treat as auth failure
+      if (error.response?.data?.code === 600) {
+        console.log('🔄 Device conflict detected in AuthContext, re-throwing to handle in LoginScreen');
+        // Don't dispatch AUTH_FAILURE for device conflicts - let LoginScreen handle it
+        dispatch({ type: 'AUTH_INITIALIZE' }); // Reset to initial state
+        throw error;
+      }
+      
+      // For all other errors, treat as auth failure
       dispatch({
         type: 'AUTH_FAILURE',
         payload: error.message,

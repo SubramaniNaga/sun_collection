@@ -3,16 +3,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Linking,
+    Modal,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
@@ -37,7 +37,7 @@ const getImageUrl = (imagePath) => {
 };
 
 const LoanCustomerListScreen = ({ navigation }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [loanList, setLoanList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,12 +111,6 @@ const LoanCustomerListScreen = ({ navigation }) => {
         String(loan?.id ?? '').includes(searchQuery)
     )
     : loanList;
-
-  // Function to truncate placeholder text to 20 characters with ellipsis
-  const getTruncatedPlaceholder = (text) => {
-    if (!text) return text;
-    return text.length > 20 ? text.substring(0, 20) + '...' : text;
-  };
 
   const handleCustomerSelect = (loan) => {
     navigation.navigate('LoanScreen', {
@@ -446,7 +440,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
           <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder={getTruncatedPlaceholder(t('loan.searchPlaceholder'))}
+            placeholder={language === 'en' ? 'Search by name, phone or ID' : t('loan.searchPlaceholder')}
             placeholderTextColor={COLORS.text.secondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -544,12 +538,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     padding: 0, // No padding
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body4, // Reduced font size for better single line fit
     color: COLORS.text.primary,
     backgroundColor: 'transparent',
     textAlign: 'left',
     height: 35, // Reduced height
-    lineHeight: 18, // Reduced line height
+    lineHeight: 16, // Reduced line height
     maxHeight: 35, // Force max height
   },
   searchIcon: {

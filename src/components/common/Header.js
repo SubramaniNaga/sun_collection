@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: SIZES.h3,
+    fontSize: SIZES.h4, // Reduced font size for Tamil text to fit on single line
     fontWeight: '600',
     color: COLORS.white,
     textAlign: 'center',

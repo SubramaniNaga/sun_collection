@@ -19,7 +19,7 @@ import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 const SEARCH_DEBOUNCE_MS = 400;
 
 const CustomerWithLoanScreen = ({ navigation }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
 
   // New vs Existing
@@ -71,43 +71,54 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           }));
           setLoanTypeOptions(options);
 
-          // Load stored loan type and period from AsyncStorage
+          // Load stored loan data and handle login response
           const loadStoredLoanData = async () => {
             try {
               const storedLoanType = await AsyncStorage.getItem('loanType');
               const storedLoanPeriod = await AsyncStorage.getItem('loanPeriod');
               
-              if (storedLoanType) {
-                setLoanTypeId(storedLoanType);
-                setIsLoanTypeDisabled(true); // Disable the field when stored value is used
-              } else {
-                // Set default to "Daily" if available (fallback)
-                const dailyOption = options.find(option =>
-                  option.label.toLowerCase() === 'daily'
-                );
-                if (dailyOption) {
-                  setLoanTypeId(dailyOption.value);
+              // If no stored data, try to get from login response
+              if (!storedLoanType) {
+                const loginResponse = await AsyncStorage.getItem('loginResponse');
+                if (loginResponse) {
+                  const loginData = JSON.parse(loginResponse);
+                  const loginLoanType = loginData?.data?.loan_type;
+                  const loginLoanPeriod = loginData?.data?.loan_period;
+                  
+                  if (loginLoanType) {
+                    // Find matching loan type from API list
+                    const matchingLoanType = options.find(option => 
+                      option.label.toLowerCase() === loginLoanType.toLowerCase()
+                    );
+                    
+                    if (matchingLoanType) {
+                      // Auto-select the matching loan type
+                      setLoanTypeId(matchingLoanType.value);
+                      setIsLoanTypeDisabled(true);
+                      
+                      // Store for future use
+                      await AsyncStorage.setItem('loanType', matchingLoanType.value);
+                      
+                      // For daily loans, set and disable period
+                      if (loginLoanType.toLowerCase() === 'daily' && loginLoanPeriod) {
+                        setLoanPeriod(loginLoanPeriod);
+                        setIsLoanPeriodDisabled(true);
+                        await AsyncStorage.setItem('loanPeriod', loginLoanPeriod);
+                      }
+                    }
+                  }
                 }
-                setIsLoanTypeDisabled(false); // Keep field enabled when no stored value
-              }
-              
-              if (storedLoanPeriod) {
-                setLoanPeriod(storedLoanPeriod);
-                setIsLoanPeriodDisabled(true); // Disable the field when stored value is used
               } else {
-                setIsLoanPeriodDisabled(false); // Keep field enabled when no stored value
+                // Use stored data if available
+                setLoanTypeId(storedLoanType);
+                setIsLoanTypeDisabled(true);
+                if (storedLoanPeriod) {
+                  setLoanPeriod(storedLoanPeriod);
+                  setIsLoanPeriodDisabled(true);
+                }
               }
             } catch (error) {
               console.error('Error loading stored loan data:', error);
-              // Fallback to "Daily" if available
-              const dailyOption = options.find(option =>
-                option.label.toLowerCase() === 'daily'
-              );
-              if (dailyOption) {
-                setLoanTypeId(dailyOption.value);
-              }
-              setIsLoanTypeDisabled(false); // Keep field enabled on error
-              setIsLoanPeriodDisabled(false); // Keep field enabled on error
             }
           };
           
@@ -480,9 +491,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 label={t('customer.customerPhone')}
                 value={customerPhone}
                 onChangeText={handlePhoneChange}
-                placeholder={t('auth.enterPhone')}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
+                placeholder={language === 'en' ? '10 digit mobile number' : '10 இலக்க மொபைல் எண்ணை'}
+                placeholderTextColor={COLORS.text.tertiary}
                 maxLength={10}
                 error={errors.customerPhone}
                 required
@@ -492,7 +502,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 label={t('customer.customerName')}
                 value={customerName}
                 onChangeText={setCustomerName}
-                placeholder={t('customer.customerName')}
+                placeholder={language === 'en' ? 'Full name' : 'முழு பெயர்'}
                 error={errors.customerName}
                 required
               />
@@ -501,9 +511,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 label={t('customer.customerAddress')}
                 value={customerAddress}
                 onChangeText={setCustomerAddress}
-                placeholder={t('customer.customerAddress')}
+                placeholder={language === 'en' ? 'Full address' : 'முழு முகவரி'}
                 multiline
-                numberOfLines={3}
+                numberOfLines={2}
                 error={errors.customerAddress}
                 required
               />
@@ -512,7 +522,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 label={t('customer.loanAmount')}
                 value={loanAmount}
                 onChangeText={setLoanAmount}
-                placeholder={t('customer.enterLoanAmount')}
+                placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                 keyboardType="numeric"
                 error={errors.loanAmount}
                 required
@@ -523,7 +533,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 value={loanTypeId}
                 onValueChange={setLoanTypeId}
                 items={loanTypeOptions}
-                placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : t('customer.selectLoanType')}
+                placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : (language === 'en' ? 'Select loan type' : 'கடன் வகையை தேர்ந்தெடுக்கவும்')}
                 error={errors.loanTypeId}
                 editable={!isLoanTypeDisabled}
               />
@@ -532,7 +542,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 label={`${t('customer.loanPeriod')} (${periodUnit})`}
                 value={loanPeriod}
                 onChangeText={setLoanPeriod}
-                placeholder={t('customer.enterLoanPeriod')}
+                placeholder={language === 'en' ? 'Enter period' : 'காலத்தை உள்ளிடவும்'}
+                placeholderTextColor={COLORS.text.tertiary}
                 keyboardType="numeric"
                 error={errors.loanPeriod}
                 disabled={isLoanPeriodDisabled}
@@ -553,7 +564,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder={t('customer.enterPhoneToSearch')}
+                  placeholder={language === 'en' ? 'Enter phone number to search' : t('customer.enterPhoneToSearch')}
                   placeholderTextColor={COLORS.text.tertiary}
                   value={existingSearch}
                   onChangeText={setExistingSearch}
@@ -662,7 +673,8 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
   },
   existingSearchLabel: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body2, // Increased font size for label
+    fontWeight: '600', // Added font weight for emphasis
     color: COLORS.primary,
     marginBottom: SIZES.base,
   },
@@ -682,7 +694,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: SIZES.padding,
-    fontSize: SIZES.body2,
+    fontSize: SIZES.body4, // Reduced font size for placeholder
     color: COLORS.black,
   },
   searchLoader: {
