@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
@@ -16,11 +17,7 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -35,7 +32,13 @@ const HomeScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+    }, [fetchDashboardData])
+  );
 
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification drawer
@@ -44,6 +47,9 @@ const HomeScreen = ({ navigation }) => {
     // navigation.navigate('Notifications');
   };
 
+  
+
+  
   const menuItems = [
     {
       id: 'collection',

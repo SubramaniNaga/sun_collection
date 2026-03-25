@@ -9,6 +9,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import apiClient from '../../api/apiClient';
 import Button from '../../components/common/Button';
 import Header from '../../components/common/Header';
+import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 
@@ -23,6 +24,7 @@ const AddCustomerScreen = ({ navigation }) => {
   const [askAmount, setAskAmount] = useState('');
   const [customerPhoto, setCustomerPhoto] = useState(null);
   const [aadharImage, setAadharImage] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -68,7 +70,7 @@ const AddCustomerScreen = ({ navigation }) => {
         showWarning('Permission Required', 'Camera permission is required to take photo');
         return;
       }
-      const asset = await pickFromCamera([4, 3]);
+      const asset = await pickFromCamera();
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
       console.error('Photo capture error:', error?.message ?? error);
@@ -84,7 +86,7 @@ const AddCustomerScreen = ({ navigation }) => {
         showWarning('Permission Required', 'Gallery permission is required to select image');
         return;
       }
-      const asset = await pickFromLibrary([3, 2]);
+      const asset = await pickFromLibrary();
       if (asset) setAadharImage(asset);
     } catch (error) {
       console.error('Aadhar upload error:', error?.message ?? error);
@@ -228,7 +230,13 @@ const AddCustomerScreen = ({ navigation }) => {
             <View style={styles.photoContainer}>
               {customerPhoto ? (
                 <View style={styles.photoPreview}>
-                  <Image source={{ uri: customerPhoto.uri }} style={styles.photoImage} />
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewImage({ uri: customerPhoto.uri, title: 'Customer Photo' })}>
+                    <Image source={{ uri: customerPhoto.uri }} style={styles.photoImage} />
+                    <View style={styles.previewHint}>
+                      <Ionicons name="expand-outline" size={12} color={COLORS.white} />
+                      <Text style={styles.previewHintText}>Preview</Text>
+                    </View>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.removePhotoButton} onPress={() => setCustomerPhoto(null)}>
                     <Ionicons name="close-circle" size={24} color={COLORS.white} />
                   </TouchableOpacity>
@@ -250,7 +258,13 @@ const AddCustomerScreen = ({ navigation }) => {
             <View style={styles.photoContainer}>
               {aadharImage ? (
                 <View style={styles.photoPreview}>
-                  <Image source={{ uri: aadharImage.uri }} style={styles.aadharImage} />
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewImage({ uri: aadharImage.uri, title: 'Aadhar Card Image' })}>
+                    <Image source={{ uri: aadharImage.uri }} style={styles.aadharImage} />
+                    <View style={styles.previewHint}>
+                      <Ionicons name="expand-outline" size={12} color={COLORS.white} />
+                      <Text style={styles.previewHintText}>Preview</Text>
+                    </View>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.removePhotoButton} onPress={() => setAadharImage(null)}>
                     <Ionicons name="close-circle" size={24} color={COLORS.white} />
                   </TouchableOpacity>
@@ -278,6 +292,13 @@ const AddCustomerScreen = ({ navigation }) => {
           />
         </View>
       </KeyboardAvoidingView>
+
+      <ImagePreviewModal
+        visible={!!previewImage}
+        uri={previewImage?.uri ?? null}
+        title={previewImage?.title ?? ''}
+        onClose={() => setPreviewImage(null)}
+      />
     </SafeAreaView>
   );
 };
@@ -331,6 +352,22 @@ const styles = StyleSheet.create({
     right: 5,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 12,
+  },
+  previewHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  previewHintText: {
+    color: COLORS.white,
+    fontSize: 10,
+    marginLeft: 2,
   },
   photoPlaceholder: {
     width: 150,

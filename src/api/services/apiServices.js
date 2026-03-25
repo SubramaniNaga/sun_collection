@@ -676,6 +676,20 @@ export const apiServices = {
         throw error;
       }
     },
+
+    deleteExpense: async (expenseId) => {
+      try {
+        if (expenseId == null || expenseId === '') {
+          throw new Error('Expense ID is required for delete.');
+        }
+        console.log('🗑️ API: deleteExpense - DELETE', ENDPOINTS.EXPENSE.DELETE(expenseId));
+        const response = await apiClient.delete(ENDPOINTS.EXPENSE.DELETE(expenseId));
+        return response.data;
+      } catch (error) {
+        console.error('Delete expense error:', error);
+        throw error;
+      }
+    },
   },
 
   // Collection Services
@@ -794,67 +808,14 @@ export const apiServices = {
   dashboard: {
     getTodayStats: async () => {
       try {
-        console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY);
-        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY);
+        const deviceId = await AsyncStorage.getItem('deviceId');
+        const params = deviceId ? { device_id: deviceId } : {};
+        console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY, '| params:', params);
+        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY, { params });
         console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-      }
-    },
-
-    create: async (payload) => {
-      try {
-        const branchId = await AsyncStorage.getItem('branchId');
-        const lineId = await AsyncStorage.getItem('lineId');
-        const token = await AsyncStorage.getItem('authToken');
-
-        const formData = new FormData();
-        formData.append('title', String(payload.title ?? ''));
-        formData.append('category', String(payload.category ?? ''));
-        formData.append('amount', String(payload.amount ?? ''));
-        formData.append('date', String(payload.date ?? ''));
-        formData.append('description', String(payload.description ?? ''));
-        formData.append('branch_id', String(branchId ?? '1'));
-        formData.append('line_id', String(lineId ?? '1'));
-
-        if (payload.receiptImageUri) {
-          const uri = typeof payload.receiptImageUri === 'object' ? payload.receiptImageUri?.uri : payload.receiptImageUri;
-          if (uri) {
-            const name = uri.split('/').pop()?.split('?')[0] || 'receipt_image.png';
-            const type = (uri || '').toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg';
-            formData.append('receipt_image', { uri, name, type });
-          }
-        }
-
-        const path = ENDPOINTS.EXPENSE.CREATE;
-        const baseURL = apiClient.defaults?.baseURL || '';
-        const fullUrl = `${baseURL}${path}`;
-        const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-        const response = await fetch(fullUrl, {
-          method: 'POST',
-          headers,
-          body: formData,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          const err = new Error(data?.message || `HTTP ${response.status}`);
-          err.response = { status: response.status, data };
-          throw err;
-        }
-        return data;
-      } catch (error) {
-        console.error('Create expense error:', error);
-        if (error.name === 'AbortError') {
-          console.error('Create expense - request timed out');
-        }
+        console.error('Get today stats error:', error);
         throw error;
       }
     },
@@ -979,21 +940,6 @@ export const apiServices = {
         return response.data;
       } catch (error) {
         console.error('App version check error:', error);
-        throw error;
-      }
-    }
-  },
-
-  // Dashboard Services
-  dashboard: {
-    getTodayStats: async () => {
-      try {
-        console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY);
-        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY);
-        console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
-        return response.data;
-      } catch (error) {
-        console.error('Get today dashboard stats error:', error);
         throw error;
       }
     }

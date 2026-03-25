@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
-import { Image, Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 import { showAlert, showError, showWarning } from '../../utils/alertService';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
+import ImagePreviewModal from './ImagePreviewModal';
 
 const CustomImagePicker = ({
   image,
@@ -12,6 +14,7 @@ const CustomImagePicker = ({
   editable = true,
   style = {},
 }) => {
+  const [previewVisible, setPreviewVisible] = useState(false);
   const pickImage = async (source) => {
     if (!editable) return;
 
@@ -22,7 +25,7 @@ const CustomImagePicker = ({
           showWarning('Permission Required', 'Camera permission is required to take photos.');
           return;
         }
-        const asset = await pickFromCamera([4, 3]);
+        const asset = await pickFromCamera();
         if (asset) onImageChange(asset);
       } else {
         const mediaPermission = await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
@@ -30,7 +33,7 @@ const CustomImagePicker = ({
           showWarning('Permission Required', 'Gallery permission is required to select photos.');
           return;
         }
-        const asset = await pickFromLibrary([4, 3]);
+        const asset = await pickFromLibrary();
         if (asset) onImageChange(asset);
       }
     } catch (error) {
@@ -71,15 +74,32 @@ const CustomImagePicker = ({
           borderRadius: SIZES.radius,
           overflow: 'hidden',
         }}>
-          <Image
-            source={{ uri: image.uri }}
-            style={{
-              width: '100%',
-              height: 200,
-              backgroundColor: COLORS.lightGray,
-            }}
-            resizeMode="cover"
-          />
+          <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewVisible(true)}>
+            <Image
+              source={{ uri: image.uri }}
+              style={{
+                width: '100%',
+                height: 200,
+                backgroundColor: COLORS.lightGray,
+              }}
+              resizeMode="cover"
+            />
+            {/* Tap-to-preview hint */}
+            <View style={{
+              position: 'absolute',
+              bottom: 6,
+              right: 8,
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              borderRadius: 12,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}>
+              <Ionicons name="expand-outline" size={12} color={COLORS.white} />
+              <Text style={{ color: COLORS.white, fontSize: 11, marginLeft: 3 }}>Preview</Text>
+            </View>
+          </TouchableOpacity>
           {editable && (
             <View style={{
               flexDirection: 'row',
@@ -231,6 +251,13 @@ const CustomImagePicker = ({
           {error}
         </Text>
       )}
+
+      <ImagePreviewModal
+        visible={previewVisible}
+        uri={image?.uri ?? null}
+        title="Receipt Image"
+        onClose={() => setPreviewVisible(false)}
+      />
     </View>
   );
 };

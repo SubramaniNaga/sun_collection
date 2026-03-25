@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
 import Header from '../../components/common/Header';
+import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import CollectionHistory from '../../models/CollectionHistory';
 import { useLanguage } from '../../store/LanguageContext';
@@ -240,8 +241,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={COLORS.primary} />
-        <Text style={styles.loadingMoreText}>{t('collectionHistory.loadingMore')}</Text>
+        <ListSkeleton count={2} />
       </View>
     );
   };
@@ -494,15 +494,8 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     marginTop: SIZES.margin,
   },
-  loadingMoreText: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    marginTop: SIZES.base,
-    textAlign: 'center',
-  },
   footerLoader: {
-    paddingVertical: SIZES.margin,
-    alignItems: 'center',
+    paddingVertical: SIZES.base,
   },
   listContainer: {
     paddingTop: SIZES.base,

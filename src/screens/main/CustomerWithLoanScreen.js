@@ -10,6 +10,7 @@ import apiServices from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
 import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
+import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
@@ -55,6 +56,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [errors, setErrors] = useState({});
+  const [previewImage, setPreviewImage] = useState(null);
 
   // Fetch loan types from API when screen mounts (for New customer form)
   useEffect(() => {
@@ -276,7 +278,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           showError(t('common.error'), t('customer.imageRequired'));
           return;
         }
-        const image = await pickFromCamera([3, 2]);
+        const image = await pickFromCamera();
         if (image) {
           if (type === 'aadhar') setAadharImage(image);
           else if (type === 'customer') setCustomerPhoto(image);
@@ -288,7 +290,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           showError(t('common.error'), t('customer.imageRequired'));
           return;
         }
-        const image = await pickFromLibrary([3, 2]);
+        const image = await pickFromLibrary();
         if (image) {
           if (type === 'aadhar') setAadharImage(image);
           else if (type === 'customer') setCustomerPhoto(image);
@@ -399,7 +401,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       <Text style={styles.imageLabel}>{title}</Text>
       {image ? (
         <View style={styles.imagePreview}>
-          <Image source={{ uri: image.uri }} style={styles.image} />
+          <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewImage({ uri: image.uri, title })}>
+            <Image source={{ uri: image.uri }} style={styles.image} />
+            <View style={styles.previewHint}>
+              <Ionicons name="expand-outline" size={12} color={COLORS.white} />
+              <Text style={styles.previewHintText}>Preview</Text>
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.removeImageButton}
             onPress={() => {
@@ -618,6 +626,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           />
         </View>
       )}
+      <ImagePreviewModal
+        visible={!!previewImage}
+        uri={previewImage?.uri ?? null}
+        title={previewImage?.title ?? ''}
+        onClose={() => setPreviewImage(null)}
+      />
     </SafeAreaView>
   );
 };
@@ -783,6 +797,22 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  previewHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  previewHintText: {
+    color: COLORS.white,
+    fontSize: 10,
+    marginLeft: 2,
   },
   removeImageButton: {
     position: 'absolute',

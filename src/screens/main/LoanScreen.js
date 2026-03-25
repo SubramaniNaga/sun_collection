@@ -3,10 +3,11 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
@@ -14,7 +15,6 @@ import { formatDisplayDate } from '../../utils/dateFormatter';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const formatLoanAmount = (val) => {
   if (val == null || val === '') return '—';
@@ -196,7 +196,7 @@ const LoanScreen = ({ navigation, route }) => {
         showError(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
-      const asset = await pickFromCamera([4, 3]);
+      const asset = await pickFromCamera();
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
       console.error('Photo capture error:', error?.message ?? error);
@@ -212,7 +212,7 @@ const LoanScreen = ({ navigation, route }) => {
         showError(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
-      const asset = await pickFromCamera([3, 2]);
+      const asset = await pickFromCamera();
       if (asset) setAadharCardImage(asset);
     } catch (error) {
       console.error('Aadhar capture error:', error?.message ?? error);
@@ -228,7 +228,7 @@ const LoanScreen = ({ navigation, route }) => {
         showError(t('common.error'), t('customer.galleryPermissionRequired'));
         return;
       }
-      const asset = await pickFromLibrary([3, 2]);
+      const asset = await pickFromLibrary();
       if (asset) setAadharCardImage(asset);
     } catch (error) {
       console.error('Aadhar upload error:', error?.message ?? error);
@@ -244,7 +244,7 @@ const LoanScreen = ({ navigation, route }) => {
         showError(t('common.error'), t('customer.cameraPermissionRequired'));
         return;
       }
-      const asset = await pickFromCamera([4, 3]);
+      const asset = await pickFromCamera();
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
       console.error('Loan given photo capture error:', error?.message ?? error);
@@ -259,7 +259,7 @@ const LoanScreen = ({ navigation, route }) => {
         showError(t('common.error'), t('customer.galleryPermissionRequired'));
         return;
       }
-      const asset = await pickFromLibrary([4, 3]);
+      const asset = await pickFromLibrary();
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
       console.error('Loan given photo upload error:', error?.message ?? error);
@@ -762,7 +762,19 @@ const LoanScreen = ({ navigation, route }) => {
                     <Text style={styles.loanGivenImageLabel}>{t('loan.loanGivenPhoto')}</Text>
                     {loanGivenPhoto ? (
                       <View style={styles.loanGivenImagePreview}>
-                        <Image source={{ uri: loanGivenPhoto.uri || loanGivenPhoto.localUri }} style={styles.loanGivenImage} resizeMode="cover" />
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            setSelectedImage({ uri: loanGivenPhoto.uri || loanGivenPhoto.localUri, title: t('loan.loanGivenPhoto') });
+                            setImageViewerVisible(true);
+                          }}
+                        >
+                          <Image source={{ uri: loanGivenPhoto.uri || loanGivenPhoto.localUri }} style={styles.loanGivenImage} resizeMode="cover" />
+                          <View style={styles.loanGivenPreviewHint}>
+                            <Ionicons name="expand-outline" size={12} color={COLORS.white} />
+                            <Text style={styles.loanGivenPreviewHintText}>Preview</Text>
+                          </View>
+                        </TouchableOpacity>
                         <TouchableOpacity style={styles.loanGivenRemoveButton} onPress={() => setLoanGivenPhoto(null)} activeOpacity={0.7}>
                           <Ionicons name="close-circle" size={24} color={COLORS.white} />
                         </TouchableOpacity>
@@ -853,42 +865,12 @@ const LoanScreen = ({ navigation, route }) => {
         </SafeAreaView>
       )}
 
-      {/* Full Image Viewer Modal */}
-      <Modal
+      <ImagePreviewModal
         visible={imageViewerVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeImageViewer}
-      >
-        <View style={styles.imageViewerContainer}>
-          <SafeAreaView style={styles.imageViewerSafeArea}>
-            <View style={styles.imageViewerHeader}>
-              <Text style={styles.imageViewerTitle}>{selectedImage?.title || t('common.image')}</Text>
-              <TouchableOpacity
-                style={styles.imageViewerCloseButton}
-                onPress={closeImageViewer}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={28} color={COLORS.white} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              contentContainerStyle={styles.imageViewerScrollContent}
-              showsVerticalScrollIndicator={false}
-              showsHorizontalScrollIndicator={false}
-              bounces={false}
-            >
-              {selectedImage && (
-                <Image
-                  source={{ uri: selectedImage.uri }}
-                  style={styles.fullImage}
-                  resizeMode="contain"
-                />
-              )}
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      </Modal>
+        uri={selectedImage?.uri ?? null}
+        title={selectedImage?.title ?? t('common.image')}
+        onClose={closeImageViewer}
+      />
 
     </SafeAreaView>
   );
@@ -1293,47 +1275,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
-  imageViewerContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
-  },
-  imageViewerSafeArea: {
-    flex: 1,
-  },
-  imageViewerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding * 0.75,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  imageViewerTitle: {
-    fontSize: SIZES.h4,
-    fontWeight: '600',
-    color: COLORS.white,
-    flex: 1,
-  },
-  imageViewerCloseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imageViewerScrollContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: SCREEN_HEIGHT * 0.7,
-    paddingVertical: SIZES.padding * 2,
-  },
-  fullImage: {
-    width: SCREEN_WIDTH - (SIZES.padding * 2),
-    height: SCREEN_HEIGHT * 0.7,
-  },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1399,6 +1340,22 @@ const styles = StyleSheet.create({
   loanGivenImage: {
     width: '100%',
     height: '100%',
+  },
+  loanGivenPreviewHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loanGivenPreviewHintText: {
+    color: COLORS.white,
+    fontSize: 10,
+    marginLeft: 2,
   },
   loanGivenRemoveButton: {
     position: 'absolute',

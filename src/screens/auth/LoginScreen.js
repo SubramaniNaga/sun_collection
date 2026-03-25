@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
@@ -14,6 +14,7 @@ import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError, showInfo, showWarning } from '../../utils/alertService';
 import { getDeviceId } from '../../utils/deviceId';
+import { registerForPushNotificationsAsync } from '../../utils/notifications';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
@@ -22,9 +23,33 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [deviceConflictData, setDeviceConflictData] = useState(null);
+  const [fcmToken, setFcmToken] = useState(null);
 
   const { login, loading } = useAuthContext();
   const { t } = useLanguage();
+
+  // Generate FCM token when screen appears
+  useEffect(() => {
+    const generateFCMToken = async () => {
+      try {
+        console.log('🔔 Generating FCM token on LoginScreen mount...');
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+          console.log('🔔 FCM token generated successfully:', token);
+          setFcmToken(token);
+          // Store token for later use
+          await AsyncStorage.setItem('fcmToken', token);
+        } else {
+          console.log('🔔 FCM token generation failed or not supported');
+        }
+      } catch (error) {
+        console.warn('🔔 Error generating FCM token:', error);
+        // Don't show error to user for FCM token failure - it's optional
+      }
+    };
+
+    generateFCMToken();
+  }, []);
 
   const handlePhoneChange = (text) => {
     // Remove any non-numeric characters
@@ -107,14 +132,20 @@ const LoginScreen = ({ navigation }) => {
    * @param {string} phone - User phone number
    * @param {string} password - User password
    * @param {string} deviceId - Device ID
+   * @param {string} firebaseToken - FCM token (optional)
    * @returns {Promise} Login response
    */
-  const callLoginAPI = async (phone, password, deviceId) => {
+  const callLoginAPI = async (phone, password, deviceId, firebaseToken = null) => {
     const requestPayload = {
       phone: phone,
       password: password,
       device_id: deviceId
     };
+
+    // Add FCM token if available (optional)
+    if (firebaseToken) {
+      requestPayload.firebase_token = firebaseToken;
+    }
 
     console.log('🔑 Calling login API with payload:', JSON.stringify(requestPayload, null, 2));
     
@@ -133,8 +164,8 @@ const LoginScreen = ({ navigation }) => {
       // Get device ID for API call
       const deviceId = await getDeviceId();
       
-      // Call login API directly
-      const response = await callLoginAPI(phone, password, deviceId);
+      // Call login API directly with FCM token
+      const response = await callLoginAPI(phone, password, deviceId, fcmToken);
       
       // Check for device conflict in response (code 600)
       if (response.data?.code === 600) {
@@ -236,6 +267,9 @@ const LoginScreen = ({ navigation }) => {
         await AsyncStorage.setItem('userDevice', data.device || '');
         await AsyncStorage.setItem('loanType', data.loan_type?.toString() || '');
         await AsyncStorage.setItem('loanPeriod', data.loan_period?.toString() || '');
+        
+        // Store device ID for dashboard API calls
+        await AsyncStorage.setItem('deviceId', deviceId);
         
         console.log('� Login successful and data stored');
       }

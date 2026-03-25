@@ -4,20 +4,20 @@ import { Platform } from 'react-native';
 /**
  * Safe options for expo-image-picker that work on Android and iOS.
  * - Uses string 'images' for mediaTypes (SDK accepts MediaType | MediaType[]).
+ * - allowsEditing: false  — disables the built-in crop/edit UI.
+ * - quality: 0.5          — compresses the image to ~50% to reduce upload size.
  * - legacy: true on Android for library so selection from file system works.
  */
-const getCameraOptions = (aspect = [4, 3]) => ({
+const getCameraOptions = () => ({
   mediaTypes: 'images',
-  allowsEditing: true,
-  aspect,
-  quality: 0.8,
+  allowsEditing: false,
+  quality: 0.5,
 });
 
-const getLibraryOptions = (aspect = [4, 3]) => ({
+const getLibraryOptions = () => ({
   mediaTypes: 'images',
-  allowsEditing: true,
-  aspect,
-  quality: 0.8,
+  allowsEditing: false,
+  quality: 0.5,
   ...(Platform.OS === 'android' && { legacy: true }),
 });
 
@@ -25,8 +25,8 @@ const getLibraryOptions = (aspect = [4, 3]) => ({
  * Launch camera and return the selected asset or null.
  * On Android, tries getPendingResultAsync if the main result was canceled (activity may have been killed).
  */
-export async function pickFromCamera(aspect = [4, 3]) {
-  const result = await ImagePicker.launchCameraAsync(getCameraOptions(aspect));
+export async function pickFromCamera() {
+  const result = await ImagePicker.launchCameraAsync(getCameraOptions());
 
   if (!result.canceled && result.assets?.length > 0) {
     return result.assets[0];
@@ -49,8 +49,8 @@ export async function pickFromCamera(aspect = [4, 3]) {
 /**
  * Launch image library and return the selected asset or null.
  */
-export async function pickFromLibrary(aspect = [4, 3]) {
-  const result = await ImagePicker.launchImageLibraryAsync(getLibraryOptions(aspect));
+export async function pickFromLibrary() {
+  const result = await ImagePicker.launchImageLibraryAsync(getLibraryOptions());
 
   if (!result.canceled && result.assets?.length > 0) {
     return result.assets[0];

@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   ScrollView,
@@ -19,7 +20,21 @@ import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { formatCurrency } from '../../utils/amountFormatters';
-import { formatDisplayDate } from '../../utils/dateFormatter';
+import { formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
+
+const isToday = (dateVal) => {
+  if (dateVal == null || dateVal === '') return false;
+  try {
+    const d = dateVal instanceof Date ? dateVal : new Date(dateVal);
+    if (Number.isNaN(d.getTime())) return false;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}` === getCurrentDateString();
+  } catch {
+    return false;
+  }
+};
 
 const LIMIT = 10;
 
@@ -38,6 +53,7 @@ const ExpensesScreen = ({ navigation }) => {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -96,6 +112,43 @@ const ExpensesScreen = ({ navigation }) => {
     fetchExpenses(pagination.currentPage + 1, true);
   }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchExpenses]);
 
+  const handleDeleteExpense = useCallback(
+    (expense) => {
+      const expenseId = expense?.id;
+      if (expenseId == null || expenseId === '') {
+        Alert.alert(t('common.error'), t('errors.somethingWentWrong'));
+        return;
+      }
+
+      Alert.alert(
+        t('common.delete'),
+        'Are you sure you want to delete this expense?',
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('common.delete'),
+            style: 'destructive',
+            onPress: async () => {
+              setDeletingId(expenseId);
+              try {
+                await apiServices.expense.deleteExpense(expenseId);
+                await fetchExpenses(1, false);
+                Alert.alert(t('common.success'), t('success.deleted'));
+              } catch (err) {
+                console.error('Delete expense error:', err);
+                Alert.alert(t('common.error'), err?.message || t('errors.somethingWentWrong'));
+              } finally {
+                setDeletingId(null);
+              }
+            },
+          },
+        ],
+        { cancelable: true }
+      );
+    },
+    [t, fetchExpenses]
+  );
+
   const filteredExpenses = (() => {
     if (selectedFilter === t('common.all')) return expenses;
     const statusMap = {
@@ -122,36 +175,47 @@ const ExpensesScreen = ({ navigation }) => {
   const renderExpenseItem = ({ item }) => {
     const dateVal = item.expense_date ?? item.date;
     const amountVal = item.amount ?? 0;
-    const statusLabel = item.status != null ? String(item.status) : 'Pending';
     const status = STATUS_CONFIG[item.status] || { label: 'Unknown', color: '#6B7280', bg: '#E5E7EB' };
+    const expenseId = item?.id;
+    const hasExpenseId = expenseId != null && expenseId !== '';
+    const todayExpense = isToday(dateVal);
+    const isDeleting = deletingId != null && String(deletingId) === String(expenseId);
+    const canDelete = hasExpenseId && todayExpense;
 
     return (
       <View style={styles.expenseCard}>
-        <View style={styles.expenseGrid}>
-          {/* Top Row: Title and Date */}
-          <View style={styles.expenseTopRow}>
-            <View style={styles.expenseTitleContainer}>
-              <Text style={styles.expenseTitle} numberOfLines={1}>{item.title ?? '—'}</Text>
-            </View>
-            <View style={styles.expenseDateContainer}>
-              <Text style={styles.dateText}>{formatDisplayDate(dateVal)}</Text>
-            </View>
-          </View>
-          
-          {/* Bottom Row: Status and Amount */}
-          <View style={styles.expenseBottomRow}>
-            <View style={styles.expenseStatusContainer}>
-              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                <Text style={[styles.statusText, { color: status.color }]}>
-                  {status.label}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.expenseAmountContainer}>
-              <Text style={styles.amountText}>{formatCurrency(amountVal)}</Text>
-            </View>
+        {/* Left: Title + Status badge */}
+        <View style={styles.expenseLeft}>
+          <Text style={styles.expenseTitle} numberOfLines={1}>{item.title ?? '—'}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
         </View>
+
+        {/* Right: Date + Amount */}
+        <View style={styles.expenseRight}>
+          <Text style={styles.dateText}>{formatDisplayDate(dateVal)}</Text>
+          <Text style={styles.amountText}>{formatCurrency(amountVal)}</Text>
+        </View>
+
+        {/* Trash icon — vertically centred on the far right */}
+        <TouchableOpacity
+          style={[styles.deleteIconButton, !canDelete && styles.deleteIconButtonDisabled]}
+          onPress={canDelete ? () => handleDeleteExpense(item) : undefined}
+          disabled={!canDelete || isDeleting}
+          accessibilityRole="button"
+          accessibilityLabel={canDelete ? 'Delete expense' : 'Cannot delete past expense'}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color={COLORS.text.secondary} />
+          ) : (
+            <Ionicons
+              name="trash-outline"
+              size={16}
+              color={canDelete ? COLORS.error : COLORS.border}
+            />
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -326,64 +390,47 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.padding,
   },
   expenseCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
-    padding: SIZES.padding * 0.75,
-    marginBottom: SIZES.margin * 0.4,
+    paddingVertical: SIZES.base,
+    paddingHorizontal: SIZES.padding * 0.75,
+    marginBottom: SIZES.base * 0.75,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 1,
   },
-  expenseGrid: {
-    flex: 1,
-  },
-  expenseTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SIZES.base * 0.5,
-  },
-  expenseBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  expenseTitleContainer: {
+  expenseLeft: {
     flex: 1,
     marginRight: SIZES.base,
   },
-  expenseDateContainer: {
+  expenseRight: {
     alignItems: 'flex-end',
-    minWidth: 80,
+    marginRight: SIZES.base * 0.75,
   },
-  expenseStatusContainer: {
-    flex: 1,
-    marginRight: SIZES.base,
+  deleteIconButton: {
+    padding: SIZES.base * 0.75,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  expenseAmountContainer: {
-    alignItems: 'flex-end',
-    minWidth: 80,
+  deleteIconButtonDisabled: {
+    opacity: 0.35,
   },
   expenseTitle: {
-    fontSize: SIZES.body2,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  expenseMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  categoryText: {
     fontSize: SIZES.body3,
+    fontWeight: '600',
     color: COLORS.text.secondary,
+    marginBottom: SIZES.base * 0.4,
   },
   dateText: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body4,
     color: COLORS.text.tertiary,
+    marginBottom: SIZES.base * 0.4,
   },
   amountText: {
     fontSize: SIZES.body3,
@@ -485,10 +532,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusBadge: {
-    paddingVertical: SIZES.base * 0.25,
-    paddingHorizontal: SIZES.base,
-    borderRadius: SIZES.radius,
+    paddingVertical: 2,
+    paddingHorizontal: SIZES.base * 0.75,
+    borderRadius: SIZES.radius * 0.75,
     alignSelf: 'flex-start',
+  },
+  statusText: {
+    fontSize: SIZES.body4,
+    fontWeight: '600',
   },
 });
 

@@ -39,6 +39,7 @@ export const ENDPOINTS = {
   EXPENSE: {
     CREATE: '/expense',
     LIST: '/expense',
+    DELETE: (id) => `/expense/${id}`,
   },
   UPFRONT_CASH: {
     LIST: '/frontcash',
