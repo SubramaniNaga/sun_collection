@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   button: {
-    paddingVertical: SIZES.base * 0.75,
+    paddingVertical: SIZES.base * 1.25,
     paddingHorizontal: SIZES.base,
     minWidth: 60,
     flex: 1,

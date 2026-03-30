@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
+import { compressImageAssetIfNeeded } from './imageCompression';
 
 /**
  * Safe options for expo-image-picker that work on Android and iOS.
@@ -29,14 +30,14 @@ export async function pickFromCamera() {
   const result = await ImagePicker.launchCameraAsync(getCameraOptions());
 
   if (!result.canceled && result.assets?.length > 0) {
-    return result.assets[0];
+    return compressImageAssetIfNeeded(result.assets[0]);
   }
 
   if (Platform.OS === 'android' && result.canceled) {
     try {
       const pending = await ImagePicker.getPendingResultAsync();
       if (pending && !pending.canceled && pending.assets?.length > 0) {
-        return pending.assets[0];
+        return compressImageAssetIfNeeded(pending.assets[0]);
       }
     } catch (e) {
       console.warn('getPendingResultAsync fallback failed:', e?.message);
@@ -53,7 +54,7 @@ export async function pickFromLibrary() {
   const result = await ImagePicker.launchImageLibraryAsync(getLibraryOptions());
 
   if (!result.canceled && result.assets?.length > 0) {
-    return result.assets[0];
+    return compressImageAssetIfNeeded(result.assets[0]);
   }
 
   return null;

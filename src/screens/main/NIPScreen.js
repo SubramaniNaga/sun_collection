@@ -15,6 +15,8 @@ import {
 
   Modal,
 
+  RefreshControl,
+
   StyleSheet,
 
   Text,
@@ -40,7 +42,7 @@ import NIPLoan from '../../models/NIPLoan';
 
 import { useLanguage } from '../../store/LanguageContext';
 
-import { showError } from '../../utils/alertService';
+import { getApiErrorMessage, showError } from '../../utils/alertService';
 
 import { formatCurrency } from '../../utils/amountFormatters';
 
@@ -67,128 +69,6 @@ const getImageUrl = (imagePath) => {
   return `${API_BASE_URL}/api/v1${cleanPath}`;
 
 };
-
-
-
-// Dummy data for fallback (customer_photo optional; same keys as API when response available)
-
-const getDummyData = () => [
-
-  {
-
-    id: 1,
-
-    customer_id: 1,
-
-    customer_name: 'John Doe',
-
-    customer_phone: '9876543210',
-
-    customer_no: '001',
-
-    customer_photo: null,
-
-    loan_amount: '50000.00',
-
-    approved_amount: '45000.00',
-
-    balance_amount: '30000.00',
-
-    loan_period: 12,
-
-    approval_status: '1',
-
-    loan_status: '2',
-
-    requested_date: '2026-01-15T00:00:00.000Z',
-
-    branch: 'Coimbatore',
-
-    line_name: 'A Line',
-
-    address_latitude: '12.9716',
-
-    address_longitude: '77.5946',
-
-  },
-
-  {
-
-    id: 2,
-
-    customer_id: 2,
-
-    customer_name: 'Jane Smith',
-
-    customer_phone: '9876543211',
-
-    customer_no: '002',
-
-    customer_photo: null,
-
-    loan_amount: '75000.00',
-
-    approved_amount: '70000.00',
-
-    balance_amount: '50000.00',
-
-    loan_period: 24,
-
-    approval_status: '1',
-
-    loan_status: '3',
-
-    requested_date: '2026-01-20T00:00:00.000Z',
-
-    branch: 'Coimbatore',
-
-    line_name: 'B Line',
-
-    address_latitude: '12.9717',
-
-    address_longitude: '77.5947',
-
-  },
-
-  {
-
-    id: 3,
-
-    customer_id: 3,
-
-    customer_name: 'Robert Johnson',
-
-    customer_phone: '9876543212',
-
-    customer_no: '003',
-
-    customer_photo: null,
-
-    loan_amount: '100000.00',
-
-    approved_amount: null,
-
-    balance_amount: null,
-
-    loan_period: 36,
-
-    approval_status: '0',
-
-    loan_status: '0',
-
-    requested_date: '2026-02-01T00:00:00.000Z',
-
-    branch: 'Coimbatore',
-
-    line_name: 'A Line',
-
-    address_latitude: '12.9718',
-
-    address_longitude: '77.5948',
-
-  },
-
-];
 
 
 
@@ -220,15 +100,23 @@ const NIPScreen = ({ navigation }) => {
 
   const [photoModalUri, setPhotoModalUri] = useState(null);
 
+  const [refreshing, setRefreshing] = useState(false);
 
 
-  const fetchNIPLoans = useCallback(async (page = 1, append = false) => {
+
+  const fetchNIPLoans = useCallback(async (page = 1, append = false, options = {}) => {
+
+    const { skipFullScreenLoader = false } = options;
 
     try {
 
-      if (page === 1) {
+      if (page === 1 && !append && !skipFullScreenLoader) {
 
         setLoading(true);
+
+        setError(null);
+
+      } else if (page === 1 && !append && skipFullScreenLoader) {
 
         setError(null);
 
@@ -256,45 +144,19 @@ const NIPScreen = ({ navigation }) => {
 
       const pag = response?.pagination || {};
 
+      const nipLoans = NIPLoan.fromApiResponseArray(list);
 
+      setNipList((prev) => (append ? [...prev, ...nipLoans] : nipLoans));
 
-      // If no data from API, use dummy data (only on first page)
+      setPagination({
 
-      if (list.length === 0 && page === 1 && !append) {
+        currentPage: pag.currentPage ?? page,
 
-        const dummyData = getDummyData();
+        hasNextPage: Boolean(pag.hasNextPage),
 
-        const nipLoans = NIPLoan.fromApiResponseArray(dummyData);
+        totalPages: pag.totalPages ?? 1,
 
-        setNipList(nipLoans);
-
-        setPagination({
-
-          currentPage: 1,
-
-          hasNextPage: false,
-
-          totalPages: 1,
-
-        });
-
-      } else {
-
-        const nipLoans = NIPLoan.fromApiResponseArray(list);
-
-        setNipList((prev) => (append ? [...prev, ...nipLoans] : nipLoans));
-
-        setPagination({
-
-          currentPage: pag.currentPage ?? page,
-
-          hasNextPage: Boolean(pag.hasNextPage),
-
-          totalPages: pag.totalPages ?? 1,
-
-        });
-
-      }
+      });
 
     } catch (err) {
 
@@ -302,15 +164,9 @@ const NIPScreen = ({ navigation }) => {
 
       if (page === 1) {
 
-        // On error, show dummy data
+        setNipList([]);
 
-        const dummyData = getDummyData();
-
-        const nipLoans = NIPLoan.fromApiResponseArray(dummyData);
-
-        setNipList(nipLoans);
-
-        setError(null); // Don't show error, just use dummy data
+        setError(getApiErrorMessage(err, t('nip.failedToLoad')));
 
       }
 
@@ -322,7 +178,25 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-  }, [searchQuery]);
+  }, [searchQuery, t]);
+
+
+
+  const onRefresh = useCallback(async () => {
+
+    setRefreshing(true);
+
+    try {
+
+      await fetchNIPLoans(1, false, { skipFullScreenLoader: true });
+
+    } finally {
+
+      setRefreshing(false);
+
+    }
+
+  }, [fetchNIPLoans]);
 
 
 
@@ -792,27 +666,33 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
+    if (nipList.length > 0 && searchQuery.trim() && filteredList.length === 0) {
+
+      return (
+
+        <View style={styles.emptyState}>
+
+          <Ionicons name="search-outline" size={48} color={COLORS.text.tertiary} />
+
+          <Text style={styles.emptyStateText}>{t('nip.noSearchMatches')}</Text>
+
+          <Text style={styles.emptyStateSubText}>{t('common.search')}</Text>
+
+        </View>
+
+      );
+
+    }
+
     return (
 
       <View style={styles.emptyState}>
 
         <Ionicons name="document-text-outline" size={48} color={COLORS.text.tertiary} />
 
-        <Text style={styles.emptyStateText}>
+        <Text style={styles.emptyStateText}>{t('nip.noNIPLoans')}</Text>
 
-          {searchQuery.trim() ? t('nip.noNIPLoans') : t('nip.noNIPLoans')}
-
-        </Text>
-
-        <Text style={styles.emptyStateSubText}>
-
-          {searchQuery.trim()
-
-            ? t('common.search')
-
-            : t('nip.noNIPLoans')}
-
-        </Text>
+        <Text style={styles.emptyStateSubText}>{t('nip.noNIPLoansHint')}</Text>
 
       </View>
 
@@ -915,6 +795,22 @@ const NIPScreen = ({ navigation }) => {
         ListEmptyComponent={renderEmpty}
 
         ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
+
+        refreshControl={
+
+          <RefreshControl
+
+            refreshing={refreshing}
+
+            onRefresh={onRefresh}
+
+            colors={[COLORS.primary]}
+
+            tintColor={COLORS.primary}
+
+          />
+
+        }
 
       />
 

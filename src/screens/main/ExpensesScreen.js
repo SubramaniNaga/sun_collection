@@ -4,14 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
@@ -19,6 +18,7 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
 
@@ -116,14 +116,19 @@ const ExpensesScreen = ({ navigation }) => {
     (expense) => {
       const expenseId = expense?.id;
       if (expenseId == null || expenseId === '') {
-        Alert.alert(t('common.error'), t('errors.somethingWentWrong'));
+        showAlert({
+          type: 'error',
+          title: t('common.error'),
+          message: t('errors.somethingWentWrong'),
+        });
         return;
       }
 
-      Alert.alert(
-        t('common.delete'),
-        'Are you sure you want to delete this expense?',
-        [
+      showAlert({
+        type: 'warning',
+        title: t('common.delete'),
+        message: 'Are you sure you want to delete this expense?',
+        buttons: [
           { text: t('common.cancel'), style: 'cancel' },
           {
             text: t('common.delete'),
@@ -133,18 +138,25 @@ const ExpensesScreen = ({ navigation }) => {
               try {
                 await apiServices.expense.deleteExpense(expenseId);
                 await fetchExpenses(1, false);
-                Alert.alert(t('common.success'), t('success.deleted'));
+                showAlert({
+                  type: 'success',
+                  title: t('common.success'),
+                  message: t('success.deleted'),
+                });
               } catch (err) {
                 console.error('Delete expense error:', err);
-                Alert.alert(t('common.error'), err?.message || t('errors.somethingWentWrong'));
+                showAlert({
+                  type: 'error',
+                  title: t('common.error'),
+                  message: err?.message || t('errors.somethingWentWrong'),
+                });
               } finally {
                 setDeletingId(null);
               }
             },
           },
         ],
-        { cancelable: true }
-      );
+      });
     },
     [t, fetchExpenses]
   );
@@ -192,30 +204,33 @@ const ExpensesScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Right: Date + Amount */}
+        {/* Right: Date + Amount + Delete Icon (only if can delete) */}
         <View style={styles.expenseRight}>
           <Text style={styles.dateText}>{formatDisplayDate(dateVal)}</Text>
-          <Text style={styles.amountText}>{formatCurrency(amountVal)}</Text>
+          <View style={styles.amountRow}>
+            <Text style={styles.amountText}>{formatCurrency(amountVal)}</Text>
+            {canDelete && (
+              <TouchableOpacity
+                style={styles.deleteIconButton}
+                onPress={() => handleDeleteExpense(item)}
+                disabled={isDeleting}
+                accessibilityRole="button"
+                accessibilityLabel="Delete expense"
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color={COLORS.error} />
+                ) : (
+                  <Ionicons
+                    name="trash-outline"
+                    size={16}
+                    color={COLORS.error}
+                  />
+                )}
+              </TouchableOpacity>
+            )}
+            
+          </View>
         </View>
-
-        {/* Trash icon — vertically centred on the far right */}
-        <TouchableOpacity
-          style={[styles.deleteIconButton, !canDelete && styles.deleteIconButtonDisabled]}
-          onPress={canDelete ? () => handleDeleteExpense(item) : undefined}
-          disabled={!canDelete || isDeleting}
-          accessibilityRole="button"
-          accessibilityLabel={canDelete ? 'Delete expense' : 'Cannot delete past expense'}
-        >
-          {isDeleting ? (
-            <ActivityIndicator size="small" color={COLORS.text.secondary} />
-          ) : (
-            <Ionicons
-              name="trash-outline"
-              size={16}
-              color={canDelete ? COLORS.error : COLORS.border}
-            />
-          )}
-        </TouchableOpacity>
       </View>
     );
   };
@@ -413,13 +428,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginRight: SIZES.base * 0.75,
   },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
   deleteIconButton: {
-    padding: SIZES.base * 0.75,
+    marginLeft: SIZES.base,
+    padding: SIZES.base * 0.5,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  deleteIconButtonDisabled: {
-    opacity: 0.35,
   },
   expenseTitle: {
     fontSize: SIZES.body3,

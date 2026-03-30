@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { ErrorHandler } from '../utils/errorHandler';
+import ErrorHandler from '../utils/errorHandler';
 import { clearSession } from '../utils/sessionManager';
 
 /**
@@ -68,18 +68,26 @@ const handleUnauthorized = async () => {
   try {
     console.log('🚫 Unauthorized access detected. Logging out user...');
     
-    // Clear all session data
-    await clearSession();
-    
-    // Trigger logout callback if registered (from AuthContext)
-    if (logoutCallback && typeof logoutCallback === 'function') {
-      console.log('🔄 Triggering logout callback...');
-      logoutCallback();
-    } else {
-      console.warn('⚠️ No logout callback registered. Session cleared but logout not triggered.');
-    }
+    // Show session expired alert to user and handle logout after dismissal
+    showSessionExpiredAlert(async () => {
+      // Clear all session data
+      await clearSession();
+      
+      // Trigger logout callback if registered (from AuthContext)
+      if (logoutCallback && typeof logoutCallback === 'function') {
+        console.log('🔄 Triggering logout callback...');
+        logoutCallback();
+      } else {
+        console.warn('⚠️ No logout callback registered. Session cleared but logout not triggered.');
+      }
+    });
   } catch (error) {
     console.error('❌ Error during unauthorized handling:', error);
+    // Fallback: clear session and logout even if alert fails
+    await clearSession();
+    if (logoutCallback && typeof logoutCallback === 'function') {
+      logoutCallback();
+    }
   }
 };
 

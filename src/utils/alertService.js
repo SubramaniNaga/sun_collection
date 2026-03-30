@@ -93,3 +93,25 @@ export function showWarning(title, message, buttons) {
 export function showInfo(title, message, buttons) {
   showAlert({ type: ALERT_TYPES.INFO, title, message, buttons });
 }
+
+/**
+ * Show session expired alert and trigger logout.
+ * @param {Function} logoutCallback - Function to call after user dismisses alert
+ */
+export function showSessionExpiredAlert(logoutCallback) {
+  showAlert({
+    type: ALERT_TYPES.WARNING,
+    title: 'Session Expired',
+    message: 'Your session has expired. Please login again.',
+    buttons: [
+      {
+        text: 'OK',
+        onPress: async () => {
+          if (logoutCallback && typeof logoutCallback === 'function') {
+            await logoutCallback();
+          }
+        }
+      }
+    ]
+  });
+}

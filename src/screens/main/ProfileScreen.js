@@ -220,12 +220,12 @@ const ProfileScreen = ({ navigation }) => {
       icon: 'shield-checkmark-outline',
       onPress: handlePrivacyPress,
     },
-    {
-      id: 'help',
-      title: t('profile.helpSupport'),
-      icon: 'help-circle-outline',
-      onPress: () => console.log('Navigate to help'),
-    },
+    // {
+    //   id: 'help',
+    //   title: t('profile.helpSupport'),
+    //   icon: 'help-circle-outline',
+    //   onPress: () => console.log('Navigate to help'),
+    // },
   ];
 
   return (

@@ -102,7 +102,7 @@ const SplashScreen = ({ navigation }) => {
         <StatusBar style="dark" backgroundColor={COLORS.statusBar} />
         <View style={styles.content}>
           <Image 
-            source={require('../../../assets/images/favicon.png')} 
+            source={require('../../../assets/images/splash-icon.png')} 
             style={styles.logo}
             resizeMode="contain"
           />
