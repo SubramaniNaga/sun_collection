@@ -461,6 +461,7 @@ export const apiServices = {
           search = '',
           page = 1,
           limit = 20,
+          niptype,
         } = params;
         const requestParams = {
           branch_id: branchId || 1,
@@ -468,6 +469,7 @@ export const apiServices = {
           ...(search && { search }),
           page,
           limit,
+          ...(niptype != null && niptype !== '' ? { niptype } : {}),
         };
         console.log('🔗 API: getNIPList - GET', ENDPOINTS.LOAN.NIP, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.LOAN.NIP, { params: requestParams });
@@ -928,6 +930,26 @@ export const apiServices = {
         throw error;
       }
     },
+
+    submitClosingAccount: async (payload = {}) => {
+      try {
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const body = {
+          branch_id: branchId,
+          line_id: lineIdsString,
+          ...payload,
+        };
+        console.log('📋 API: submitClosingAccount - POST', ENDPOINTS.COLLECTION.CLOSING_ACCOUNT, '| body:', JSON.stringify(body, null, 2));
+        const response = await apiClient.post(ENDPOINTS.COLLECTION.CLOSING_ACCOUNT, body);
+        return response.data;
+      } catch (error) {
+        console.error('Submit closing account error:', error);
+        throw error;
+      }
+    },
   },
 
   // App Services
@@ -991,6 +1013,30 @@ export const apiServices = {
         console.error('❌ Error Status:', error.response?.status);
         console.error('❌ Error Data:', error.response?.data);
         console.error('❌ Error Config:', error.config);
+        throw error;
+      }
+    },
+
+    createFrontCash: async (payload) => {
+      try {
+        console.log('💰 API: createFrontCash - POST', ENDPOINTS.UPFRONT_CASH.LIST, '| body:', JSON.stringify(payload, null, 2));
+        const response = await apiClient.post(ENDPOINTS.UPFRONT_CASH.LIST, payload);
+        console.log('💰 API: createFrontCash - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('Create front cash error:', error);
+        throw error;
+      }
+    },
+
+    closeOpeningAccount: async () => {
+      try {
+        console.log('💰 API: closeOpeningAccount - POST', ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT);
+        const response = await apiClient.post(ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT, {});
+        console.log('💰 API: closeOpeningAccount - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        console.error('Close opening account error:', error);
         throw error;
       }
     },

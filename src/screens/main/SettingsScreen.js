@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../../components/common/Card';
 import LogoutModal from '../../components/common/LogoutModal';
+import { APP_VERSION } from '../../constants/appVersion';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
@@ -192,7 +193,7 @@ const SettingsScreen = ({ navigation }) => {
         ))}
         <Card style={styles.versionCard}>
           <Text style={styles.versionTitle}>{t('settings.collectionAgentApp')}</Text>
-          <Text style={styles.versionNumber}>{t('settings.version')} 1.0.0</Text>
+          <Text style={styles.versionNumber}>{t('settings.version')} {APP_VERSION}</Text>
           <Text style={styles.versionBuild}>{t('settings.build')} 2024.03.01</Text>
         </Card>
       </ScrollView>

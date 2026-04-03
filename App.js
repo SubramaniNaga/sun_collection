@@ -19,27 +19,26 @@ import {
 setNotificationHandler();
 
 const AppContent = () => {
-  const loading = useLoading();
+  const loadingContext = useLoading();
   const { isAuthenticated } = useAuthContext();
   const notificationListener = useRef(null);
   const responseListener = useRef(null);
 
   // Set loading context for API clients
   useEffect(() => {
-    setLoadingContext(loading);
-  }, [loading]);
+    setLoadingContext(loadingContext);
+  }, [loadingContext]);
 
   // Hide splash screen when app is ready
   useEffect(() => {
     const hideSplash = async () => {
-      // Only hide splash screen when loading is complete
-      if (!loading) {
+      if (!loadingContext.globalLoading) {
         await SplashScreen.hideAsync();
       }
     };
-    
+
     hideSplash();
-  }, [loading]);
+  }, [loadingContext.globalLoading]);
 
   // Register for push when user is logged in; listen for notifications
   useEffect(() => {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LogoutModal from '../../components/common/LogoutModal';
+import { APP_VERSION } from '../../constants/appVersion';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
@@ -101,7 +102,7 @@ const SideDrawer = ({ isVisible, onClose, navigation }) => {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            {t('settings.collectionAgentApp')} v1.0.0
+            {t('settings.collectionAgentApp')} v{APP_VERSION}
           </Text>
         </View>
       </View>

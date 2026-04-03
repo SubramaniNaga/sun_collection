@@ -3,24 +3,21 @@ import { createContext, useCallback, useContext, useState } from 'react';
 const LoadingContext = createContext();
 
 export const LoadingProvider = ({ children }) => {
-  const [globalLoading, setGlobalLoading] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
+  /** Derived from count so parallel start/stop never leaves the overlay stuck (stale closure bug). */
+  const globalLoading = requestCount > 0;
 
   const startLoading = useCallback(() => {
-    setRequestCount(prev => prev + 1);
-    setGlobalLoading(true);
+    setRequestCount((prev) => prev + 1);
   }, []);
 
   const stopLoading = useCallback(() => {
-    setRequestCount(prev => Math.max(0, prev - 1));
-    if (requestCount <= 1) {
-      setGlobalLoading(false);
-    }
-  }, [requestCount]);
+    setRequestCount((prev) => Math.max(0, prev - 1));
+  }, []);
 
   const isLoading = useCallback(() => {
-    return globalLoading;
-  }, [globalLoading]);
+    return requestCount > 0;
+  }, [requestCount]);
 
   const getLoadingCount = useCallback(() => {
     return requestCount;
@@ -28,7 +25,6 @@ export const LoadingProvider = ({ children }) => {
 
   const clearAllLoading = useCallback(() => {
     setRequestCount(0);
-    setGlobalLoading(false);
   }, []);
 
   const value = {

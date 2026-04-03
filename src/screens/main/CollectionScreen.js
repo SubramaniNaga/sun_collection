@@ -13,6 +13,14 @@ import { COLORS, SIZES } from '../../constants/theme';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { showAlert, showError, showSuccess, showWarning } from '../../utils/alertService';
+
+const openIosAppSettings = async () => {
+  try {
+    await Linking.openURL('app-settings:');
+  } catch {
+    await Linking.openSettings();
+  }
+};
 import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -262,80 +270,105 @@ const CollectionScreen = ({ navigation }) => {
 
   const getCurrentLocation = async (retryCount = 0) => {
     try {
-      // Check if location services are enabled
-      const isEnabled = await Location.hasServicesEnabledAsync();
-      if (!isEnabled) {
-        const userAction = await new Promise((resolve) => {
+      const promptLocationServicesDisabled = () =>
+        new Promise((resolve) => {
           showAlert({
             type: 'warning',
             title: t('collection.locationServicesDisabled'),
-            message: t('collection.enableLocation'),
+            message: `${t('collection.enableLocation')}\n\n${t('collection.enableLocationThenRetry')}`,
             buttons: [
               { text: t('common.cancel'), style: 'cancel', onPress: () => resolve('cancel') },
-              {
-                text: t('common.ok'),
-                onPress: () => {
-                  if (Platform.OS === 'android') Linking.openSettings();
-                  else Linking.openURL('app-settings:');
-                  resolve('settings');
-                },
-              },
+              { text: t('collection.turnOnLocation'), onPress: () => resolve('turnOn') },
               { text: t('common.retry'), onPress: () => resolve('retry') },
             ],
           });
         });
 
-        if (userAction === 'cancel') {
+      let afterTurnOnNeedRetry = false;
+
+      for (;;) {
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (servicesEnabled && !afterTurnOnNeedRetry) {
+          break;
+        }
+
+        const action = await promptLocationServicesDisabled();
+        if (action === 'cancel') {
           throw new Error('Location services are disabled - user cancelled');
-        } else if (userAction === 'retry' && retryCount < 3) {
-          // Wait a bit and retry
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          return getCurrentLocation(retryCount + 1);
-        } else if (userAction === 'settings') {
-          // User opened settings, wait a bit longer and check again
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const isEnabledAfter = await Location.hasServicesEnabledAsync();
-          if (!isEnabledAfter && retryCount < 2) {
-            // Give user another chance
-            return getCurrentLocation(retryCount + 1);
-          } else if (!isEnabledAfter) {
-            throw new Error('Location services are still disabled. Please enable GPS/Location in device settings and try again.');
+        }
+        if (action === 'turnOn') {
+          afterTurnOnNeedRetry = true;
+          if (Platform.OS === 'android') {
+            try {
+              await Location.enableNetworkProviderAsync();
+            } catch {
+              // User dismissed the system dialog or resolution failed
+            }
+          } else {
+            await openIosAppSettings();
           }
+          continue;
+        }
+        if (action === 'retry') {
+          if (await Location.hasServicesEnabledAsync()) {
+            afterTurnOnNeedRetry = false;
+            break;
+          }
+          showWarning(t('collection.locationServicesDisabled'), t('collection.locationStillDisabled'));
+          continue;
         }
       }
 
-      // Request location permissions
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      let { status: permStatus } = await Location.getForegroundPermissionsAsync();
+      if (permStatus !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        permStatus = req.status;
+      }
 
-      if (status !== 'granted') {
-        const userAction = await new Promise((resolve) => {
+      const promptPermissionDenied = () =>
+        new Promise((resolve) => {
           showAlert({
             type: 'warning',
             title: t('collection.locationPermissionDenied'),
-            message: t('collection.enableLocation'),
+            message: `${t('collection.enableLocationPermissionBody')}\n\n${t('collection.permissionThenRetry')}`,
             buttons: [
               { text: t('common.cancel'), style: 'cancel', onPress: () => resolve('cancel') },
-              {
-                text: t('common.ok'),
-                onPress: () => {
-                  if (Platform.OS === 'android') Linking.openSettings();
-                  else Linking.openURL('app-settings:');
-                  resolve('settings');
-                },
-              },
+              { text: t('collection.openAppSettings'), onPress: () => resolve('settings') },
+              { text: t('common.retry'), onPress: () => resolve('retry') },
             ],
           });
         });
 
-        if (userAction === 'cancel') {
+      let afterSettingsNeedRetry = false;
+
+      while (permStatus !== 'granted' || afterSettingsNeedRetry) {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted' && !afterSettingsNeedRetry) {
+          break;
+        }
+
+        const action = await promptPermissionDenied();
+        if (action === 'cancel') {
           throw new Error('Location permission denied - user cancelled');
-        } else {
-          // Wait a bit after opening settings, then check again
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const { status: newStatus } = await Location.getForegroundPermissionsAsync();
-          if (newStatus !== 'granted') {
-            throw new Error('Location permission denied - please enable in settings');
+        }
+        if (action === 'settings') {
+          afterSettingsNeedRetry = true;
+          if (Platform.OS === 'ios') {
+            await openIosAppSettings();
+          } else {
+            await Linking.openSettings();
           }
+          permStatus = (await Location.getForegroundPermissionsAsync()).status;
+          continue;
+        }
+        if (action === 'retry') {
+          permStatus = (await Location.getForegroundPermissionsAsync()).status;
+          if (permStatus === 'granted') {
+            afterSettingsNeedRetry = false;
+            break;
+          }
+          showWarning(t('collection.locationPermissionDenied'), t('collection.permissionStillDenied'));
+          continue;
         }
       }
 
@@ -345,6 +378,7 @@ const CollectionScreen = ({ navigation }) => {
           accuracy: Location.Accuracy.High,
           timeout: 20000, // 20 seconds timeout
           maximumAge: 10000, // Accept cached location up to 10 seconds old
+          mayShowUserSettingsDialog: Platform.OS === 'android',
         });
 
         return {

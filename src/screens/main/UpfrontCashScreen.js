@@ -10,7 +10,7 @@ import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const UpfrontCashScreen = ({ navigation }) => {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState([]);
   const [fromDate, setFromDate] = useState(new Date());
@@ -40,7 +40,7 @@ const UpfrontCashScreen = ({ navigation }) => {
     try {
       const formattedFromDate = formatDate(fromDateParam);
       const formattedToDate = formatDate(toDateParam);
-      
+
       // Log API params before call
       console.log('🌐 API Params:', {
         from_date: formattedFromDate,
@@ -49,7 +49,7 @@ const UpfrontCashScreen = ({ navigation }) => {
         page: 1,
         limit: 20
       });
-      
+
       const requestParams = {
         from_date: formattedFromDate,
         to_date: formattedToDate,
@@ -57,11 +57,11 @@ const UpfrontCashScreen = ({ navigation }) => {
         page: 1,
         limit: 20,
       };
-      
+
       // Log final API request parameters
       console.log('🌐 API Request Params:', JSON.stringify(requestParams, null, 2));
       console.log('🌐 Expected URL: /api/v1/frontcash/openingbalance?' + new URLSearchParams(requestParams).toString());
-      
+
       const response = await apiServices.upfrontCash.getOpeningBalance(requestParams);
 
       const responseData = response?.data || [];
@@ -112,40 +112,21 @@ const UpfrontCashScreen = ({ navigation }) => {
   };
 
   const renderRecordCard = (record) => {
-    // Use full text for both English and Tamil - no tooltips, single line
     const fields = [
-      { 
-        key: 'opening_balance', 
-        label: language === 'en' ? 'Opening Balance' : 'துவக்க இருப்பு' 
-      },
-      { 
-        key: 'total_expeses', 
-        label: language === 'en' ? 'Total Expenses' : 'மொத்த செலவுகள்' 
-      },
-      { 
-        key: 'total_frontcash', 
-        label: language === 'en' ? 'Total Front Cash' : 'மொத்த முன் பணம்' 
-      },
-      { 
-        key: 'total_collection', 
-        label: language === 'en' ? 'Total Collection' : 'மொத்த சேகரிப்பு' 
-      },
-      { 
-        key: 'total_loangiven', 
-        label: language === 'en' ? 'Total Loan Given' : 'மொத்த கடன் வழங்கப்பட்டது' 
-      },
-      { 
-        key: 'closing_balance', 
-        label: language === 'en' ? 'Closing Balance' : 'மூடுதல் இருப்பு' 
-      },
+      { key: 'opening_balance', labelKey: 'openingBalance' },
+      { key: 'total_collection', labelKey: 'totalCollection' },
+      { key: 'total_expeses', labelKey: 'totalExpenses' },
+      { key: 'total_frontcash', labelKey: 'totalFrontCash' },
+      { key: 'total_loangiven', labelKey: 'totalLoanGiven' },
+      { key: 'closing_balance', labelKey: 'closingBalance' },
     ];
 
     return (
       <View style={styles.recordCard}>
         <View style={styles.fieldsContainer}>
-          {fields.map((field, index) => (
+          {fields.map((field) => (
             <View key={field.key} style={styles.fieldRow}>
-              <Text style={styles.fieldLabel} numberOfLines={1}>{field.label}</Text>
+              <Text style={styles.fieldLabel}>{t(`upfrontCash.${field.labelKey}`)}</Text>
               <View style={styles.fieldValueContainer}>
                 <Text style={styles.fieldValue} numberOfLines={1}>
                   {formatCurrency(record[field.key] || '0')}
@@ -178,11 +159,11 @@ const UpfrontCashScreen = ({ navigation }) => {
     if (loading) {
       return renderEmpty();
     }
-    
+
     if (!records || records.length === 0) {
       return renderEmpty();
     }
-    
+
     return (
       <FlatList
         data={records}
@@ -203,7 +184,7 @@ const UpfrontCashScreen = ({ navigation }) => {
         <Text style={styles.dateLabel}>{t('upfrontCash.fromDate')}</Text>
         <Text style={styles.dateValue}>{formatDisplayDate(fromDate.toISOString().split('T')[0])}</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={styles.dateButton}
         onPress={() => setShowToDatePicker(true)}
@@ -277,25 +258,29 @@ const styles = StyleSheet.create({
   },
   fieldRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SIZES.base / 2,
+    alignItems: 'flex-start',
+    paddingVertical: SIZES.base * 0.75,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   fieldLabel: {
     flex: 1,
-    fontSize: SIZES.body5, // Further reduced font size to fit Tamil text on single line
+    flexShrink: 1,
+    paddingRight: SIZES.base,
+    fontSize: SIZES.body3,
+    lineHeight: 20,
     color: COLORS.text.secondary,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   fieldValueContainer: {
-    flex: 2,
+    maxWidth: '48%',
     alignItems: 'flex-end',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 1,
   },
   fieldValue: {
-    fontSize: SIZES.body2,
-    fontWeight: '700',
+    fontSize: SIZES.body3,
+    fontWeight: '400',
     color: COLORS.black,
   },
   centerWrap: {

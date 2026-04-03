@@ -1,7 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
@@ -9,10 +21,44 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import CollectionHistory from '../../models/CollectionHistory';
+import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
+import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { formatDateForAPI } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
+
+/** Space so list scrolls above the fixed bottom “Account closing” bar */
+const LIST_EXTRA_BOTTOM = 88;
+
+/**
+ * `stats.closingbalance` (or `closing_balance`) from GET /collection/history:
+ * when set (e.g. 1 or true), period is closed — hide Account closing UI. Missing/false/0 → show.
+ */
+function isClosingBalanceDone(statsLike) {
+  if (!statsLike || typeof statsLike !== 'object') return false;
+  const v = statsLike.closingbalance ?? statsLike.closing_balance;
+  if (v === true) return true;
+  if (v === 1 || v === '1') return true;
+  if (typeof v === 'string' && v.toLowerCase() === 'true') return true;
+  return false;
+}
+
+/** Normalize GET /frontcash/dashboard/today response for Dashboard.fromApiResponse */
+function dashboardDataFromTodayApi(res) {
+  if (!res || typeof res !== 'object') return {};
+  if (res.success && res.data && typeof res.data === 'object') return res.data;
+  if (res.data && typeof res.data === 'object') {
+    const d = res.data;
+    if (d.expenses != null || d.collections != null || d.frontcash != null || d.loans_given != null) {
+      return d;
+    }
+  }
+  if (res.expenses != null || res.collections != null || res.frontcash != null || res.loans_given != null) {
+    return res;
+  }
+  return {};
+}
 
 const CollectionHistoryScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -47,6 +93,16 @@ const CollectionHistoryScreen = ({ navigation }) => {
 
   // Payment type filter state (null = all, 'cash' = cash, 'online' = online)
   const [selectedPaymentType, setSelectedPaymentType] = useState(null);
+
+  const [showClosingModal, setShowClosingModal] = useState(false);
+  const [closingForm, setClosingForm] = useState({
+    expensesSpent: '',
+    loanGiven: '',
+    cashBrought: '',
+    collectionCompleted: '',
+  });
+  const [closingDataLoading, setClosingDataLoading] = useState(false);
+  const [closingSubmitting, setClosingSubmitting] = useState(false);
 
   // Validation function
   const validateDates = () => {
@@ -135,6 +191,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
         collected_amount: statsData.collected_amount ?? 0,
         expenses_spent: statsData.expenses_spent ?? 0,
         loan_given_amount: statsData.loan_given_amount ?? 0,
+        closingbalance: statsData.closingbalance ?? statsData.closing_balance,
       });
 
       setPagination({
@@ -160,6 +217,8 @@ const CollectionHistoryScreen = ({ navigation }) => {
       fetchCollectionHistory(1, false);
     }
   }, [startDate, endDate, fetchCollectionHistory]);
+
+  const accountClosingBlocked = useMemo(() => isClosingBalanceDone(stats), [stats]);
 
   // Filter collection history by payment type
   const filteredCollectionHistory = collectionHistory.filter((item) => {
@@ -212,6 +271,69 @@ const CollectionHistoryScreen = ({ navigation }) => {
     if (amount == null || amount === '') return '₹0';
     const num = parseFloat(amount);
     return isNaN(num) ? '₹0' : `₹${num.toLocaleString('en-IN')}`;
+  };
+
+  const applyClosingFormFromHistoryStats = useCallback(() => {
+    setClosingForm({
+      expensesSpent:
+        stats.expenses_spent != null && stats.expenses_spent !== ''
+          ? String(stats.expenses_spent)
+          : '0',
+      loanGiven:
+        stats.loan_given_amount != null && stats.loan_given_amount !== ''
+          ? String(stats.loan_given_amount)
+          : '0',
+      cashBrought: '0',
+      collectionCompleted:
+        stats.collected_amount != null && stats.collected_amount !== ''
+          ? String(stats.collected_amount)
+          : '0',
+    });
+  }, [stats]);
+
+  const openClosingModal = async () => {
+    if (accountClosingBlocked) return;
+    setShowClosingModal(true);
+    setClosingDataLoading(true);
+    try {
+      const res = await apiServices.dashboard.getTodayStats();
+      const raw = dashboardDataFromTodayApi(res);
+      const dash = Dashboard.fromApiResponse(raw);
+      setClosingForm({
+        expensesSpent: String(dash.expenses?.totalAmount ?? 0),
+        loanGiven: String(dash.loansGiven?.totalAmount ?? 0),
+        cashBrought: String(dash.frontcash?.totalAmount ?? 0),
+        collectionCompleted: String(dash.collections?.totalAmount ?? 0),
+      });
+    } catch (err) {
+      console.warn('CollectionHistory: dashboard today for account closing:', err);
+      applyClosingFormFromHistoryStats();
+    } finally {
+      setClosingDataLoading(false);
+    }
+  };
+
+  const closeClosingModal = () => {
+    setShowClosingModal(false);
+    setClosingSubmitting(false);
+    setClosingDataLoading(false);
+  };
+
+  const handleSubmitClosing = async () => {
+    if (accountClosingBlocked || closingDataLoading) return;
+    setClosingSubmitting(true);
+    try {
+      await apiServices.upfrontCash.closeOpeningAccount();
+      closeClosingModal();
+      await fetchCollectionHistory(1, false);
+      showSuccess(t('common.success'), t('collectionHistory.closingAccountSuccess'), [
+        { text: t('common.ok'), onPress: () => {} },
+      ]);
+    } catch (err) {
+      showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
+    } finally {
+      setClosingSubmitting(false);
+    }
   };
 
   const renderHistoryItem = ({ item }) => {
@@ -286,11 +408,94 @@ const CollectionHistoryScreen = ({ navigation }) => {
         onBackPress={() => navigation.goBack()}
       />
 
+      <Modal
+        visible={showClosingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeClosingModal}
+      >
+        <View style={styles.closingModalOverlay}>
+          <Pressable
+            style={styles.closingModalBackdrop}
+            onPress={closeClosingModal}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.closingModalKb}
+          >
+            <View style={styles.closingModalCard}>
+              <View style={styles.closingModalBody}>
+                {closingDataLoading ? (
+                  <View style={styles.closingModalLoading}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={styles.closingModalLoadingText}>{t('common.loading')}</Text>
+                  </View>
+                ) : (
+                  [
+                    { key: 'expensesSpent', label: t('collectionHistory.closingAccountExpenses') },
+                    { key: 'loanGiven', label: t('collectionHistory.closingAccountLoanGiven') },
+                    { key: 'cashBrought', label: t('collectionHistory.closingAccountCashBrought') },
+                    { key: 'collectionCompleted', label: t('collectionHistory.closingAccountCollectionCompleted') },
+                  ].map(({ key, label }) => (
+                    <View key={key} style={styles.closingField}>
+                      <Text style={styles.closingLabel}>{label}</Text>
+                      <TextInput
+                        style={[styles.closingInput, styles.closingInputReadOnly]}
+                        value={closingForm[key]}
+                        editable={false}
+                        selectTextOnFocus={false}
+                        placeholder="0"
+                        placeholderTextColor={COLORS.text.tertiary}
+                      />
+                    </View>
+                  ))
+                )}
+              </View>
+              <View style={styles.closingActionsRow}>
+                <TouchableOpacity
+                  style={styles.closingCancelBtn}
+                  onPress={closeClosingModal}
+                  disabled={closingSubmitting || closingDataLoading}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.closingCancelText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.closingSubmitBtn,
+                    (closingSubmitting || closingDataLoading || accountClosingBlocked) && styles.closingSubmitBtnDisabled,
+                  ]}
+                  onPress={handleSubmitClosing}
+                  disabled={closingSubmitting || closingDataLoading || accountClosingBlocked}
+                  activeOpacity={0.85}
+                >
+                  {closingSubmitting ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.closingSubmitText}>{t('collectionHistory.closingAccountSubmit')}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <View style={styles.mainBody}>
       <FlatList
+        style={styles.mainBodyList}
         data={filteredCollectionHistory}
         keyExtractor={(item) => String(item?.id ?? Math.random())}
         renderItem={renderHistoryItem}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingBottom:
+              SIZES.padding * 2 + (accountClosingBlocked ? 0 : LIST_EXTRA_BOTTOM),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
@@ -467,6 +672,23 @@ const CollectionHistoryScreen = ({ navigation }) => {
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}
       />
+
+      {!accountClosingBlocked ? (
+        <View style={styles.accountClosingBar}>
+          <TouchableOpacity
+            style={styles.accountClosingBtn}
+            onPress={openClosingModal}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={t('collectionHistory.accountClosingButton')}
+          >
+            <Text style={styles.accountClosingBtnText}>
+              {t('collectionHistory.accountClosingButton')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      </View>
     </SafeAreaView>
   );
 };
@@ -475,6 +697,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.white,
+  },
+  mainBody: {
+    flex: 1,
+  },
+  mainBodyList: {
+    flex: 1,
   },
   content: {
     padding: SIZES.padding * 0.5,
@@ -753,6 +981,141 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: COLORS.white,
+  },
+  accountClosingBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: SIZES.base,
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: SIZES.base,
+    backgroundColor: COLORS.white,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.border,
+  },
+  accountClosingBtn: {
+    backgroundColor: COLORS.success,
+    borderRadius: SIZES.radius,
+    paddingVertical: SIZES.padding,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  accountClosingBtnText: {
+    color: COLORS.white,
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+  },
+  closingModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  closingModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  closingModalKb: {
+    width: '90%',
+    maxWidth: 400,
+    zIndex: 1,
+  },
+  closingModalCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius * 2,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  closingModalBody: {
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.base,
+  },
+  closingField: {
+    marginBottom: SIZES.base + 2,
+  },
+  closingLabel: {
+    fontSize: SIZES.body3,
+    fontWeight: '500',
+    color: COLORS.text.secondary,
+    marginBottom: 4,
+  },
+  closingInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding * 0.75,
+    paddingVertical: 10,
+    fontSize: SIZES.body3,
+    color: COLORS.black,
+    backgroundColor: COLORS.white,
+    minHeight: 44,
+  },
+  closingInputReadOnly: {
+    backgroundColor: COLORS.lightGray,
+    color: COLORS.text.secondary,
+  },
+  closingModalLoading: {
+    paddingVertical: SIZES.padding * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closingModalLoadingText: {
+    marginTop: SIZES.margin,
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+  },
+  closingActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.base,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    borderBottomLeftRadius: SIZES.radius * 2,
+    borderBottomRightRadius: SIZES.radius * 2,
+  },
+  closingCancelBtn: {
+    flex: 1,
+    borderRadius: SIZES.radius,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.lightGray,
+  },
+  closingCancelText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  closingSubmitBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: SIZES.radius,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  closingSubmitBtnDisabled: {
+    opacity: 0.7,
+  },
+  closingSubmitText: {
+    color: COLORS.white,
+    fontSize: SIZES.body2,
+    fontWeight: '600',
   },
 });
 

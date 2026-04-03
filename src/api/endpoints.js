@@ -24,6 +24,8 @@ export const ENDPOINTS = {
     LIST: '/collection',
     UPDATE_AMOUNT: (id) => `/collection/payment/${id}`,
     HISTORY: '/collection/history',
+    /** Day-end closing summary (adjust path if your backend uses a different route). */
+    CLOSING_ACCOUNT: '/collection/closing-account',
   },
   LOAN: {
     LIST: '/loan',
@@ -44,6 +46,7 @@ export const ENDPOINTS = {
   UPFRONT_CASH: {
     LIST: '/frontcash',
     OPENING_BALANCE: '/frontcash/openingbalance',
+    CLOSE_ACCOUNT: '/frontcash/openingbalance/closeaccount',
   },
   DASHBOARD: {
     TODAY: '/frontcash/dashboard/today',

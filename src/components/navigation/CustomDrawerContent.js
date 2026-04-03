@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LogoutModal from '../../components/common/LogoutModal';
+import { APP_VERSION } from '../../constants/appVersion';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
@@ -103,7 +104,7 @@ const CustomDrawerContent = (props) => {
 
       {/* App Version */}
       <View style={styles.footer}>
-        <Text style={styles.versionText}>{t('settings.version')} 1.0.0</Text>
+        <Text style={styles.versionText}>{t('settings.version')} {APP_VERSION}</Text>
       </View>
 
       {/* Logout Confirmation Modal */}

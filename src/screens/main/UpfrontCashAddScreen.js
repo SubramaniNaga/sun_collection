@@ -1,19 +1,17 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import apiServices from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import FormInput from '../../components/common/FormInput';
-import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showError, showInfo, showSuccess } from '../../utils/alertService';
-import { formatDisplayDate } from '../../utils/dateFormatter';
+import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 
 const UpfrontCashAddScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -22,138 +20,81 @@ const UpfrontCashAddScreen = ({ navigation }) => {
   const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
-    amountTaken: '',
-    purpose: '',
-    cashReceivedFrom: '',
-    approvedBy: '',
-    remarks: '',
-    agentSignature: null,
-    managerSignature: null,
+    amount: '',
+    type: 'cash',
+    message: '',
   });
-
-  const [floatSummary, setFloatSummary] = useState({
-    previousFloatBalance: 0,
-    totalUpfrontCashTaken: 0,
-    totalSettled: 0,
-    currentOutstandingFloat: 0,
-  });
-
-  const purposeOptions = [
-    { label: t('upfrontCash.fieldCollectionFloat'), value: 'field_collection_float' },
-    { label: t('upfrontCash.customerRefundHandling'), value: 'customer_refund_handling' },
-    { label: t('upfrontCash.pettyExpenses'), value: 'petty_expenses' },
-    { label: t('upfrontCash.emergencyRequirement'), value: 'emergency_requirement' },
-    { label: t('common.other'), value: 'other' },
-  ];
-
-  const cashReceivedFromOptions = [
-    { label: t('upfrontCash.manager'), value: 'manager' },
-    { label: t('upfrontCash.accountant'), value: 'accountant' },
-    { label: t('upfrontCash.branchHead'), value: 'branch_head' },
-  ];
-
-  const approvedByOptions = [
-    { label: t('upfrontCash.johnManager'), value: 'john_manager' },
-    { label: t('upfrontCash.sarahAccountant'), value: 'sarah_accountant' },
-    { label: t('upfrontCash.mikeBranchHead'), value: 'mike_branch_head' },
-  ];
-
-  const headerData = {
-    agentName: user?.name || t('upfrontCash.agentName'),
-    agentId: user?.id || 'AG001',
-    branchName: user?.branch || t('upfrontCash.mainBranch'),
-    currentDate: formatDisplayDate(new Date()),
-  };
+  const [userIdDisplay, setUserIdDisplay] = useState('');
 
   useEffect(() => {
-    fetchFloatSummary();
-  }, []);
-
-  const fetchFloatSummary = async () => {
-    try {
-      setFloatSummary({
-        previousFloatBalance: 5000,
-        totalUpfrontCashTaken: 2000,
-        totalSettled: 1500,
-        currentOutstandingFloat: 5500,
-      });
-    } catch (error) {
-      console.error('Error fetching float summary:', error);
+    if (user?.id != null && user.id !== '') {
+      setUserIdDisplay(String(user.id));
+      return;
     }
-  };
+    AsyncStorage.getItem('userId').then((id) => setUserIdDisplay(id && id.trim() ? id : '—'));
+  }, [user?.id]);
+
+  const typeOptions = [
+    { label: t('upfrontCash.typeCash'), value: 'cash' },
+    { label: t('upfrontCash.typeOnline'), value: 'online' },
+  ];
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }));
   };
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.amountTaken) newErrors.amountTaken = t('upfrontCash.amountRequired');
-    else if (parseFloat(formData.amountTaken) <= 0) newErrors.amountTaken = t('upfrontCash.amountGreaterThanZero');
-    if (!formData.purpose) newErrors.purpose = t('upfrontCash.purposeRequired');
-    if (!formData.cashReceivedFrom) newErrors.cashReceivedFrom = t('upfrontCash.cashReceivedFromRequired');
-    if (!formData.approvedBy) newErrors.approvedBy = t('upfrontCash.approvedByRequired');
-    if (!formData.agentSignature) newErrors.agentSignature = t('upfrontCash.agentSignatureRequired');
+    if (!formData.amount?.trim()) {
+      newErrors.amount = t('upfrontCash.amountRequired');
+    } else if (parseFloat(formData.amount) <= 0 || Number.isNaN(parseFloat(formData.amount))) {
+      newErrors.amount = t('upfrontCash.amountGreaterThanZero');
+    }
+    if (!formData.type) {
+      newErrors.type = t('upfrontCash.typeRequired');
+    }
+    if (!formData.message?.trim()) {
+      newErrors.message = t('upfrontCash.messageRequired');
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const captureLocation = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') throw new Error('Location permission denied');
-      let locationData = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      return {
-        latitude: locationData.coords.latitude,
-        longitude: locationData.coords.longitude,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      console.error('Location capture error:', error);
-      return null;
+  const resolveUserId = async () => {
+    if (user?.id != null && user.id !== '') {
+      return String(user.id);
     }
+    const stored = await AsyncStorage.getItem('userId');
+    return stored || '';
   };
-
-  const generateEntryId = () => `UC${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
   const handleSubmit = async () => {
     if (!validateForm()) {
       showError(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
       return;
     }
+    const userId = await resolveUserId();
+    if (!userId) {
+      showError(t('common.error'), t('upfrontCash.userIdMissing'));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const locationData = await captureLocation();
-      const entryId = generateEntryId();
       const payload = {
-        entryId,
-        agentId: headerData.agentId,
-        agentName: headerData.agentName,
-        branchName: headerData.branchName,
-        amountTaken: parseFloat(formData.amountTaken),
-        purpose: formData.purpose,
-        cashReceivedFrom: formData.cashReceivedFrom,
-        approvedBy: formData.approvedBy,
-        remarks: formData.remarks,
-        modeOfTransfer: 'cash',
-        agentSignature: formData.agentSignature,
-        managerSignature: formData.managerSignature,
-        status: 'ACTIVE',
-        timestamp: new Date().toISOString(),
-        location: locationData,
-        createdBy: headerData.agentId,
-        deviceId: 'DEVICE_ID',
+        amount: parseFloat(formData.amount),
+        type: formData.type,
+        user_id: userId,
+        message: formData.message.trim(),
       };
-      console.log('Upfront Cash Entry Payload:', payload);
-      showSuccess(
-        t('common.success'),
-        t('upfrontCash.entryCreatedSuccessfully', { entryId }),
-        [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
-      );
+      await apiServices.upfrontCash.createFrontCash(payload);
+      showSuccess(t('common.success'), t('upfrontCash.frontCashSuccess'), [
+        { text: t('common.ok'), onPress: () => navigation.goBack() },
+      ]);
     } catch (error) {
-      console.error('Submit error:', error);
-      showError(t('common.error'), t('upfrontCash.failedToSubmitEntry'));
+      console.error('Submit front cash error:', error);
+      showError(t('common.error'), getApiErrorMessage(error, t('upfrontCash.failedToSubmitEntry')));
     } finally {
       setIsSubmitting(false);
     }
@@ -164,76 +105,81 @@ const UpfrontCashAddScreen = ({ navigation }) => {
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       <Header title={t('upfrontCash.addUpfrontCash')} showBackButton={true} onBackPress={() => navigation.goBack()} />
       <View style={styles.mainContent}>
-        <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+        <KeyboardAvoidingView
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             <Card style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>{t('upfrontCash.agentInformation')}</Text>
-              <View style={styles.headerGrid}>
-                <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>{t('upfrontCash.agentName')}</Text>
-                  <FormInput value={headerData.agentName} editable={false} style={styles.readonlyInput} />
+              {/* <Text style={styles.sectionTitle}>{t('upfrontCash.upfrontCashDetails')}</Text> */}
+              <FormInput
+                label={t('upfrontCash.amount')}
+                value={formData.amount}
+                onChangeText={(v) => handleInputChange('amount', v)}
+                placeholder={t('upfrontCash.enterAmount')}
+                keyboardType="numeric"
+                error={errors.amount}
+              />
+              <View style={styles.typeField}>
+                <Text style={styles.typeLabel}>{t('upfrontCash.transactionType')}</Text>
+                <View style={styles.typeRadioList}>
+                  {typeOptions.map((opt) => {
+                    const selected = formData.type === opt.value;
+                    return (
+                      <Pressable
+                        key={opt.value}
+                        style={({ pressed }) => [
+                          styles.typeRadioRow,
+                          selected && styles.typeRadioRowSelected,
+                          errors.type && styles.typeRadioRowError,
+                          pressed && styles.typeRadioRowPressed,
+                        ]}
+                        onPress={() => handleInputChange('type', opt.value)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                      >
+                        <View
+                          style={[
+                            styles.radioOuter,
+                            selected && styles.radioOuterSelected,
+                            errors.type && !selected && styles.radioOuterError,
+                          ]}
+                        >
+                          {selected ? <View style={styles.radioInner} /> : null}
+                        </View>
+                        <Text style={styles.typeRadioText}>{opt.label}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-                <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>{t('upfrontCash.agentId')}</Text>
-                  <FormInput value={headerData.agentId} editable={false} style={styles.readonlyInput} />
-                </View>
-                <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>{t('upfrontCash.branchName')}</Text>
-                  <FormInput value={headerData.branchName} editable={false} style={styles.readonlyInput} />
-                </View>
-                <View style={styles.headerItem}>
-                  <Text style={styles.headerLabel}>{t('common.date')}</Text>
-                  <FormInput value={headerData.currentDate} editable={false} style={styles.readonlyInput} />
-                </View>
+                {errors.type ? (
+                  <Text style={styles.typeErrorText}>{errors.type}</Text>
+                ) : null}
               </View>
+              <FormInput
+                label={t('upfrontCash.messageLabel')}
+                value={formData.message}
+                onChangeText={(v) => handleInputChange('message', v)}
+                placeholder={t('upfrontCash.enterMessage')}
+                multiline
+                numberOfLines={4}
+                error={errors.message}
+              />
             </Card>
-
-            <Card style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>{t('upfrontCash.upfrontCashDetails')}</Text>
-              <FormInput label={t('upfrontCash.amountTaken')} value={formData.amountTaken} onChangeText={(v) => handleInputChange('amountTaken', v)} placeholder={t('upfrontCash.enterAmount')} keyboardType="numeric" error={errors.amountTaken} />
-              <FormPicker label={t('upfrontCash.purpose')} value={formData.purpose} onValueChange={(v) => handleInputChange('purpose', v)} items={purposeOptions} placeholder={t('upfrontCash.selectPurpose')} error={errors.purpose} />
-              <FormPicker label={t('upfrontCash.cashReceivedFrom')} value={formData.cashReceivedFrom} onValueChange={(v) => handleInputChange('cashReceivedFrom', v)} items={cashReceivedFromOptions} placeholder={t('upfrontCash.selectPerson')} error={errors.cashReceivedFrom} />
-              <FormPicker label={t('upfrontCash.approvedBy')} value={formData.approvedBy} onValueChange={(v) => handleInputChange('approvedBy', v)} items={approvedByOptions} placeholder={t('upfrontCash.selectApprover')} error={errors.approvedBy} />
-              <FormInput label={t('common.remarks')} value={formData.remarks} onChangeText={(v) => handleInputChange('remarks', v)} placeholder={t('upfrontCash.enterRemarksOptional')} multiline numberOfLines={3} />
-            </Card>
-
-            <Card style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>{t('upfrontCash.acknowledgement')}</Text>
-              <TouchableOpacity style={[styles.signatureBox, errors.agentSignature && styles.signatureBoxError]} onPress={() => { showInfo(t('upfrontCash.signature'), t('upfrontCash.signaturePadImplementation')); handleInputChange('agentSignature', 'mock_signature_data'); }}>
-                {formData.agentSignature ? (
-                  <View style={styles.signatureContent}>
-                    <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                    <Text style={styles.signatureText}>{t('upfrontCash.agentSignatureAdded')}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.signaturePlaceholder}>
-                    <Ionicons name="create-outline" size={24} color={COLORS.text.tertiary} />
-                    <Text style={styles.signaturePlaceholderText}>{t('upfrontCash.tapToAddAgentSignature')}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.signatureBox} onPress={() => { showInfo(t('upfrontCash.signature'), t('upfrontCash.managerSignaturePadImplementation')); handleInputChange('managerSignature', 'mock_manager_signature'); }}>
-                {formData.managerSignature ? (
-                  <View style={styles.signatureContent}>
-                    <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                    <Text style={styles.signatureText}>{t('upfrontCash.managerSignatureAdded')}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.signaturePlaceholder}>
-                    <Ionicons name="create-outline" size={24} color={COLORS.text.tertiary} />
-                    <Text style={styles.signaturePlaceholderText}>{t('upfrontCash.tapToAddManagerSignatureOptional')}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              {errors.agentSignature && <Text style={styles.errorText}>{t('upfrontCash.agentSignatureRequired')}</Text>}
-            </Card>
-
             <View style={styles.bottomPadding} />
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
       <View style={styles.bottomSection}>
-        <Button title={t('upfrontCash.submitUpfrontCashEntry')} onPress={handleSubmit} loading={isSubmitting} disabled={isSubmitting} style={styles.submitButton} size="large" />
+        <Button
+          title={t('upfrontCash.submitUpfrontCashEntry')}
+          onPress={handleSubmit}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+          style={styles.submitButton}
+          size="large"
+        />
       </View>
     </SafeAreaView>
   );
@@ -247,19 +193,82 @@ const styles = StyleSheet.create({
   scrollContent: { padding: SIZES.padding, paddingBottom: SIZES.padding * 6 },
   sectionCard: { marginBottom: SIZES.margin },
   sectionTitle: { fontSize: SIZES.h3, fontWeight: '600', color: COLORS.text.primary, marginBottom: SIZES.margin },
-  headerGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  headerItem: { width: '48%', marginBottom: SIZES.margin },
-  headerLabel: { fontSize: SIZES.body3, color: COLORS.text.secondary, marginBottom: SIZES.base / 2 },
-  readonlyInput: { backgroundColor: COLORS.lightGray },
-  signatureBox: { borderWidth: 1, borderColor: COLORS.border, borderRadius: SIZES.radius, padding: SIZES.padding, marginBottom: SIZES.margin, minHeight: 80, justifyContent: 'center', alignItems: 'center' },
-  signatureBoxError: { borderColor: 'red' },
-  signatureContent: { flexDirection: 'row', alignItems: 'center' },
-  signatureText: { fontSize: SIZES.body2, color: COLORS.primary, marginLeft: SIZES.base },
-  signaturePlaceholder: { flexDirection: 'row', alignItems: 'center' },
-  signaturePlaceholderText: { fontSize: SIZES.body2, color: COLORS.text.tertiary, marginLeft: SIZES.base },
-  errorText: { fontSize: SIZES.body3, color: 'red', marginTop: SIZES.base / 2 },
+  typeField: { marginBottom: SIZES.margin },
+  typeLabel: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginBottom: SIZES.base,
+  },
+  typeRadioList: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: SIZES.base,
+    alignItems: 'stretch',
+  },
+  typeRadioRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SIZES.padding * 0.65,
+    paddingHorizontal: SIZES.padding * 0.75,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.white,
+  },
+  typeRadioRowSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(29, 126, 226, 0.06)',
+  },
+  typeRadioRowError: {
+    borderColor: 'red',
+  },
+  typeRadioRowPressed: {
+    opacity: 0.92,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterSelected: {
+    borderColor: COLORS.primary,
+  },
+  radioOuterError: {
+    borderColor: 'red',
+  },
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+  },
+  typeRadioText: {
+    marginLeft: SIZES.base + 2,
+    fontSize: SIZES.body2,
+    color: COLORS.black,
+    flexShrink: 1,
+  },
+  typeErrorText: {
+    fontSize: SIZES.body3,
+    color: 'red',
+    marginTop: SIZES.base / 2,
+  },
   bottomPadding: { height: 20 },
-  bottomSection: { backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border, paddingHorizontal: SIZES.padding, paddingVertical: SIZES.padding },
+  bottomSection: {
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
+  },
   submitButton: {},
 });
 

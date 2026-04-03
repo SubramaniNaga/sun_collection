@@ -1,15 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import ENDPOINTS from '../../api/endpoints';
 import apiServices from '../../api/services/apiServices';
+import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError, showInfo, showWarning } from '../../utils/alertService';
@@ -27,6 +30,13 @@ const LoginScreen = ({ navigation }) => {
 
   const { login, loading } = useAuthContext();
   const { t } = useLanguage();
+  const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
+
+  useFocusEffect(
+    useCallback(() => {
+      runCheck();
+    }, [runCheck])
+  );
 
   // Generate FCM token when screen appears
   useEffect(() => {
@@ -412,75 +422,81 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar style="dark" backgroundColor={COLORS.statusBar} />
-      
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardContainer}
-      >
-        <View style={styles.card}>
-          <Image
-            source={require('../../../assets/images/favicon.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>{t('auth.welcome')}</Text>
-          <Text style={styles.title}>{t('auth.sunMicrofinance')}</Text>
-          <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
+    <>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+        <StatusBar style="dark" backgroundColor={COLORS.statusBar} />
 
-          <Input
-            label={t('auth.phoneNumber')}
-            value={phone}
-            onChangeText={handlePhoneChange}
-            placeholder={t('auth.enterPhone')}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-            maxLength={10}
-            error={errors.phone}
-          />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardContainer}
+        >
+          <View style={styles.card}>
+            <Image
+              source={require('../../../assets/images/favicon.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>{t('auth.welcome')}</Text>
+            <Text style={styles.title}>{t('auth.sunMicrofinance')}</Text>
+            <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
 
-          <Input
-            label={t('auth.password')}
-            value={password}
-            onChangeText={setPassword}
-            placeholder={t('auth.enterPassword')}
-            secureTextEntry={!showPassword}
-            error={errors.password}
-            rightIcon={
-              <TouchableOpacity 
-                onPress={togglePasswordVisibility}
-                style={styles.eyeIconInside}
-              >
-                <Ionicons 
-                  name={showPassword ? 'eye-off' : 'eye'} 
-                  size={20} 
-                  color={COLORS.primary} 
-                />
-              </TouchableOpacity>
-            }
-          />
+            <Input
+              label={t('auth.phoneNumber')}
+              value={phone}
+              onChangeText={handlePhoneChange}
+              placeholder={t('auth.enterPhone')}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              maxLength={10}
+              error={errors.phone}
+            />
 
-          {errors.general && (
-            <Text style={styles.errorText}>{errors.general}</Text>
-          )}
+            <Input
+              label={t('auth.password')}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={t('auth.enterPassword')}
+              secureTextEntry={!showPassword}
+              error={errors.password}
+              rightIcon={
+                <TouchableOpacity
+                  onPress={togglePasswordVisibility}
+                  style={styles.eyeIconInside}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color={COLORS.primary}
+                  />
+                </TouchableOpacity>
+              }
+            />
 
-          <Button
-            title={t('auth.signIn')}
-            onPress={handleLogin}
-            loading={isLoading || loading}
-            style={styles.loginButton}
-          />
+            {errors.general && (
+              <Text style={styles.errorText}>{errors.general}</Text>
+            )}
 
-          <Button
-            // title="Don't have an account? Sign Up"
-            onPress={() => navigation.navigate('Register')}
-            variant="ghost"
-            style={styles.signupButton}
-          />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            <Button
+              title={t('auth.signIn')}
+              onPress={handleLogin}
+              loading={isLoading || loading}
+              style={styles.loginButton}
+            />
+
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+      {updatePayload && (
+        <AppUpdateBottomSheet
+          visible
+          currentVersion={updatePayload.currentVersion}
+          latestVersion={updatePayload.latestVersion}
+          forceUpdate={updatePayload.forceUpdate}
+          storeUrl={updatePayload.storeUrl}
+          onContinue={updatePayload.forceUpdate ? undefined : clearUpdate}
+        />
+      )}
+    </>
   );
 };
 

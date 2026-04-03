@@ -271,6 +271,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
     const isPending = isPendingBorder(item?.is_pending ?? item?.isPending ?? item?.ispending);
     const isNip = isNipStatus(item);
     const isHighPending = isHighPendingCount(item?.loan_type_name, item?.pending_days, item?.pending_weeks);
+    const footerActionIconColor = isNip ? COLORS.error : COLORS.primary;
     return (
       <TouchableOpacity
         style={[styles.loanCard, isPending && styles.loanCardPending, isNip && styles.loanCardNip, isHighPending && styles.loanCardHighPending]}
@@ -300,7 +301,10 @@ const LoanCustomerListScreen = ({ navigation }) => {
               />
             )}
           </TouchableOpacity>
-          <Text style={styles.loanCardNameLine} numberOfLines={1}>
+          <Text
+            style={[styles.loanCardNameLine, isNip && styles.loanCardNameLineNip]}
+            numberOfLines={1}
+          >
             {(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
@@ -311,7 +315,9 @@ const LoanCustomerListScreen = ({ navigation }) => {
         <View style={styles.loanCardRow}>
           <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
           <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
-          <Text style={styles.loanCardValueAmount}>{formatCurrency(item?.loan_amount)}</Text>
+          <Text style={[styles.loanCardValueAmount, isNip && styles.loanCardValueAmountNip]}>
+            {formatCurrency(item?.loan_amount)}
+          </Text>
         </View>
         {item?.approved_amount != null && item?.approved_amount !== '' && (
           <View style={styles.loanCardRow}>
@@ -352,7 +358,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
                   handleMapPress(item.address_latitude, item.address_longitude);
                 }}
               >
-                <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+                <Ionicons name="map-outline" size={18} color={footerActionIconColor} />
               </TouchableOpacity>
             )}
             {item?.customer_phone && (
@@ -363,10 +369,10 @@ const LoanCustomerListScreen = ({ navigation }) => {
                   handlePhonePress(item.customer_phone);
                 }}
               >
-                <Ionicons name="call" size={18} color={COLORS.primary} />
+                <Ionicons name="call" size={18} color={footerActionIconColor} />
               </TouchableOpacity>
             )}
-            <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+            <Ionicons name="chevron-forward" size={18} color={footerActionIconColor} />
           </View>
         </View>
       </TouchableOpacity>
@@ -650,6 +656,9 @@ const styles = StyleSheet.create({
     color: COLORS.text?.primary || COLORS.primary,
     // marginHorizontal: SIZES.base,
   },
+  loanCardNameLineNip: {
+    color: COLORS.error,
+  },
   loanCardPhotoWrap: {
     width: 44,
     height: 44,
@@ -711,6 +720,9 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  loanCardValueAmountNip: {
+    color: COLORS.error,
   },
   loanCardFooter: {
     flexDirection: 'row',

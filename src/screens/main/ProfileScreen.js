@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import apiClient from '../../api/apiClient';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import Header from '../../components/common/Header';
@@ -13,6 +12,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { showAlert } from '../../utils/alertService';
+import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
 const ProfileScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -70,11 +70,10 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleLanguageSelect = async (newLanguage) => {
     try {
-      const token = await AsyncStorage.getItem('authToken');
       const storedUserId = await AsyncStorage.getItem('userId');
       const userId = user?.id || storedUserId;
 
-      if (!token || !userId) {
+      if (!userId) {
         showAlert({
           type: 'error',
           title: t('common.error'),
@@ -83,18 +82,7 @@ const ProfileScreen = ({ navigation }) => {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('language', newLanguage);
-
-      await apiClient.put(`/user/${userId}`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      await AsyncStorage.setItem('@app_language', newLanguage);
-      await AsyncStorage.setItem('login_language', newLanguage);
+      await syncUserLanguageWithApi(newLanguage, userId);
       await changeLanguage(newLanguage);
       updateUser({ language: newLanguage, lang: newLanguage });
       setShowLanguageModal(false);

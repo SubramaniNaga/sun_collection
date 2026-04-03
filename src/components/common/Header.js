@@ -5,46 +5,51 @@ import { COLORS, SIZES } from '../../constants/theme';
 
 const STATUS_BAR_COLOR = '#1d7ee2';
 
-const Header = ({ 
-  title, 
-  showBackButton = false, 
+const Header = ({
+  title,
+  showBackButton = false,
   showMenuButton = false,
   onBackPress,
   onMenuPress,
   rightComponent,
-  style 
+  /** Optional row below the title bar (e.g. search), same blue header background */
+  bottomContent,
+  style,
 }) => {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
-    <View style={[styles.header, style]}>
-      {showMenuButton && (
-        <TouchableOpacity 
-          onPress={onMenuPress} 
-          style={styles.menuButton}
-        >
-          <Ionicons name="menu" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-      )}
-      
-      {showBackButton && (
-        <TouchableOpacity 
-          onPress={onBackPress} 
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-      )}
-      
-      <Text style={styles.headerTitle}>{title}</Text>
-      
-      {rightComponent ? (
-        rightComponent
-      ) : (
-        <View style={styles.headerPlaceholder} />
-      )}
-    </View>
+      <View style={[styles.header, style]}>
+        {showMenuButton && (
+          <TouchableOpacity
+            onPress={onMenuPress}
+            style={styles.menuButton}
+          >
+            <Ionicons name="menu" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        )}
+
+        {showBackButton && (
+          <TouchableOpacity
+            onPress={onBackPress}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        )}
+
+        <Text style={styles.headerTitle}>{title}</Text>
+
+        {rightComponent ? (
+          rightComponent
+        ) : (
+          <View style={styles.headerPlaceholder} />
+        )}
+      </View>
+      {bottomContent != null ? (
+        <View style={styles.headerBottom}>{bottomContent}</View>
+      ) : null}
     </View>
   );
 };
@@ -55,10 +60,15 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: STATUS_BAR_COLOR,
-    height: 60,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SIZES.padding,
+  },
+  headerBottom: {
+    backgroundColor: STATUS_BAR_COLOR,
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: SIZES.base,
   },
   headerTitle: {
     flex: 1,

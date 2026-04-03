@@ -1,19 +1,45 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
+import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
 import Dashboard from '../../models/Dashboard';
+import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { showAlert } from '../../utils/alertService';
+import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
+
+const LANG_SWITCH_W = 58;
+const LANG_SWITCH_H = 30;
+const LANG_THUMB = 26;
+const LANG_PAD = 2;
+const LANG_THUMB_TRAVEL = LANG_SWITCH_W - LANG_THUMB - LANG_PAD * 2;
 
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { t } = useLanguage();
+  const { t, language, changeLanguage } = useLanguage();
+  const { user, updateUser } = useAuthContext();
+  const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
   const [dashboardData, setDashboardData] = useState(null);
+  const [langSaving, setLangSaving] = useState(false);
+  const slideAnim = useRef(
+    new Animated.Value(language === 'ta' ? LANG_THUMB_TRAVEL : 0)
+  ).current;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -37,14 +63,57 @@ const HomeScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       fetchDashboardData();
-    }, [fetchDashboardData])
+      runCheck();
+    }, [fetchDashboardData, runCheck])
   );
+
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: language === 'ta' ? LANG_THUMB_TRAVEL : 0,
+      useNativeDriver: true,
+      friction: 9,
+      tension: 80,
+    }).start();
+  }, [language, slideAnim]);
 
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification drawer
     console.log('Notification pressed');
     // You can navigate to a notifications screen when it's ready
     // navigation.navigate('Notifications');
+  };
+
+  const handleHomeLanguageChange = async (newLanguage) => {
+    if (newLanguage === language || langSaving) return;
+    setLangSaving(true);
+    try {
+      const storedUserId = await AsyncStorage.getItem('userId');
+      const userId = user?.id ?? storedUserId;
+      if (!userId) {
+        showAlert({
+          type: 'error',
+          title: t('common.error'),
+          message: t('profile.updateFailed') || 'Unable to update language. Please login again.',
+        });
+        return;
+      }
+      await syncUserLanguageWithApi(newLanguage, userId);
+      await changeLanguage(newLanguage);
+      updateUser({ language: newLanguage, lang: newLanguage });
+    } catch (error) {
+      console.error('Home language change error:', error);
+      const message =
+        error?.code === 'NO_AUTH'
+          ? t('profile.updateFailed') || 'Unable to update language. Please login again.'
+          : error?.response?.data?.message || 'Failed to change language. Please try again.';
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message,
+      });
+    } finally {
+      setLangSaving(false);
+    }
   };
 
   
@@ -91,6 +160,7 @@ const HomeScreen = ({ navigation }) => {
   ];
 
   return (
+    <>
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
@@ -99,12 +169,55 @@ const HomeScreen = ({ navigation }) => {
         showMenuButton={true}
         onMenuPress={() => navigation.openDrawer()}
         rightComponent={
-          <TouchableOpacity
-            onPress={handleNotificationPress}
-            style={styles.notificationButton}
-          >
-            <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <View
+              style={[
+                styles.langSwitchTrack,
+                langSaving && styles.langSwitchTrackDisabled,
+              ]}
+            >
+              {language === 'ta' && (
+                <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
+                  <Text style={styles.langSwitchInactiveText}>EN</Text>
+                </View>
+              )}
+              {language === 'en' && (
+                <View style={styles.langSwitchInactiveRight} pointerEvents="none">
+                  <Text style={styles.langSwitchInactiveText}>TA</Text>
+                </View>
+              )}
+              <Animated.View
+                style={[
+                  styles.langSwitchThumb,
+                  { transform: [{ translateX: slideAnim }] },
+                ]}
+              >
+                <Text style={styles.langSwitchThumbText}>
+                  {language === 'en' ? 'EN' : 'TA'}
+                </Text>
+              </Animated.View>
+              <View style={styles.langSwitchHitRow}>
+                <TouchableOpacity
+                  style={styles.langSwitchHitHalf}
+                  onPress={() => handleHomeLanguageChange('en')}
+                  disabled={langSaving}
+                  activeOpacity={0.7}
+                />
+                <TouchableOpacity
+                  style={styles.langSwitchHitHalf}
+                  onPress={() => handleHomeLanguageChange('ta')}
+                  disabled={langSaving}
+                  activeOpacity={0.7}
+                />
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={handleNotificationPress}
+              style={styles.notificationButton}
+            >
+              <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -133,44 +246,60 @@ const HomeScreen = ({ navigation }) => {
           ) : dashboardData ? (
             <View style={styles.dashboardGrid}>
               {/* Frontcash Card */}
-              <View style={[styles.dashboardCard, styles.frontcashCard]}>
+              <TouchableOpacity
+                style={[styles.dashboardCard, styles.frontcashCard]}
+                onPress={() => navigation.navigate('UpfrontCashAdd')}
+                activeOpacity={0.85}
+              >
                 <View style={styles.cardHeader}>
                   <Ionicons name="wallet" size={24} color={COLORS.white} />
                   <Text style={styles.cardHeaderText}>{t('home.frontcash')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedFrontcashAmount()}</Text>
                 <Text style={styles.cardCount}>{dashboardData.frontcash.count} {t('home.transactions')}</Text>
-              </View>
+              </TouchableOpacity>
 
               {/* Loans Given Card */}
-              <View style={[styles.dashboardCard, styles.loansCard]}>
+              <TouchableOpacity
+                style={[styles.dashboardCard, styles.loansCard]}
+                onPress={() => navigation.navigate('Loan')}
+                activeOpacity={0.85}
+              >
                 <View style={styles.cardHeader}>
                   <Ionicons name="document-text" size={24} color={COLORS.white} />
                   <Text style={styles.cardHeaderText}>{t('home.loansGiven')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedLoansGivenAmount()}</Text>
                 <Text style={styles.cardCount}>{dashboardData.loansGiven.count} {t('home.loans')}</Text>
-              </View>
+              </TouchableOpacity>
 
               {/* Collections Card */}
-              <View style={[styles.dashboardCard, styles.collectionsCard]}>
+              <TouchableOpacity
+                style={[styles.dashboardCard, styles.collectionsCard]}
+                onPress={() => navigation.navigate('CollectionHistory')}
+                activeOpacity={0.85}
+              >
                 <View style={styles.cardHeader}>
                   <Ionicons name="cash" size={24} color={COLORS.white} />
                   <Text style={styles.cardHeaderText}>{t('home.collections')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedCollectionsAmount()}</Text>
                 <Text style={styles.cardCount}>{dashboardData.collections.count} {t('home.collectionsCount')}</Text>
-              </View>
+              </TouchableOpacity>
 
               {/* Expenses Card */}
-              <View style={[styles.dashboardCard, styles.expensesCard]}>
+              <TouchableOpacity
+                style={[styles.dashboardCard, styles.expensesCard]}
+                onPress={() => navigation.navigate('Expenses')}
+                activeOpacity={0.85}
+              >
                 <View style={styles.cardHeader}>
                   <Ionicons name="card" size={24} color={COLORS.white} />
                   <Text style={styles.cardHeaderText}>{t('home.expenses')}</Text>
                 </View>
                 <Text style={styles.cardAmount}>{dashboardData.getFormattedExpensesAmount()}</Text>
                 <Text style={styles.cardCount}>{dashboardData.expenses.count} {t('home.expensesCount')}</Text>
-              </View>
+              </TouchableOpacity>
 
               {/* Tracking Card - Full Width 
               <View style={[styles.dashboardCard, styles.trackingCard, styles.fullWidthCard]}>
@@ -227,6 +356,17 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </ScrollView>
     </SafeAreaView>
+    {updatePayload && (
+      <AppUpdateBottomSheet
+        visible
+        currentVersion={updatePayload.currentVersion}
+        latestVersion={updatePayload.latestVersion}
+        forceUpdate={updatePayload.forceUpdate}
+        storeUrl={updatePayload.storeUrl}
+        onContinue={updatePayload.forceUpdate ? undefined : clearUpdate}
+      />
+    )}
+    </>
   );
 };
 
@@ -273,6 +413,70 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     textAlign: 'center',
     letterSpacing: -0.2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  langSwitchTrack: {
+    width: LANG_SWITCH_W,
+    height: LANG_SWITCH_H,
+    borderRadius: LANG_SWITCH_H / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.38)',
+    marginRight: 6,
+    justifyContent: 'center',
+  },
+  langSwitchTrackDisabled: {
+    opacity: 0.55,
+  },
+  langSwitchInactiveLeft: {
+    position: 'absolute',
+    left: 6,
+    top: LANG_PAD,
+    bottom: LANG_PAD,
+    justifyContent: 'center',
+    minWidth: 18,
+  },
+  langSwitchInactiveRight: {
+    position: 'absolute',
+    right: 6,
+    top: LANG_PAD,
+    bottom: LANG_PAD,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    minWidth: 18,
+  },
+  langSwitchInactiveText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.42)',
+    letterSpacing: 0.2,
+  },
+  langSwitchThumb: {
+    position: 'absolute',
+    left: LANG_PAD,
+    top: LANG_PAD,
+    width: LANG_THUMB,
+    height: LANG_THUMB,
+    borderRadius: LANG_THUMB / 2,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  langSwitchThumbText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.2,
+  },
+  langSwitchHitRow: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+  },
+  langSwitchHitHalf: {
+    flex: 1,
   },
   notificationButton: {
     padding: SIZES.padding / 2,

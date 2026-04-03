@@ -15,6 +15,8 @@ import {
 
   Modal,
 
+  Platform,
+
   RefreshControl,
 
   StyleSheet,
@@ -74,9 +76,11 @@ const getImageUrl = (imagePath) => {
 
 const NIPScreen = ({ navigation }) => {
 
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [nipTypeTab, setNipTypeTab] = useState(1);
 
   const [nipList, setNipList] = useState([]);
 
@@ -136,6 +140,8 @@ const NIPScreen = ({ navigation }) => {
 
         limit: LIMIT,
 
+        niptype: nipTypeTab,
+
       });
 
 
@@ -178,7 +184,7 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-  }, [searchQuery, t]);
+  }, [searchQuery, nipTypeTab, t]);
 
 
 
@@ -566,7 +572,7 @@ const NIPScreen = ({ navigation }) => {
 
             >
 
-              <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+              <Ionicons name="map-outline" size={18} color={COLORS.error} />
 
             </TouchableOpacity>
 
@@ -588,13 +594,13 @@ const NIPScreen = ({ navigation }) => {
 
             >
 
-              <Ionicons name="call" size={18} color={COLORS.primary} />
+              <Ionicons name="call" size={18} color={COLORS.error} />
 
             </TouchableOpacity>
 
           )}
 
-          <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+          <Ionicons name="chevron-forward" size={18} color={COLORS.error} />
 
         </View>
 
@@ -718,49 +724,78 @@ const NIPScreen = ({ navigation }) => {
 
         onBackPress={() => navigation.goBack()}
 
+        bottomContent={(
+          <View style={styles.headerSearchRow}>
+            <Ionicons name="search" size={20} color={COLORS.primary} style={styles.headerSearchIcon} />
+            <View style={styles.headerSearchInputWrap}>
+              <TextInput
+                style={[
+                  styles.headerSearchInput,
+                  language === 'ta' ? styles.headerSearchInputTamil : styles.headerSearchInputEnglish,
+                ]}
+                placeholder={t('nip.searchPlaceholder')}
+                placeholderTextColor={COLORS.text.tertiary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                clearButtonMode="while-editing"
+                returnKeyType="search"
+                multiline={false}
+                numberOfLines={1}
+                scrollEnabled
+                underlineColorAndroid="transparent"
+              />
+            </View>
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                style={styles.headerSearchClear}
+                onPress={() => setSearchQuery('')}
+              >
+                <Ionicons name="close-circle" size={18} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       />
 
+      <View style={styles.topSection}>
 
+        <View style={styles.nipTabsRow}>
 
-      <View style={styles.searchSection}>
+          <TouchableOpacity
 
-        <View style={styles.searchInputWrapper}>
+            style={[styles.nipTab, nipTypeTab === 1 && styles.nipTabActive]}
 
-          <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
+            onPress={() => setNipTypeTab(1)}
 
-          <TextInput
+            activeOpacity={0.7}
 
-            style={styles.searchInput}
+          >
 
-            placeholder={t('nip.searchPlaceholder')}
+            <Text style={[styles.nipTabText, nipTypeTab === 1 && styles.nipTabTextActive]}>
 
-            placeholderTextColor={COLORS.text.secondary}
+              {t('nip.tabNIP1')}
 
-            value={searchQuery}
+            </Text>
 
-            onChangeText={setSearchQuery}
+          </TouchableOpacity>
 
-            clearButtonMode="while-editing"
+          <TouchableOpacity
 
-            returnKeyType="search"
+            style={[styles.nipTab, nipTypeTab === 2 && styles.nipTabActive]}
 
-          />
+            onPress={() => setNipTypeTab(2)}
 
-          {searchQuery.length > 0 && (
+            activeOpacity={0.7}
 
-            <TouchableOpacity
+          >
 
-              style={styles.clearButton}
+            <Text style={[styles.nipTabText, nipTypeTab === 2 && styles.nipTabTextActive]}>
 
-              onPress={() => setSearchQuery('')}
+              {t('nip.tabNIP2')}
 
-            >
+            </Text>
 
-              <Ionicons name="close-circle" size={16} color={COLORS.text.secondary} />
-
-            </TouchableOpacity>
-
-          )}
+          </TouchableOpacity>
 
         </View>
 
@@ -892,13 +927,9 @@ const styles = StyleSheet.create({
 
   },
 
-  searchSection: {
+  topSection: {
 
     backgroundColor: COLORS.white,
-
-    paddingHorizontal: SIZES.padding,
-
-    paddingVertical: SIZES.padding * 0.75,
 
     borderBottomWidth: 1,
 
@@ -906,19 +937,127 @@ const styles = StyleSheet.create({
 
   },
 
-  searchInputWrapper: {
+  headerSearchRow: {
 
     flexDirection: 'row',
 
+    flexWrap: 'nowrap',
+
     alignItems: 'center',
 
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.white,
 
-    borderRadius: SIZES.radius,
+    borderRadius: SIZES.radius * 2,
 
     paddingHorizontal: SIZES.base,
 
-    paddingVertical: SIZES.base / 2,
+    paddingVertical: Platform.OS === 'android' ? 4 : 6,
+
+    borderWidth: 1,
+
+    borderColor: 'rgba(255,255,255,0.35)',
+
+  },
+
+  headerSearchIcon: {
+
+    marginRight: SIZES.base / 2,
+
+    flexShrink: 0,
+
+  },
+
+  headerSearchInputWrap: {
+
+    flex: 1,
+
+    minWidth: 0,
+
+    justifyContent: 'center',
+
+  },
+
+  headerSearchInput: {
+
+    flexGrow: 1,
+
+    width: '100%',
+
+    minWidth: 0,
+
+    paddingVertical: Platform.OS === 'android' ? 6 : 8,
+
+    paddingHorizontal: 0,
+
+    margin: 0,
+
+    color: COLORS.black,
+
+    ...(Platform.OS === 'android'
+
+      ? { textAlignVertical: 'center', includeFontPadding: false }
+
+      : {}),
+
+  },
+
+  headerSearchInputEnglish: {
+
+    fontSize: SIZES.body2,
+
+    lineHeight: Math.ceil(SIZES.body2 * 1.25),
+
+    maxHeight: Platform.OS === 'android' ? 46 : 50,
+
+  },
+
+  headerSearchInputTamil: {
+
+    fontSize: SIZES.body4,
+
+    lineHeight: Math.ceil(SIZES.body4 * 1.25),
+
+    maxHeight: Platform.OS === 'android' ? 34 : 38,
+
+  },
+
+  headerSearchClear: {
+
+    padding: SIZES.base / 2,
+
+    flexShrink: 0,
+
+  },
+
+  nipTabsRow: {
+
+    flexDirection: 'row',
+
+    paddingHorizontal: SIZES.padding,
+
+    paddingTop: SIZES.base,
+
+    paddingBottom: SIZES.base,
+
+    gap: SIZES.base / 2,
+
+  },
+
+  nipTab: {
+
+    flex: 1,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    paddingVertical: SIZES.base,
+
+    paddingHorizontal: SIZES.base,
+
+    borderRadius: SIZES.radius * 0.75,
+
+    backgroundColor: COLORS.lightGray,
 
     borderWidth: 1,
 
@@ -926,27 +1065,27 @@ const styles = StyleSheet.create({
 
   },
 
-  searchIcon: {
+  nipTabActive: {
 
-    marginRight: SIZES.base / 2,
+    backgroundColor: COLORS.primary,
+
+    borderColor: COLORS.primary,
 
   },
 
-  searchInput: {
-
-    flex: 1,
-
-    padding: SIZES.base,
+  nipTabText: {
 
     fontSize: SIZES.body3,
 
-    color: COLORS.text.primary,
+    fontWeight: '600',
+
+    color: COLORS.text.secondary,
 
   },
 
-  clearButton: {
+  nipTabTextActive: {
 
-    padding: SIZES.base / 2,
+    color: COLORS.white,
 
   },
 
@@ -1030,7 +1169,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '700',
 
-    color: COLORS.text?.primary || COLORS.primary,
+    color: COLORS.error,
 
     // marginHorizontal: SIZES.base,
 
@@ -1134,7 +1273,7 @@ const styles = StyleSheet.create({
 
     fontWeight: '600',
 
-    color: COLORS.primary,
+    color: COLORS.error,
 
     flex: 1,
 
