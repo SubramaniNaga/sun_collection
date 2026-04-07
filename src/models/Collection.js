@@ -60,6 +60,8 @@ class Collection {
 
     // Loan fields
     this.loanAmount = data.loan_amount || '0';
+    this.processingFees = data.processing_fees ?? null;
+    this.intrestAmount = data.intrest_amount ?? null;
     this.approvedAmount = data.approved_amount || '0';
     this.loanPeriod = data.loan_period ?? null;
     this.loanTypeName = data.loan_type_name || null;

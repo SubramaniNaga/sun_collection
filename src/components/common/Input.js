@@ -21,6 +21,7 @@ const Input = ({
   leftIcon,
   rightIcon,
   containerStyle,
+  required = false,
   ...props
 }) => {
   const getInputStyle = () => {
@@ -52,7 +53,10 @@ const Input = ({
   return (
     <View style={[styles.container, style, containerStyle]}>
       {label && (
-        <Text style={[styles.label, labelStyle]}>{label}</Text>
+        <Text style={[styles.label, labelStyle]}>
+          {label}
+          {required ? <Text style={styles.requiredMark}> *</Text> : null}
+        </Text>
       )}
       
       <View style={styles.inputContainer}>
@@ -101,6 +105,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.primary,
     marginBottom: SIZES.base / 2,
+  },
+  requiredMark: {
+    color: COLORS.error,
+    fontWeight: '600',
   },
   inputContainer: {
     flexDirection: 'row',

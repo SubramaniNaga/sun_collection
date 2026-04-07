@@ -44,10 +44,12 @@ const CustomDrawerContent = (props) => {
     return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
 
+  const headerPadding = SIZES.padding * 1.5;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      {/* Enhanced Header */}
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+      {/* Safe area top is inside header so status-bar strip matches primary blue */}
+      <View style={[styles.header, { paddingTop: insets.top + headerPadding }]}>
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
@@ -127,7 +129,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   header: {
-    padding: SIZES.padding * 1.5,
+    paddingHorizontal: SIZES.padding * 1.5,
+    paddingBottom: SIZES.padding * 1.5,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.primary,

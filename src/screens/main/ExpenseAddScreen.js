@@ -161,6 +161,7 @@ const ExpenseAddScreen = ({ navigation }) => {
             items={categoryOptions}
             placeholder={categoriesLoading ? t('common.loading') || 'Loading...' : t('expenses.expenseType')}
             error={errors.category}
+            required
           />
 
           <FormInput
@@ -170,6 +171,7 @@ const ExpenseAddScreen = ({ navigation }) => {
             placeholder="0.00"
             keyboardType="numeric"
             error={errors.amount}
+            required
           />
 
           <DatePicker
@@ -177,6 +179,7 @@ const ExpenseAddScreen = ({ navigation }) => {
             value={formData.date}
             onValueChange={(value) => handleInputChange('date', value)}
             error={errors.date}
+            required
           />
 
           <FormInput
@@ -189,9 +192,14 @@ const ExpenseAddScreen = ({ navigation }) => {
           />
 
           <CustomImagePicker
+            label={t('expenses.receiptImage')}
             image={selectedImage}
-            onImageChange={setSelectedImage}
+            onImageChange={(img) => {
+              setSelectedImage(img);
+              if (errors.image) setErrors((prev) => ({ ...prev, image: '' }));
+            }}
             error={errors.image}
+            required
           />
         </ScrollView>
       </KeyboardAvoidingView>

@@ -14,9 +14,16 @@ const Header = ({
   rightComponent,
   /** Optional row below the title bar (e.g. search), same blue header background */
   bottomContent,
+  /** Renders in the same row as the title (e.g. compact search). Hides bottomContent when set. */
+  inlineHeaderContent,
+  /** Full-width search/toolbar row: back stays; title and right slot hidden. */
+  searchExpanded = false,
+  searchExpandedContent,
   style,
 }) => {
   const insets = useSafeAreaInsets();
+  const useExpandedSearch = Boolean(searchExpanded && searchExpandedContent != null);
+  const useInline = !useExpandedSearch && inlineHeaderContent != null;
 
   return (
     <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
@@ -39,15 +46,27 @@ const Header = ({
           </TouchableOpacity>
         )}
 
-        <Text style={styles.headerTitle}>{title}</Text>
-
-        {rightComponent ? (
-          rightComponent
+        {useExpandedSearch ? (
+          <View style={styles.headerSearchExpandedFill}>{searchExpandedContent}</View>
+        ) : useInline ? (
+          <>
+            <Text style={styles.headerTitleCompact} numberOfLines={1}>
+              {title}
+            </Text>
+            <View style={styles.headerInlineFill}>{inlineHeaderContent}</View>
+          </>
         ) : (
-          <View style={styles.headerPlaceholder} />
+          <>
+            <Text style={styles.headerTitle}>{title}</Text>
+            {rightComponent ? (
+              rightComponent
+            ) : (
+              <View style={styles.headerPlaceholder} />
+            )}
+          </>
         )}
       </View>
-      {bottomContent != null ? (
+      {bottomContent != null && !useInline && !useExpandedSearch ? (
         <View style={styles.headerBottom}>{bottomContent}</View>
       ) : null}
     </View>
@@ -76,6 +95,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.white,
     textAlign: 'center',
+  },
+  headerTitleCompact: {
+    flexShrink: 0,
+    fontSize: SIZES.h4,
+    fontWeight: '600',
+    color: COLORS.white,
+    marginRight: SIZES.base,
+    maxWidth: 72,
+  },
+  headerInlineFill: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  headerSearchExpandedFill: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   headerPlaceholder: {
     width: 40, // Same width as back/menu button for centering

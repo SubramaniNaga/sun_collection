@@ -12,6 +12,7 @@ const FormInput = ({
   maxLength,
   error,
   editable = true,
+  required = false,
   style = {},
   ...props
 }) => {
@@ -25,6 +26,9 @@ const FormInput = ({
           marginBottom: SIZES.base,
         }}>
           {label}
+          {required ? (
+            <Text style={{ color: COLORS.error, fontWeight: '600' }}> *</Text>
+          ) : null}
         </Text>
       )}
       <TextInput

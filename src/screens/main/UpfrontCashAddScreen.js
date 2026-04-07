@@ -120,6 +120,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 placeholder={t('upfrontCash.enterAmount')}
                 keyboardType="numeric"
                 error={errors.amount}
+                required
               />
               <View style={styles.typeField}>
                 <Text style={styles.typeLabel}>{t('upfrontCash.transactionType')}</Text>
@@ -165,6 +166,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={4}
                 error={errors.message}
+                required
               />
             </Card>
             <View style={styles.bottomPadding} />

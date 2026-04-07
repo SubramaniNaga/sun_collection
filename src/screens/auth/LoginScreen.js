@@ -402,6 +402,17 @@ const LoginScreen = ({ navigation }) => {
 
   const getLoginErrorMessage = (error) => {
     if (!error) return t('auth.loginError');
+    
+    // Check for device ID mismatch error
+    if (error.response?.data?.message?.toLowerCase().includes('device id mismatch') ||
+        error.response?.data?.message?.toLowerCase().includes('device mismatch') ||
+        error.response?.data?.message?.toLowerCase().includes('device id')) {
+      const errorMessage = error.response.data.message;
+      // Show popup for device mismatch errors
+      showError('Device ID Mismatch', errorMessage);
+      return errorMessage;
+    }
+    
     if (typeof error.message === 'string' && error.message && !error.message.startsWith('API Error:')) {
       return error.message;
     }

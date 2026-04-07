@@ -2,16 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
+import { apiServices } from '../../api/services/apiServices';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert } from '../../utils/alertService';
+import { getApiErrorMessage, showAlert } from '../../utils/alertService';
+import { getDeviceId } from '../../utils/deviceId';
 import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
 const ProfileScreen = ({ navigation }) => {
@@ -33,6 +36,7 @@ const ProfileScreen = ({ navigation }) => {
     new: false,
     confirm: false,
   });
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -102,8 +106,9 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handlePasswordChange = () => {
-    // Validate passwords
+  const handlePasswordChange = async () => {
+    if (passwordSubmitting) return;
+
     if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
       showAlert({
         type: 'error',
@@ -131,25 +136,53 @@ const ProfileScreen = ({ navigation }) => {
       return;
     }
 
-    // TODO: Call API to change password
-    console.log('Changing password...', {
-      currentPassword: passwordData.currentPassword,
-      newPassword: passwordData.newPassword,
-    });
+    const storedUserId = await AsyncStorage.getItem('userId');
+    const userId = user?.id ?? storedUserId;
+    if (!userId) {
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: t('profile.userIdMissing') || 'Could not determine your user ID. Please log in again.',
+      });
+      return;
+    }
 
-    showAlert({
-      type: 'success',
-      title: t('common.success'),
-      message: t('profile.passwordChanged') || 'Password changed successfully',
-    });
+    let deviceId = await AsyncStorage.getItem('deviceId');
+    if (!deviceId) {
+      deviceId = await getDeviceId();
+    }
 
-    // Reset form and close modal
-    setPasswordData({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    });
-    setShowPasswordModal(false);
+    try {
+      setPasswordSubmitting(true);
+      await apiServices.auth.changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+        userid: userId,
+        device_id: deviceId,
+      });
+
+      showAlert({
+        type: 'success',
+        title: t('common.success'),
+        message: t('profile.passwordChanged') || 'Password changed successfully',
+      });
+
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setShowPasswordModal(false);
+    } catch (error) {
+      console.error('Change password error:', error);
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: getApiErrorMessage(error, t('profile.passwordChangeFailed') || 'Could not change password. Please try again.'),
+      });
+    } finally {
+      setPasswordSubmitting(false);
+    }
   };
 
   const handlePrivacyPress = () => {
@@ -202,12 +235,12 @@ const ProfileScreen = ({ navigation }) => {
       },
     },
    
-    {
-      id: 'privacy',
-      title: t('profile.privacySettings'),
-      icon: 'shield-checkmark-outline',
-      onPress: handlePrivacyPress,
-    },
+    // {
+    //   id: 'privacy',
+    //   title: t('profile.privacySettings'),
+    //   icon: 'shield-checkmark-outline',
+    //   onPress: handlePrivacyPress,
+    // },
     // {
     //   id: 'help',
     //   title: t('profile.helpSupport'),
@@ -436,38 +469,53 @@ const ProfileScreen = ({ navigation }) => {
         animationType="fade"
         onRequestClose={() => setShowPasswordModal(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowPasswordModal(false)}
+        <KeyboardAvoidingView
+          style={styles.passwordModalKeyboardRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
         >
-          <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderContent}>
-                <View style={styles.modalIconContainer}>
-                  <Ionicons name="lock-closed" size={28} color={COLORS.primary} />
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowPasswordModal(false)}
+          >
+            <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderContent}>
+                  <View style={styles.modalIconContainer}>
+                    <Ionicons name="lock-closed" size={28} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="tail">
+                    {truncateText(t('profile.changePassword') || 'Change Password', 18)}
+                  </Text>
                 </View>
-                <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="tail">
-                  {truncateText(t('profile.changePassword') || 'Change Password', 18)}
-                </Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => {
+                    setShowPasswordModal(false);
+                    setPasswordData({
+                      currentPassword: '',
+                      newPassword: '',
+                      confirmPassword: '',
+                    });
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={() => {
-                  setShowPasswordModal(false);
-                  setPasswordData({
-                    currentPassword: '',
-                    newPassword: '',
-                    confirmPassword: '',
-                  });
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+
+              <KeyboardAwareScrollView
+                style={styles.passwordModalScroll}
+                contentContainerStyle={styles.passwordModalScrollContent}
+                showsVerticalScrollIndicator={false}
+                enableOnAndroid
+                enableAutomaticScroll
+                keyboardShouldPersistTaps="handled"
+                extraScrollHeight={Platform.OS === 'android' ? 140 : 100}
+                extraHeight={120}
+                nestedScrollEnabled
               >
-                <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.passwordModalContent} showsVerticalScrollIndicator={false}>
               {/* Current Password */}
               <View style={styles.passwordInputContainer}>
                 <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
@@ -556,6 +604,7 @@ const ProfileScreen = ({ navigation }) => {
               <View style={styles.passwordButtonRow}>
                 <TouchableOpacity
                   style={[styles.passwordButton, styles.passwordButtonCancel]}
+                  disabled={passwordSubmitting}
                   onPress={() => {
                     setShowPasswordModal(false);
                     setPasswordData({
@@ -568,15 +617,21 @@ const ProfileScreen = ({ navigation }) => {
                   <Text style={styles.passwordButtonCancelText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.passwordButton, styles.passwordButtonSubmit]}
+                  style={[styles.passwordButton, styles.passwordButtonSubmit, passwordSubmitting && styles.passwordButtonSubmitDisabled]}
                   onPress={handlePasswordChange}
+                  disabled={passwordSubmitting}
                 >
-                  <Text style={styles.passwordButtonSubmitText}>{t('common.save')}</Text>
+                  {passwordSubmitting ? (
+                    <ActivityIndicator color={COLORS.white} size="small" />
+                  ) : (
+                    <Text style={styles.passwordButtonSubmitText}>{t('common.save')}</Text>
+                  )}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
+              </KeyboardAwareScrollView>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -768,6 +823,9 @@ const styles = StyleSheet.create({
     fontSize: SIZES.h2,
     color: COLORS.text.tertiary,
   },
+  passwordModalKeyboardRoot: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -780,6 +838,7 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius * 3,
     width: '100%',
     maxWidth: 420,
+    maxHeight: '88%',
     overflow: 'hidden',
     shadowColor: COLORS.black,
     shadowOffset: {
@@ -917,9 +976,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  passwordModalContent: {
+  passwordModalScroll: {
+    maxHeight: 420,
+  },
+  passwordModalScrollContent: {
     padding: SIZES.padding * 1.5,
-    maxHeight: 500,
+    paddingBottom: SIZES.padding * 3,
   },
   passwordInputContainer: {
     marginBottom: SIZES.margin * 1.5,
@@ -943,7 +1005,7 @@ const styles = StyleSheet.create({
   passwordInput: {
     flex: 1,
     fontSize: SIZES.body2,
-    color: COLORS.text.primary,
+    color: COLORS.black,
     paddingVertical: SIZES.base,
     textAlignVertical: 'center',
     includeFontPadding: false,
@@ -976,6 +1038,9 @@ const styles = StyleSheet.create({
   },
   passwordButtonSubmit: {
     backgroundColor: COLORS.primary,
+  },
+  passwordButtonSubmitDisabled: {
+    opacity: 0.85,
   },
   passwordButtonSubmitText: {
     fontSize: SIZES.body2,

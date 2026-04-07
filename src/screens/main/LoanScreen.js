@@ -574,18 +574,14 @@ const LoanScreen = ({ navigation, route }) => {
                   <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.balance_amount || loan?.balance_amount)}</Text>
                 </View>
               )}
-              {(loanDetails?.intrest_amount || loan?.intrest_amount) != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>{t('loan.interestAmount')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.intrest_amount || loan?.intrest_amount)}</Text>
-                </View>
-              )}
-              {(loanDetails?.processing_fees || loan?.processing_fees) != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>{t('loan.processingFees')}</Text>
-                  <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.processing_fees || loan?.processing_fees)}</Text>
-                </View>
-              )}
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{t('customer.aathayam')}</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.intrest_amount ?? loan?.intrest_amount)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{t('customer.magimai')}</Text>
+                <Text style={styles.detailValue}>{formatLoanAmount(loanDetails?.processing_fees ?? loan?.processing_fees)}</Text>
+              </View>
               {(loanDetails?.payment_type || loan?.payment_type) != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{t('loan.paymentType')}</Text>

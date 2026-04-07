@@ -11,6 +11,7 @@ const DatePicker = ({
   onValueChange,
   error,
   editable = true,
+  required = false,
   style = {},
   minimumDate,
   maximumDate,
@@ -38,7 +39,14 @@ const DatePicker = ({
 
   return (
     <View style={[styles.container, style]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && (
+        <Text style={styles.label}>
+          {label}
+          {required ? (
+            <Text style={styles.labelRequired}> *</Text>
+          ) : null}
+        </Text>
+      )}
 
       <Pressable
         onPress={() => editable && setShow(true)}
@@ -101,6 +109,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.text?.primary || '#333',
     marginBottom: SIZES.base,
+  },
+  labelRequired: {
+    color: COLORS.error,
+    fontWeight: '600',
   },
   inputContainer: {
     flexDirection: 'row',

@@ -260,7 +260,24 @@ export const apiServices = {
         console.error('Refresh token error:', error);
         throw error;
       }
-    }
+    },
+
+    /**
+     * Change password for the logged-in user.
+     * Body keys expected by backend: current_password, new_password, userid, device_id
+     */
+    changePassword: async ({ currentPassword, newPassword, userid, device_id }) => {
+      const body = {
+        current_password: currentPassword,
+        new_password: newPassword,
+        userid: String(userid),
+        device_id: String(device_id),
+      };
+      const response = await apiClient.post(ENDPOINTS.AUTH.CHANGE_PASSWORD, body, {
+        skipGlobalLoader: true,
+      });
+      return response.data;
+    },
   },
 
   // Customer Services
@@ -285,25 +302,20 @@ export const apiServices = {
         const lineId = await AsyncStorage.getItem('lineId');
         const branchId = await AsyncStorage.getItem('branchId');
 
-        const formDataWithParams = new FormData();
-        for (const [key, value] of formData.entries()) {
-          formDataWithParams.append(key, value);
-        }
-        const lineIdNum = lineId != null && lineId !== '' ? (Number(lineId) || parseInt(lineId, 10) || 1) : 1;
-        const branchIdNum = branchId != null && branchId !== '' ? (Number(branchId) || parseInt(branchId, 10) || 1) : 1;
-        formDataWithParams.append('line_id', String(lineIdNum));
-        formDataWithParams.append('branch_id', String(branchIdNum));
+        const lineIdNum = lineId != null && lineId !== '' ? (Number(lineId) || parseInt(String(lineId), 10) || 1) : 1;
+        const branchIdNum = branchId != null && branchId !== '' ? (Number(branchId) || parseInt(String(branchId), 10) || 1) : 1;
+        // Match POST /customer/with-loan multipart (do not clone FormData — RN file parts break when re-built via .entries())
+        formData.append('branch_id', String(branchIdNum));
+        formData.append('line_id', String(lineIdNum));
 
-        const payloadLog = {};
-        for (const [key, value] of formDataWithParams.entries()) {
-          if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value && 'type' in value) {
-            payloadLog[key] = `[FILE] name: ${value.name}, type: ${value.type}, uri: ${value.uri?.substring?.(0, 60)}...`;
-          } else {
-            payloadLog[key] = value;
-          }
-        }
-        console.log('👤 createCustomerWithLoan - PAYLOAD:', JSON.stringify(payloadLog, null, 2));
-        console.log('👤 API: createCustomerWithLoan - POST', ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN, '| lineId:', lineId, '| branchId:', branchId);
+        console.log(
+          '👤 API: createCustomerWithLoan - POST',
+          ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN,
+          '| branch_id:',
+          branchIdNum,
+          '| line_id:',
+          lineIdNum,
+        );
 
         const path = ENDPOINTS.CUSTOMER.CREATE_WITH_LOAN;
         const baseURL = apiClient.defaults?.baseURL || '';
@@ -320,7 +332,7 @@ export const apiServices = {
         const response = await fetch(fullUrl, {
           method: 'POST',
           headers,
-          body: formDataWithParams,
+          body: formData,
           signal: controller.signal,
         });
 
@@ -461,7 +473,7 @@ export const apiServices = {
           search = '',
           page = 1,
           limit = 20,
-          niptype,
+          nip_type,
         } = params;
         const requestParams = {
           branch_id: branchId || 1,
@@ -469,7 +481,7 @@ export const apiServices = {
           ...(search && { search }),
           page,
           limit,
-          ...(niptype != null && niptype !== '' ? { niptype } : {}),
+          ...(nip_type != null && nip_type !== '' ? { nip_type } : {}),
         };
         console.log('🔗 API: getNIPList - GET', ENDPOINTS.LOAN.NIP, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.LOAN.NIP, { params: requestParams });

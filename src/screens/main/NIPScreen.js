@@ -2,32 +2,34 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { StatusBar } from 'expo-status-bar';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  ActivityIndicator,
+    ActivityIndicator,
 
-  FlatList,
+    FlatList,
 
-  Image,
+    Image,
 
-  Linking,
+    Keyboard,
 
-  Modal,
+    Linking,
 
-  Platform,
+    Modal,
 
-  RefreshControl,
+    Platform,
 
-  StyleSheet,
+    RefreshControl,
 
-  Text,
+    StyleSheet,
 
-  TextInput,
+    Text,
 
-  TouchableOpacity,
+    TextInput,
 
-  View,
+    TouchableOpacity,
+
+    View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -72,13 +74,48 @@ const getImageUrl = (imagePath) => {
 
 };
 
+const formatAmountOrDash = (value) => {
 
+  if (value === null || value === undefined || value === '') return '—';
+
+  const n = Number(value);
+
+  if (Number.isNaN(n)) return '—';
+
+  return formatCurrency(value);
+
+};
+
+/** Ordered steps for “one level” font size changes on NIP screen */
+const NIP_FONT_LADDER = [
+  SIZES.body5,
+  SIZES.body4,
+  SIZES.body3,
+  SIZES.body2,
+  SIZES.body1,
+  SIZES.h3,
+  SIZES.h2,
+];
+
+function shiftNipFontSize(baseSize, language) {
+  const idx = NIP_FONT_LADDER.indexOf(baseSize);
+  if (idx === -1) return baseSize;
+  const delta = language === 'ta' ? -1 : 1;
+  const next = Math.max(0, Math.min(NIP_FONT_LADDER.length - 1, idx + delta));
+  return NIP_FONT_LADDER[next];
+}
 
 const NIPScreen = ({ navigation }) => {
 
   const { t, language } = useLanguage();
 
+  const styles = useMemo(() => createNipScreenStyles(language), [language]);
+
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
+
+  const headerSearchInputRef = useRef(null);
 
   const [nipTypeTab, setNipTypeTab] = useState(1);
 
@@ -106,11 +143,25 @@ const NIPScreen = ({ navigation }) => {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    if (!headerSearchOpen) return undefined;
+    const t = setTimeout(() => {
+      headerSearchInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(t);
+  }, [headerSearchOpen]);
 
+  const closeHeaderSearch = useCallback(() => {
+    Keyboard.dismiss();
+    setSearchQuery('');
+    setHeaderSearchOpen(false);
+  }, []);
 
   const fetchNIPLoans = useCallback(async (page = 1, append = false, options = {}) => {
 
     const { skipFullScreenLoader = false } = options;
+
+    const nipTypeForApi = nipTypeTab === 2 ? 'nip2' : 'nip1';
 
     try {
 
@@ -140,7 +191,7 @@ const NIPScreen = ({ navigation }) => {
 
         limit: LIMIT,
 
-        niptype: nipTypeTab,
+        nip_type: nipTypeForApi,
 
       });
 
@@ -148,9 +199,13 @@ const NIPScreen = ({ navigation }) => {
 
       const list = Array.isArray(response?.data) ? response.data : [];
 
+      const listForTab = list.filter(
+        (row) => String(row.nip_type ?? '').toLowerCase() === nipTypeForApi,
+      );
+
       const pag = response?.pagination || {};
 
-      const nipLoans = NIPLoan.fromApiResponseArray(list);
+      const nipLoans = NIPLoan.fromApiResponseArray(listForTab);
 
       setNipList((prev) => (append ? [...prev, ...nipLoans] : nipLoans));
 
@@ -356,14 +411,6 @@ const NIPScreen = ({ navigation }) => {
 
 
 
-  const getStatusColor = (loan) => {
-
-    return loan.getStatusColor();
-
-  };
-
-
-
   const formatDate = (dateStr) => {
 
     if (!dateStr) return '—';
@@ -399,12 +446,6 @@ const NIPScreen = ({ navigation }) => {
     }
 
   };
-
-
-
-  // customer_id or customer_no (NIPLoan: customerId, customerNo; raw API: customer_id, customer_no)
-
-  const getCustomerIdDisplay = (item) => item?.customerId ?? item?.customerNo ?? item?.customer_id ?? item?.customer_no ?? '—';
 
 
 
@@ -466,15 +507,19 @@ const NIPScreen = ({ navigation }) => {
 
         </TouchableOpacity>
 
-        <Text style={styles.nipCardNameLine} numberOfLines={1}>
+        <View style={styles.nipCardHeaderBody}>
 
-          {getCustomerIdDisplay(item)}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
+          <Text style={styles.nipCardNameLine} numberOfLines={2}>
 
-        </Text>
+            {(item?.customerNo ?? item?.customer_no ?? '—')}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
 
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
+          </Text>
 
-          <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
+          <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: '#FEE2E2' }]}>
+
+            <Text style={[styles.statusText, styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+
+          </View>
 
         </View>
 
@@ -489,6 +534,34 @@ const NIPScreen = ({ navigation }) => {
         <Text style={styles.nipCardLabel}>{t('loan.loanAmount')}</Text>
 
         <Text style={styles.nipCardValueAmount}>{formatCurrency(item?.loanAmount)}</Text>
+
+      </View>
+
+      <View style={styles.nipCardRow}>
+
+        <Ionicons name="pricetag-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+
+        <Text style={styles.nipCardLabel}>{t('loan.interestAmount')}</Text>
+
+        <Text style={styles.nipCardValue} numberOfLines={1}>
+
+          {formatAmountOrDash(item?.intrestAmount ?? item?.intrest_amount)}
+
+        </Text>
+
+      </View>
+
+      <View style={styles.nipCardRow}>
+
+        <Ionicons name="trending-up-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+
+        <Text style={styles.nipCardLabel}>{t('loan.processingFees')}</Text>
+
+        <Text style={styles.nipCardValue} numberOfLines={1}>
+
+          {formatAmountOrDash(item?.processingFees ?? item?.processing_fees)}
+
+        </Text>
 
       </View>
 
@@ -724,36 +797,50 @@ const NIPScreen = ({ navigation }) => {
 
         onBackPress={() => navigation.goBack()}
 
-        bottomContent={(
-          <View style={styles.headerSearchRow}>
-            <Ionicons name="search" size={20} color={COLORS.primary} style={styles.headerSearchIcon} />
-            <View style={styles.headerSearchInputWrap}>
-              <TextInput
-                style={[
-                  styles.headerSearchInput,
-                  language === 'ta' ? styles.headerSearchInputTamil : styles.headerSearchInputEnglish,
-                ]}
-                placeholder={t('nip.searchPlaceholder')}
-                placeholderTextColor={COLORS.text.tertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                clearButtonMode="while-editing"
-                returnKeyType="search"
-                multiline={false}
-                numberOfLines={1}
-                scrollEnabled
-                underlineColorAndroid="transparent"
-              />
-            </View>
-            {searchQuery.length > 0 && (
+        searchExpanded={headerSearchOpen}
+
+        searchExpandedContent={
+          headerSearchOpen ? (
+            <View style={styles.headerSearchRow}>
+              <Ionicons name="search" size={18} color={COLORS.primary} style={styles.headerSearchIcon} />
+              <View style={styles.headerSearchInputWrap}>
+                <TextInput
+                  ref={headerSearchInputRef}
+                style={[styles.headerSearchInput, styles.headerSearchInputSized]}
+                  placeholder={t('nip.searchPlaceholder')}
+                  placeholderTextColor={COLORS.text.tertiary}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  returnKeyType="search"
+                  multiline={false}
+                  numberOfLines={1}
+                  scrollEnabled
+                  underlineColorAndroid="transparent"
+                />
+              </View>
               <TouchableOpacity
-                style={styles.headerSearchClear}
-                onPress={() => setSearchQuery('')}
+                style={styles.headerSearchCloseBtn}
+                onPress={closeHeaderSearch}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
               >
-                <Ionicons name="close-circle" size={18} color={COLORS.text.secondary} />
+                <Ionicons name="close" size={22} color={COLORS.text.secondary} />
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          ) : null
+        }
+
+        rightComponent={(
+          <TouchableOpacity
+            style={styles.headerSearchIconButton}
+            onPress={() => setHeaderSearchOpen(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.search')}
+          >
+            <Ionicons name="search-outline" size={24} color={COLORS.white} />
+          </TouchableOpacity>
         )}
       />
 
@@ -917,7 +1004,10 @@ const NIPScreen = ({ navigation }) => {
 
 
 
-const styles = StyleSheet.create({
+function createNipScreenStyles(language) {
+  const font = (base) => shiftNipFontSize(base, language);
+
+  return StyleSheet.create({
 
   container: {
 
@@ -947,15 +1037,17 @@ const styles = StyleSheet.create({
 
     backgroundColor: COLORS.white,
 
-    borderRadius: SIZES.radius * 2,
+    borderRadius: SIZES.radius * 1.25,
 
     paddingHorizontal: SIZES.base,
 
-    paddingVertical: Platform.OS === 'android' ? 4 : 6,
+    paddingVertical: Platform.OS === 'android' ? 2 : 4,
 
     borderWidth: 1,
 
     borderColor: 'rgba(255,255,255,0.35)',
+
+    minHeight: 36,
 
   },
 
@@ -985,7 +1077,7 @@ const styles = StyleSheet.create({
 
     minWidth: 0,
 
-    paddingVertical: Platform.OS === 'android' ? 6 : 8,
+    paddingVertical: Platform.OS === 'android' ? 4 : 6,
 
     paddingHorizontal: 0,
 
@@ -1001,31 +1093,42 @@ const styles = StyleSheet.create({
 
   },
 
-  headerSearchInputEnglish: {
+  headerSearchInputSized: {
 
-    fontSize: SIZES.body2,
+    fontSize: font(SIZES.body3),
 
-    lineHeight: Math.ceil(SIZES.body2 * 1.25),
+    lineHeight: Math.ceil(font(SIZES.body3) * 1.2),
 
-    maxHeight: Platform.OS === 'android' ? 46 : 50,
-
-  },
-
-  headerSearchInputTamil: {
-
-    fontSize: SIZES.body4,
-
-    lineHeight: Math.ceil(SIZES.body4 * 1.25),
-
-    maxHeight: Platform.OS === 'android' ? 34 : 38,
+    maxHeight:
+      Platform.OS === 'android'
+        ? Math.max(28, Math.round(font(SIZES.body3) * 2.55))
+        : Math.max(32, Math.round(font(SIZES.body3) * 2.75)),
 
   },
 
-  headerSearchClear: {
+  headerSearchIconButton: {
 
-    padding: SIZES.base / 2,
+    width: 40,
+
+    height: 40,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
+
+  headerSearchCloseBtn: {
 
     flexShrink: 0,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    paddingLeft: SIZES.base / 2,
+
+    marginLeft: SIZES.base / 2,
 
   },
 
@@ -1075,7 +1178,7 @@ const styles = StyleSheet.create({
 
   nipTabText: {
 
-    fontSize: SIZES.body3,
+    fontSize: font(SIZES.body3),
 
     fontWeight: '600',
 
@@ -1145,9 +1248,19 @@ const styles = StyleSheet.create({
 
     flexDirection: 'row',
 
-    justifyContent: 'space-between',
-
     alignItems: 'center',
+
+  },
+
+  nipCardHeaderBody: {
+
+    flex: 1,
+
+    flexDirection: 'column',
+
+    justifyContent: 'center',
+
+    paddingRight: SIZES.base * 0.25,
 
   },
 
@@ -1155,37 +1268,37 @@ const styles = StyleSheet.create({
 
     height: StyleSheet.hairlineWidth,
 
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.gray,
 
-    marginVertical: SIZES.margin * 0.5,
+    marginVertical: SIZES.base * 0.75,
 
   },
 
   nipCardNameLine: {
 
-    flex: 1,
-
-    fontSize: SIZES.body1,
+    fontSize: font(SIZES.body2),
 
     fontWeight: '700',
 
     color: COLORS.error,
 
-    // marginHorizontal: SIZES.base,
+    marginBottom: SIZES.base * 0.375,
+
+    lineHeight: Math.round(font(SIZES.body2) * 1.25),
 
   },
 
   nipCardPhotoWrap: {
 
-    width: 44,
+    width: 40,
 
-    height: 44,
+    height: 40,
 
-    borderRadius: 22,
+    borderRadius: 20,
 
     overflow: 'hidden',
 
-    marginRight: SIZES.base,
+    marginRight: SIZES.base * 0.75,
 
   },
 
@@ -1213,21 +1326,33 @@ const styles = StyleSheet.create({
 
   statusBadge: {
 
-    paddingHorizontal: SIZES.base,
+    paddingHorizontal: SIZES.base * 0.75,
 
-    paddingVertical: SIZES.base * 0.25,
+    paddingVertical: 2,
 
-    borderRadius: SIZES.radius * 0.5,
+    borderRadius: 4,
+
+  },
+
+  statusBadgeBelowName: {
+
+    alignSelf: 'flex-start',
 
   },
 
   statusText: {
 
-    fontSize: SIZES.body4,
+    fontSize: font(SIZES.body4),
 
     fontWeight: '600',
 
     color: COLORS.white,
+
+  },
+
+  statusTextRed: {
+
+    color: COLORS.error,
 
   },
 
@@ -1245,7 +1370,7 @@ const styles = StyleSheet.create({
 
   nipCardLabel: {
 
-    fontSize: SIZES.body3,
+    fontSize: font(SIZES.body3),
 
     color: COLORS.text.tertiary,
 
@@ -1255,7 +1380,7 @@ const styles = StyleSheet.create({
 
   nipCardValue: {
 
-    fontSize: SIZES.body3,
+    fontSize: font(SIZES.body3),
 
     fontWeight: '500',
 
@@ -1269,7 +1394,7 @@ const styles = StyleSheet.create({
 
   nipCardValueAmount: {
 
-    fontSize: SIZES.body2,
+    fontSize: font(SIZES.body2),
 
     fontWeight: '600',
 
@@ -1301,7 +1426,7 @@ const styles = StyleSheet.create({
 
   nipCardDate: {
 
-    fontSize: SIZES.body4,
+    fontSize: font(SIZES.body4),
 
     color: COLORS.text.tertiary,
 
@@ -1345,7 +1470,7 @@ const styles = StyleSheet.create({
 
     marginTop: SIZES.margin,
 
-    fontSize: SIZES.body2,
+    fontSize: font(SIZES.body2),
 
     color: COLORS.text.secondary,
 
@@ -1365,7 +1490,7 @@ const styles = StyleSheet.create({
 
   emptyStateText: {
 
-    fontSize: SIZES.body1,
+    fontSize: font(SIZES.body1),
 
     fontWeight: '600',
 
@@ -1379,7 +1504,7 @@ const styles = StyleSheet.create({
 
   emptyStateSubText: {
 
-    fontSize: SIZES.body3,
+    fontSize: font(SIZES.body3),
 
     color: COLORS.text.tertiary,
 
@@ -1407,7 +1532,7 @@ const styles = StyleSheet.create({
 
     color: COLORS.white,
 
-    fontSize: SIZES.body2,
+    fontSize: font(SIZES.body2),
 
     fontWeight: '600',
 
@@ -1457,9 +1582,9 @@ const styles = StyleSheet.create({
 
   },
 
-});
+  });
 
-
+}
 
 export default NIPScreen;
 

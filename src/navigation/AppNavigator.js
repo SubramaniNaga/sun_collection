@@ -200,8 +200,8 @@ const MainDrawer = () => (
       headerShown: false,
       drawerType: 'slide',
       drawerPosition: 'left',
-      swipeEnabled: true,
-      gestureEnabled: true,
+      swipeEnabled: false,
+      gestureEnabled: false,
       drawerStyle: {
         width: 280,
         backgroundColor: COLORS.white,

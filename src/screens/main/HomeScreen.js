@@ -76,13 +76,6 @@ const HomeScreen = ({ navigation }) => {
     }).start();
   }, [language, slideAnim]);
 
-  const handleNotificationPress = () => {
-    // Navigate to notifications screen or show notification drawer
-    console.log('Notification pressed');
-    // You can navigate to a notifications screen when it's ready
-    // navigation.navigate('Notifications');
-  };
-
   const handleHomeLanguageChange = async (newLanguage) => {
     if (newLanguage === language || langSaving) return;
     setLangSaving(true);
@@ -170,11 +163,14 @@ const HomeScreen = ({ navigation }) => {
         onMenuPress={() => navigation.openDrawer()}
         rightComponent={
           <View style={styles.headerRight}>
-            <View
+            <TouchableOpacity
               style={[
                 styles.langSwitchTrack,
                 langSaving && styles.langSwitchTrackDisabled,
               ]}
+              onPress={() => handleHomeLanguageChange(language === 'en' ? 'ta' : 'en')}
+              disabled={langSaving}
+              activeOpacity={0.8}
             >
               {language === 'ta' && (
                 <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
@@ -183,7 +179,7 @@ const HomeScreen = ({ navigation }) => {
               )}
               {language === 'en' && (
                 <View style={styles.langSwitchInactiveRight} pointerEvents="none">
-                  <Text style={styles.langSwitchInactiveText}>TA</Text>
+                  <Text style={styles.langSwitchInactiveText}>த</Text>
                 </View>
               )}
               <Animated.View
@@ -193,29 +189,9 @@ const HomeScreen = ({ navigation }) => {
                 ]}
               >
                 <Text style={styles.langSwitchThumbText}>
-                  {language === 'en' ? 'EN' : 'TA'}
+                  {language === 'en' ? 'EN' : 'த'}
                 </Text>
               </Animated.View>
-              <View style={styles.langSwitchHitRow}>
-                <TouchableOpacity
-                  style={styles.langSwitchHitHalf}
-                  onPress={() => handleHomeLanguageChange('en')}
-                  disabled={langSaving}
-                  activeOpacity={0.7}
-                />
-                <TouchableOpacity
-                  style={styles.langSwitchHitHalf}
-                  onPress={() => handleHomeLanguageChange('ta')}
-                  disabled={langSaving}
-                  activeOpacity={0.7}
-                />
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={handleNotificationPress}
-              style={styles.notificationButton}
-            >
-              <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
             </TouchableOpacity>
           </View>
         }
@@ -466,17 +442,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   langSwitchThumbText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     color: COLORS.primary,
     letterSpacing: 0.2,
-  },
-  langSwitchHitRow: {
-    ...StyleSheet.absoluteFillObject,
-    flexDirection: 'row',
-  },
-  langSwitchHitHalf: {
-    flex: 1,
   },
   notificationButton: {
     padding: SIZES.padding / 2,

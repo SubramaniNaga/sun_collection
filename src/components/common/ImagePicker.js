@@ -12,6 +12,8 @@ const CustomImagePicker = ({
   onImageChange,
   error,
   editable = true,
+  label = 'Receipt Image',
+  required = false,
   style = {},
 }) => {
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -64,7 +66,10 @@ const CustomImagePicker = ({
         color: COLORS.black,
         marginBottom: SIZES.base,
       }}>
-        Receipt Image
+        {label}
+        {required ? (
+          <Text style={{ color: COLORS.error, fontWeight: '600' }}> *</Text>
+        ) : null}
       </Text>
 
       {image ? (

@@ -3,21 +3,22 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    Linking,
-    Modal,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
+import LoanCollectionsModal from '../../components/common/LoanCollectionsModal';
 import { COLORS, SIZES } from '../../constants/theme';
 import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
@@ -36,6 +37,13 @@ const getImageUrl = (imagePath) => {
   return `${API_BASE_URL}/api/v1${cleanPath}`;
 };
 
+const formatAmountOrDash = (value) => {
+  if (value === null || value === undefined || value === '') return '—';
+  const n = Number(value);
+  if (Number.isNaN(n)) return '—';
+  return formatCurrency(value);
+};
+
 const LoanCustomerListScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +58,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
   });
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [photoModalUri, setPhotoModalUri] = useState(null);
+  const [collectionsModalLoanId, setCollectionsModalLoanId] = useState(null);
   const fetchLoans = useCallback(async (page = 1, append = false) => {
     try {
       if (page === 1) {
@@ -301,14 +310,16 @@ const LoanCustomerListScreen = ({ navigation }) => {
               />
             )}
           </TouchableOpacity>
-          <Text
-            style={[styles.loanCardNameLine, isNip && styles.loanCardNameLineNip]}
-            numberOfLines={1}
-          >
-            {(item?.customer_no ?? item?.customer_no ?? '—')}{' - '}{(item?.customer_name ?? '—')}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
-            <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+          <View style={styles.loanCardHeaderBody}>
+            <Text
+              style={[styles.loanCardNameLine, isNip && styles.loanCardNameLineNip]}
+              numberOfLines={2}
+            >
+              {(item?.customer_no ?? '—')} - {(item?.customer_name ?? '—')}
+            </Text>
+            <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
+              <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+            </View>
           </View>
         </View>
         <View style={styles.loanCardDivider} />
@@ -317,6 +328,20 @@ const LoanCustomerListScreen = ({ navigation }) => {
           <Text style={styles.loanCardLabel}>{t('loan.loanAmount')}</Text>
           <Text style={[styles.loanCardValueAmount, isNip && styles.loanCardValueAmountNip]}>
             {formatCurrency(item?.loan_amount)}
+          </Text>
+        </View>
+        <View style={styles.loanCardRow}>
+          <Ionicons name="pricetag-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.loanCardLabel}>{t('customer.aathayam')}</Text>
+          <Text style={styles.loanCardValue} numberOfLines={1}>
+            {formatAmountOrDash(item?.intrest_amount)}
+          </Text>
+        </View>
+        <View style={styles.loanCardRow}>
+          <Ionicons name="trending-up-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.loanCardLabel}>{t('customer.magimai')}</Text>
+          <Text style={styles.loanCardValue} numberOfLines={1}>
+            {formatAmountOrDash(item?.processing_fees)}
           </Text>
         </View>
         {item?.approved_amount != null && item?.approved_amount !== '' && (
@@ -370,6 +395,17 @@ const LoanCustomerListScreen = ({ navigation }) => {
                 }}
               >
                 <Ionicons name="call" size={18} color={footerActionIconColor} />
+              </TouchableOpacity>
+            )}
+            {item?.id != null && item?.id !== '' && (
+              <TouchableOpacity
+                style={styles.loanCardIconButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setCollectionsModalLoanId(item.id);
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={18} color={footerActionIconColor} />
               </TouchableOpacity>
             )}
             <Ionicons name="chevron-forward" size={18} color={footerActionIconColor} />
@@ -514,6 +550,12 @@ const LoanCustomerListScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <LoanCollectionsModal
+        visible={collectionsModalLoanId != null}
+        loanId={collectionsModalLoanId}
+        onClose={() => setCollectionsModalLoanId(null)}
+      />
     </SafeAreaView>
   );
 };
@@ -617,7 +659,8 @@ const styles = StyleSheet.create({
   loanCard: {
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius * 1.25,
-    padding: SIZES.padding,
+    paddingHorizontal: SIZES.base * 1.5,
+    paddingVertical: SIZES.base * 1.25,
     marginBottom: SIZES.margin,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -641,30 +684,35 @@ const styles = StyleSheet.create({
   },
   loanCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  loanCardHeaderBody: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    paddingRight: SIZES.base * 0.25,
   },
   loanCardDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: COLORS.gray,
-    marginVertical: SIZES.margin * 0.5,
+    marginVertical: SIZES.base * 0.75,
   },
   loanCardNameLine: {
-    flex: 1,
     fontSize: SIZES.body2,
     fontWeight: '700',
     color: COLORS.text?.primary || COLORS.primary,
-    // marginHorizontal: SIZES.base,
+    marginBottom: SIZES.base * 0.375,
+    lineHeight: Math.round((SIZES.body2 || 14) * 1.25),
   },
   loanCardNameLineNip: {
     color: COLORS.error,
   },
   loanCardPhotoWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     overflow: 'hidden',
-    marginRight: SIZES.base,
+    marginRight: SIZES.base * 0.75,
   },
   loanCardPhoto: {
     width: '100%',
@@ -702,7 +750,7 @@ const styles = StyleSheet.create({
   loanCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SIZES.base * 0.5,
+    marginBottom: SIZES.base * 0.375,
   },
   loanCardLabel: {
     fontSize: SIZES.body3,
@@ -728,8 +776,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: SIZES.base,
-    paddingTop: SIZES.base,
+    marginTop: SIZES.base * 0.75,
+    paddingTop: SIZES.base * 0.75,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
@@ -752,9 +800,12 @@ const styles = StyleSheet.create({
     height: 32,
   },
   statusBadge: {
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base * 0.25,
-    borderRadius: 2,
+    paddingHorizontal: SIZES.base * 0.75,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusBadgeBelowName: {
+    alignSelf: 'flex-start',
   },
   statusText: {
     fontSize: SIZES.body4 || 12,

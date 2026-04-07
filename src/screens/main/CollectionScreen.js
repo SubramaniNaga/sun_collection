@@ -21,6 +21,7 @@ const openIosAppSettings = async () => {
     await Linking.openSettings();
   }
 };
+import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -28,6 +29,13 @@ const SEARCH_DEBOUNCE_MS = 400;
 const formatAmount = (val) => {
   const num = parseFloat(val);
   return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
+};
+
+const formatCurrencyOrDash = (val) => {
+  if (val === null || val === undefined || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return '—';
+  return formatCurrency(val);
 };
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -662,6 +670,15 @@ const CollectionScreen = ({ navigation }) => {
                         return `${collection.completed_collection_count ?? collection.completedCount ?? 0}(${collection.pending_collection_count ?? collection.pendingCount ?? 0})/${collection.current_collection_due_count ?? collection.totalCount ?? 0}`;
                       })()}
                     </Text>
+                  </View>
+
+                  <View style={styles.itemRow}>
+                    <Text style={styles.itemMetaLeft}>{t('loan.interestAmount')}:</Text>
+                    <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.intrestAmount)}</Text>
+                  </View>
+                  <View style={styles.itemRow}>
+                    <Text style={styles.itemMetaLeft}>{t('loan.processingFees')}:</Text>
+                    <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.processingFees)}</Text>
                   </View>
 
                   <View style={styles.itemRow}>

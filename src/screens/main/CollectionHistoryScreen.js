@@ -24,7 +24,7 @@ import CollectionHistory from '../../models/CollectionHistory';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
-import { formatDateForAPI } from '../../utils/dateFormatter';
+import { formatDateForAPI, getCurrentDateString } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
 
@@ -219,6 +219,27 @@ const CollectionHistoryScreen = ({ navigation }) => {
   }, [startDate, endDate, fetchCollectionHistory]);
 
   const accountClosingBlocked = useMemo(() => isClosingBalanceDone(stats), [stats]);
+
+  const isTodayDateRange = useMemo(() => {
+    const from = formatDateForAPI(startDate);
+    const to = formatDateForAPI(endDate);
+    const today = getCurrentDateString();
+    return from === today && to === today;
+  }, [startDate, endDate]);
+
+  const hasCollections = Array.isArray(collectionHistory) && collectionHistory.length >= 1;
+
+  const hasAnyStatsValue = useMemo(() => {
+    if (!stats || typeof stats !== 'object') return false;
+    const keysToConsider = ['collected_amount', 'expenses_spent', 'loan_given_amount'];
+    return keysToConsider.some((key) => {
+      const n = Number(stats?.[key]);
+      return !Number.isNaN(n) && n > 0;
+    });
+  }, [stats]);
+
+  const shouldShowAccountClosingButton =
+    !accountClosingBlocked && isTodayDateRange && (hasCollections || hasAnyStatsValue);
 
   // Filter collection history by payment type
   const filteredCollectionHistory = collectionHistory.filter((item) => {
@@ -673,7 +694,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
         ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}
       />
 
-      {!accountClosingBlocked ? (
+      {shouldShowAccountClosingButton ? (
         <View style={styles.accountClosingBar}>
           <TouchableOpacity
             style={styles.accountClosingBtn}
