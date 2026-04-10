@@ -5,31 +5,31 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-    ActivityIndicator,
+  ActivityIndicator,
 
-    FlatList,
+  FlatList,
 
-    Image,
+  Image,
 
-    Keyboard,
+  Keyboard,
 
-    Linking,
+  Linking,
 
-    Modal,
+  Modal,
 
-    Platform,
+  Platform,
 
-    RefreshControl,
+  RefreshControl,
 
-    StyleSheet,
+  StyleSheet,
 
-    Text,
+  Text,
 
-    TextInput,
+  TextInput,
 
-    TouchableOpacity,
+  TouchableOpacity,
 
-    View,
+  View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -449,7 +449,10 @@ const NIPScreen = ({ navigation }) => {
 
 
 
-  const renderNIPItem = ({ item }) => (
+  const renderNIPItem = ({ item }) => {
+    const customerName = String(item?.customerName ?? item?.customer_name ?? '').trim();
+    const isLongCustomerName = customerName.length > 10;
+    return (
 
     <TouchableOpacity
 
@@ -509,17 +512,25 @@ const NIPScreen = ({ navigation }) => {
 
         <View style={styles.nipCardHeaderBody}>
 
-          <Text style={styles.nipCardNameLine} numberOfLines={2}>
-
-            {(item?.customerNo ?? item?.customer_no ?? '—')}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
-
-          </Text>
-
-          <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: '#FEE2E2' }]}>
-
-            <Text style={[styles.statusText, styles.statusTextRed]}>{getStatusLabel(item)}</Text>
-
-          </View>
+          {isLongCustomerName ? (
+            <>
+              <Text style={styles.nipCardNameLine} numberOfLines={2}>
+                {(item?.customerNo ?? item?.customer_no ?? '—')}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
+              </Text>
+              <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: '#FEE2E2' }]}>
+                <Text style={[styles.statusText, styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.nipCardNameRow}>
+              <Text style={[styles.nipCardNameLine, styles.nipCardNameLineInline]} numberOfLines={1}>
+                {(item?.customerNo ?? item?.customer_no ?? '—')}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
+              </Text>
+              <View style={[styles.statusBadge, styles.statusBadgeInline, { backgroundColor: '#FEE2E2' }]}>
+                <Text style={[styles.statusText, styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+              </View>
+            </View>
+          )}
 
         </View>
 
@@ -682,6 +693,7 @@ const NIPScreen = ({ navigation }) => {
     </TouchableOpacity>
 
   );
+  };
 
 
 
@@ -1287,6 +1299,16 @@ function createNipScreenStyles(language) {
     lineHeight: Math.round(font(SIZES.body2) * 1.25),
 
   },
+  nipCardNameLineInline: {
+    marginBottom: 0,
+    flex: 1,
+    marginRight: SIZES.base * 0.75,
+  },
+  nipCardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 
   nipCardPhotoWrap: {
 
@@ -1338,6 +1360,9 @@ function createNipScreenStyles(language) {
 
     alignSelf: 'flex-start',
 
+  },
+  statusBadgeInline: {
+    alignSelf: 'center',
   },
 
   statusText: {

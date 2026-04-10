@@ -5,16 +5,15 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { apiServices } from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
-import { apiServices } from '../../api/services/apiServices';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert } from '../../utils/alertService';
-import { getDeviceId } from '../../utils/deviceId';
 import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
 const ProfileScreen = ({ navigation }) => {
@@ -70,6 +69,10 @@ const ProfileScreen = ({ navigation }) => {
   const truncateText = (value, maxLength = 24) => {
     if (!value) return '';
     return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+  };
+  const safeT = (key, fallback) => {
+    const value = t(key);
+    return value && value !== key ? value : fallback;
   };
 
   const handleLanguageSelect = async (newLanguage) => {
@@ -147,18 +150,12 @@ const ProfileScreen = ({ navigation }) => {
       return;
     }
 
-    let deviceId = await AsyncStorage.getItem('deviceId');
-    if (!deviceId) {
-      deviceId = await getDeviceId();
-    }
-
     try {
       setPasswordSubmitting(true);
       await apiServices.auth.changePassword({
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
         userid: userId,
-        device_id: deviceId,
       });
 
       showAlert({
@@ -293,17 +290,17 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.detailLabel}>{t('profile.id')}</Text>
               <Text style={styles.detailValue}>{user?.id ?? 'N/A'}</Text>
             </View>
-            <View style={styles.detailRow}>
+            {/* <View style={styles.detailRow}>
               <Ionicons name="phone-portrait-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
               <Text style={styles.detailLabel}>{t('profile.device')}</Text>
               <Text style={styles.detailValue} numberOfLines={1}>{user?.device || 'N/A'}</Text>
-            </View>
+            </View> */}
             <View style={styles.detailRow}>
               <Ionicons name="business-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
               <Text style={styles.detailLabel}>{t('profile.branch')}</Text>
               <Text style={styles.detailValue}>{displayBranch}</Text>
             </View>
-            <View style={[styles.detailRow, styles.detailRowLast]}>
+            <View style={styles.detailRow}>
               <Ionicons name="git-branch-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
               <Text style={styles.detailLabel}>{t('profile.line')}</Text>
               <Text style={styles.detailValue}>{displayLine}</Text>
@@ -727,6 +724,15 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     fontWeight: '500',
     textAlign: 'right',
+  },
+  detailRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  infoIconButton: {
+    paddingLeft: SIZES.base,
+    paddingVertical: SIZES.base / 2,
   },
   editCard: {
     margin: SIZES.padding,

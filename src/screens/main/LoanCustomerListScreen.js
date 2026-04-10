@@ -281,6 +281,8 @@ const LoanCustomerListScreen = ({ navigation }) => {
     const isNip = isNipStatus(item);
     const isHighPending = isHighPendingCount(item?.loan_type_name, item?.pending_days, item?.pending_weeks);
     const footerActionIconColor = isNip ? COLORS.error : COLORS.primary;
+    const customerName = String(item?.customer_name ?? '').trim();
+    const isLongCustomerName = customerName.length > 10;
     return (
       <TouchableOpacity
         style={[styles.loanCard, isPending && styles.loanCardPending, isNip && styles.loanCardNip, isHighPending && styles.loanCardHighPending]}
@@ -311,15 +313,31 @@ const LoanCustomerListScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
           <View style={styles.loanCardHeaderBody}>
-            <Text
-              style={[styles.loanCardNameLine, isNip && styles.loanCardNameLineNip]}
-              numberOfLines={2}
-            >
-              {(item?.customer_no ?? '—')} - {(item?.customer_name ?? '—')}
-            </Text>
-            <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
-              <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
-            </View>
+            {isLongCustomerName ? (
+              <>
+                <Text
+                  style={[styles.loanCardNameLine, isNip && styles.loanCardNameLineNip]}
+                  numberOfLines={2}
+                >
+                  {(item?.customer_no ?? '—')} - {(item?.customer_name ?? '—')}
+                </Text>
+                <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
+                  <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.loanCardNameRow}>
+                <Text
+                  style={[styles.loanCardNameLine, styles.loanCardNameLineInline, isNip && styles.loanCardNameLineNip]}
+                  numberOfLines={1}
+                >
+                  {(item?.customer_no ?? '—')} - {(item?.customer_name ?? '—')}
+                </Text>
+                <View style={[styles.statusBadge, styles.statusBadgeInline, { backgroundColor: isNip ? '#FEE2E2' : getStatusColor(item) }]}>
+                  <Text style={[styles.statusText, isNip && styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
         <View style={styles.loanCardDivider} />
@@ -704,6 +722,16 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.base * 0.375,
     lineHeight: Math.round((SIZES.body2 || 14) * 1.25),
   },
+  loanCardNameLineInline: {
+    marginBottom: 0,
+    flex: 1,
+    marginRight: SIZES.base * 0.75,
+  },
+  loanCardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   loanCardNameLineNip: {
     color: COLORS.error,
   },
@@ -806,6 +834,9 @@ const styles = StyleSheet.create({
   },
   statusBadgeBelowName: {
     alignSelf: 'flex-start',
+  },
+  statusBadgeInline: {
+    alignSelf: 'center',
   },
   statusText: {
     fontSize: SIZES.body4 || 12,
