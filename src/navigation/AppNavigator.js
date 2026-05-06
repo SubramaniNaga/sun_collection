@@ -15,6 +15,7 @@ import CollectionScreen from '../screens/main/CollectionScreen';
 import CustomerWithLoanScreen from '../screens/main/CustomerWithLoanScreen';
 import ExpenseAddScreen from '../screens/main/ExpenseAddScreen';
 import ExpensesScreen from '../screens/main/ExpensesScreen';
+import CashAccountScreen from '../screens/main/CashAccountScreen';
 import HomeScreen from '../screens/main/HomeScreen';
 import LoanCustomerListScreen from '../screens/main/LoanCustomerListScreen';
 import LoanScreen from '../screens/main/LoanScreen';
@@ -96,6 +97,13 @@ const HomeStack = () => (
       name="HomeScreen" 
       component={HomeScreen} 
       options={{ 
+        headerShown: false,
+      }}
+    />
+    <Stack.Screen
+      name="CashAccount"
+      component={CashAccountScreen}
+      options={{
         headerShown: false,
       }}
     />

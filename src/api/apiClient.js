@@ -52,6 +52,7 @@ export const setLoadingContext = (context) => {
 
 // Logout callback registry - allows AuthContext to register its logout function
 let logoutCallback = null;
+let unauthorizedInProgress = false;
 
 /**
  * Register a logout callback function that will be called on 401/403 errors
@@ -64,30 +65,49 @@ export const setLogoutCallback = (callback) => {
 /**
  * Handle unauthorized access (401/403) - clears session and triggers logout
  */
-const handleUnauthorized = async () => {
+const handleUnauthorized = async (error) => {
+  if (unauthorizedInProgress) {
+    return;
+  }
+  unauthorizedInProgress = true;
   try {
     console.log('🚫 Unauthorized access detected. Logging out user...');
-    
-    // Show session expired alert to user and handle logout after dismissal
-    showSessionExpiredAlert(async () => {
-      // Clear all session data
-      await clearSession();
-      
-      // Trigger logout callback if registered (from AuthContext)
-      if (logoutCallback && typeof logoutCallback === 'function') {
-        console.log('🔄 Triggering logout callback...');
-        logoutCallback();
-      } else {
-        console.warn('⚠️ No logout callback registered. Session cleared but logout not triggered.');
-      }
-    });
+
+    const apiMessage = String(
+      error?.response?.data?.message ||
+      error?.message ||
+      ''
+    ).trim();
+    const lowerMessage = apiMessage.toLowerCase();
+    const logoutReason =
+      lowerMessage.includes('device id mismatch') || lowerMessage.includes('device mismatch')
+        ? 'device_mismatch'
+        : 'session_expired';
+
+    await AsyncStorage.multiSet([
+      ['logoutReason', logoutReason],
+      ['logoutReasonMessage', apiMessage],
+    ]);
+
+    // Clear all session data
+    await clearSession();
+
+    // Trigger logout callback if registered (from AuthContext)
+    if (logoutCallback && typeof logoutCallback === 'function') {
+      console.log('🔄 Triggering logout callback...');
+      await logoutCallback();
+    } else {
+      console.warn('⚠️ No logout callback registered. Session cleared but logout not triggered.');
+    }
   } catch (error) {
     console.error('❌ Error during unauthorized handling:', error);
     // Fallback: clear session and logout even if alert fails
     await clearSession();
     if (logoutCallback && typeof logoutCallback === 'function') {
-      logoutCallback();
+      await logoutCallback();
     }
+  } finally {
+    unauthorizedInProgress = false;
   }
 };
 
@@ -199,7 +219,7 @@ apiClient.interceptors.response.use(
       console.log(`🔐 Authentication error (${error.response?.status}) detected. Initiating logout...`);
       
       // Handle unauthorized access - clear session and trigger logout
-      await handleUnauthorized();
+      await handleUnauthorized(error);
     }
     
     // Apply centralized error handling

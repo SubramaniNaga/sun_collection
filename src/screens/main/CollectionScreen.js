@@ -23,8 +23,7 @@ const openIosAppSettings = async () => {
 };
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 
 const formatAmount = (val) => {
   const num = parseFloat(val);
@@ -56,6 +55,10 @@ const CollectionScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const searchDebounceRef = useRef(null);
+  const searchTextRef = useRef(searchText);
+  searchTextRef.current = searchText;
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
 
   // Payment collection modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -88,7 +91,7 @@ const CollectionScreen = ({ navigation }) => {
       const trimmed = (searchQuery || '').trim();
       const isNumeric = /^\d+$/.test(trimmed.replace(/\s/g, ''));
       const response = await apiServices.collection.getCollectionList({
-        ...(trimmed && (isNumeric ? { customer_phone: trimmed } : { customer_name: trimmed })),
+        ...(trimmed && (isNumeric ? { customer_phone: trimmed } : { search: trimmed })),
         collection_date: dateString,
       });
       const raw = response?.response ?? response?.data ?? response?.data?.response;
@@ -105,11 +108,11 @@ const CollectionScreen = ({ navigation }) => {
     }
   }, [selectedDate]);
 
-  // Load when screen is focused (initial load and when returning from CollectionDetails so list shows updated data)
+  // Load when screen is focused or date changes — use ref for search so typing does not double-fetch (debounce handles search)
   useFocusEffect(
     useCallback(() => {
-      fetchCollectionData(searchText, selectedDate);
-    }, [fetchCollectionData, searchText, selectedDate])
+      fetchCollectionData(searchTextRef.current, selectedDate);
+    }, [fetchCollectionData, selectedDate])
   );
 
   // When user types in search bar, call API with customer_phone for server-side filtering (debounced)
@@ -123,14 +126,14 @@ const CollectionScreen = ({ navigation }) => {
       clearTimeout(searchDebounceRef.current);
     }
     searchDebounceRef.current = setTimeout(() => {
-      fetchCollectionData(searchText, selectedDate);
-    }, SEARCH_DEBOUNCE_MS);
+      fetchCollectionData(searchText, selectedDateRef.current);
+    }, DEBOUNCE_MS_DEFAULT);
     return () => {
       if (searchDebounceRef.current) {
         clearTimeout(searchDebounceRef.current);
       }
     };
-  }, [searchText, fetchCollectionData, selectedDate]);
+  }, [searchText, fetchCollectionData]);
 
   // Handle date change
   const handleDateChange = (event, date) => {
@@ -164,13 +167,13 @@ const CollectionScreen = ({ navigation }) => {
   const handleItemPress = (item) => {
     const collection = item instanceof Collection ? item : new Collection(item);
 
-    if (!isSelectedDateToday) {
-      showWarning(
-        'Collection payment',
-        "Collection payment can only be recorded for the current date. Please select today's date to collect payment."
-      );
-      return;
-    }
+    // if (!isSelectedDateToday) {
+    //   showWarning(
+    //     'Collection payment',
+    //     "Collection payment can only be recorded for the current date. Please select today's date to collect payment."
+    //   );
+    //   return;
+    // }
 
     const balanceAmount = parseFloat(collection.balanceAmount) || 0;
     if (balanceAmount <= 0) {
@@ -251,6 +254,21 @@ const CollectionScreen = ({ navigation }) => {
           showError('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
         });
       });
+  };
+
+  const handleLoanInfoPress = (collection) => {
+    if (!collection?.loanId) {
+      return;
+    }
+    navigation.navigate('LoanScreen', {
+      loan: { id: collection.loanId },
+      customerData: {
+        name: collection.customerName ?? '',
+        phone: collection.customerPhone ?? '',
+        loanId: String(collection.loanId),
+        initialAmount: collection.loanAmount ?? '',
+      },
+    });
   };
 
   const validatePaymentForm = () => {
@@ -564,7 +582,7 @@ const CollectionScreen = ({ navigation }) => {
                     value={selectedDate}
                     mode="date"
                     display="spinner"
-                    maximumDate={new Date()}
+                    // maximumDate={new Date()}
                     onChange={handleDateChange}
                   />
                 </View>
@@ -575,7 +593,7 @@ const CollectionScreen = ({ navigation }) => {
               value={selectedDate}
               mode="date"
               display="default"
-              maximumDate={new Date()}
+              // maximumDate={new Date()}
               onChange={handleDateChange}
             />
           )
@@ -646,6 +664,17 @@ const CollectionScreen = ({ navigation }) => {
                           <Ionicons name="call" size={18} color={COLORS.primary} />
                         </TouchableOpacity>
                       )}
+                      {collection.loanId ? (
+                        <TouchableOpacity
+                          style={styles.inlineIconButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleLoanInfoPress(collection);
+                          }}
+                        >
+                          <Ionicons name="information-circle-outline" size={18} color={COLORS.primary} />
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.itemDivider} />
@@ -662,15 +691,16 @@ const CollectionScreen = ({ navigation }) => {
                     <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
                   </View>
 
+                  {/* Loan due status row hidden per product request
                   <View style={styles.itemRow}>
                     <Text style={styles.itemMetaLeft}>{t('collection.loanDueStatus')}:</Text>
                     <Text style={styles.itemMetaRight}>
                       {(() => {
-                     
                         return `${collection.completed_collection_count ?? collection.completedCount ?? 0}(${collection.pending_collection_count ?? collection.pendingCount ?? 0})/${collection.current_collection_due_count ?? collection.totalCount ?? 0}`;
                       })()}
                     </Text>
                   </View>
+                  */}
 
                   <View style={styles.itemRow}>
                     <Text style={styles.itemMetaLeft}>{t('loan.interestAmount')}:</Text>

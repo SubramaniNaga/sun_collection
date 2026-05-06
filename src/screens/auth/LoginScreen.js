@@ -35,7 +35,35 @@ const LoginScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       runCheck();
-    }, [runCheck])
+      const showLogoutReasonIfAny = async () => {
+        try {
+          const [reason, message] = await AsyncStorage.multiGet(['logoutReason', 'logoutReasonMessage']);
+          const logoutReason = reason?.[1];
+          const logoutReasonMessage = message?.[1];
+
+          if (!logoutReason) return;
+
+          await AsyncStorage.multiRemove(['logoutReason', 'logoutReasonMessage']);
+
+          if (logoutReason === 'device_mismatch') {
+            showWarning(
+              t('auth.loggedOutTitle'),
+              logoutReasonMessage || t('auth.deviceMismatchLoggedOutMessage')
+            );
+            return;
+          }
+
+          showWarning(
+            t('auth.loggedOutTitle'),
+            t('auth.sessionExpiredLoggedOutMessage')
+          );
+        } catch (error) {
+          console.warn('LoginScreen logout reason read error:', error);
+        }
+      };
+
+      showLogoutReasonIfAny();
+    }, [runCheck, t])
   );
 
   // Generate FCM token when screen appears

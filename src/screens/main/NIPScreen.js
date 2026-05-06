@@ -41,6 +41,7 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 
 import { COLORS, SIZES } from '../../constants/theme';
+import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 import NIPLoan from '../../models/NIPLoan';
 
@@ -112,6 +113,7 @@ const NIPScreen = ({ navigation }) => {
   const styles = useMemo(() => createNipScreenStyles(language), [language]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, DEBOUNCE_MS_DEFAULT);
 
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
 
@@ -185,7 +187,7 @@ const NIPScreen = ({ navigation }) => {
 
       const response = await apiServices.loan.getNIPList({
 
-        search: searchQuery.trim(),
+        search: debouncedSearchQuery.trim(),
 
         page,
 
@@ -239,7 +241,7 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-  }, [searchQuery, nipTypeTab, t]);
+  }, [debouncedSearchQuery, nipTypeTab, t]);
 
 
 
@@ -281,17 +283,17 @@ const NIPScreen = ({ navigation }) => {
 
 
 
-  const filteredList = searchQuery.trim()
+  const filteredList = debouncedSearchQuery.trim()
 
     ? nipList.filter(
 
       (loan) =>
 
-        loan.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        loan.customerName?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
 
-        loan.customerPhone?.includes(searchQuery) ||
+        loan.customerPhone?.includes(debouncedSearchQuery) ||
 
-        loan.customerNo?.includes(searchQuery)
+        loan.customerNo?.includes(debouncedSearchQuery)
 
     )
 
@@ -757,7 +759,7 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-    if (nipList.length > 0 && searchQuery.trim() && filteredList.length === 0) {
+    if (nipList.length > 0 && debouncedSearchQuery.trim() && filteredList.length === 0) {
 
       return (
 

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,6 +20,7 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import LoanCollectionsModal from '../../components/common/LoanCollectionsModal';
 import { COLORS, SIZES } from '../../constants/theme';
+import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError } from '../../utils/alertService';
@@ -47,6 +48,7 @@ const formatAmountOrDash = (value) => {
 const LoanCustomerListScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, DEBOUNCE_MS_DEFAULT);
   const [loanList, setLoanList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -109,17 +111,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
     fetchLoans(nextPage, true);
   }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchLoans]);
 
-  const filteredList = searchQuery.trim()
-    ? loanList.filter(
+  const filteredList = useMemo(() => {
+    const q = debouncedSearchQuery.trim();
+    if (!q) return loanList;
+    const lower = q.toLowerCase();
+    return loanList.filter(
       (loan) =>
-        (loan?.customer_name ?? '')
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (loan?.customer_phone ?? '').includes(searchQuery) ||
-        (loan?.customer_no ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(loan?.id ?? '').includes(searchQuery)
-    )
-    : loanList;
+        (loan?.customer_name ?? '').toLowerCase().includes(lower) ||
+        (loan?.customer_phone ?? '').includes(q) ||
+        (loan?.customer_no ?? '').toLowerCase().includes(lower) ||
+        String(loan?.id ?? '').includes(q)
+    );
+  }, [loanList, debouncedSearchQuery]);
 
   const handleCustomerSelect = (loan) => {
     navigation.navigate('LoanScreen', {

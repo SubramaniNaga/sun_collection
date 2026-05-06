@@ -513,8 +513,8 @@ const CollectionHistoryScreen = ({ navigation }) => {
         contentContainerStyle={[
           styles.content,
           {
-            paddingBottom:
-              SIZES.padding * 2 + (accountClosingBlocked ? 0 : LIST_EXTRA_BOTTOM),
+            // Extra bottom inset was LIST_EXTRA_BOTTOM when fixed “Account closing” bar was shown (block below is commented out).
+            paddingBottom: SIZES.padding * 2,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -694,6 +694,8 @@ const CollectionHistoryScreen = ({ navigation }) => {
         ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}
       />
 
+      {/*
+      Green “Account closing” button (temporarily hidden — restore LIST_EXTRA_BOTTOM in FlatList paddingBottom when re-enabled).
       {shouldShowAccountClosingButton ? (
         <View style={styles.accountClosingBar}>
           <TouchableOpacity
@@ -709,6 +711,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       ) : null}
+      */}
       </View>
     </SafeAreaView>
   );

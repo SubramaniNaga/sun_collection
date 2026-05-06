@@ -715,13 +715,15 @@ export const apiServices = {
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
-        const { customer_phone = '', customer_name = '', collection_date = '' } = params;
+        const { customer_phone = '', customer_name = '', collection_date = '', search = '' } = params;
+        const searchTrimmed = typeof search === 'string' ? search.trim() : '';
         const requestParams = {
           branch_id: branchId,
           line_id: lineIdsString,
           ...(customer_phone && { customer_phone }),
           ...(customer_name && { customer_name }),
           ...(collection_date && { collection_date }),
+          ...(searchTrimmed && { search: searchTrimmed }),
         };
         console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.COLLECTION.LIST, {
@@ -844,13 +846,15 @@ export const apiServices = {
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
-        const { customer_phone = '', customer_name = '', collection_date = '' } = params;
+        const { customer_phone = '', customer_name = '', collection_date = '', search = '' } = params;
+        const searchTrimmed = typeof search === 'string' ? search.trim() : '';
         const requestParams = {
           branch_id: branchId,
           line_id: lineIdsString,
           ...(customer_phone && { customer_phone }),
           ...(customer_name && { customer_name }),
           ...(collection_date && { collection_date }),
+          ...(searchTrimmed && { search: searchTrimmed }),
         };
         console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.COLLECTION.LIST, {
@@ -1041,10 +1045,10 @@ export const apiServices = {
       }
     },
 
-    closeOpeningAccount: async () => {
+    closeOpeningAccount: async (payload = {}) => {
       try {
-        console.log('💰 API: closeOpeningAccount - POST', ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT);
-        const response = await apiClient.post(ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT, {});
+        console.log('💰 API: closeOpeningAccount - POST', ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT, '| body:', JSON.stringify(payload, null, 2));
+        const response = await apiClient.post(ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT, payload);
         console.log('💰 API: closeOpeningAccount - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {

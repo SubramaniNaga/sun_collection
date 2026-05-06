@@ -12,16 +12,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
+import Collection from '../../models/Collection';
 import Dashboard from '../../models/Dashboard';
+import NIPLoan from '../../models/NIPLoan';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { showAlert } from '../../utils/alertService';
+import { getCurrentDateString } from '../../utils/dateFormatter';
 import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
 const LANG_SWITCH_W = 58;
@@ -30,41 +33,109 @@ const LANG_THUMB = 26;
 const LANG_PAD = 2;
 const LANG_THUMB_TRAVEL = LANG_SWITCH_W - LANG_THUMB - LANG_PAD * 2;
 
+/** Normalize GET /frontcash/dashboard/today response for Dashboard.fromApiResponse */
+function dashboardDataFromTodayApi(res) {
+  if (!res || typeof res !== 'object') return {};
+  if (res.success && res.data && typeof res.data === 'object') return res.data;
+  if (res.data && typeof res.data === 'object') {
+    const d = res.data;
+    if (d.expenses != null || d.collections != null || d.frontcash != null || d.loans_given != null) {
+      return d;
+    }
+  }
+  if (res.expenses != null || res.collections != null || res.frontcash != null || res.loans_given != null) {
+    return res;
+  }
+  return {};
+}
+
+const formatRupee = (value) => {
+  const amount = parseFloat(value) || 0;
+  return `₹${amount.toLocaleString('en-IN')}`;
+};
+
 const HomeScreen = ({ navigation }) => {
-  const insets = useSafeAreaInsets();
   const { t, language, changeLanguage } = useLanguage();
   const { user, updateUser } = useAuthContext();
   const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
-  const [dashboardData, setDashboardData] = useState(null);
   const [langSaving, setLangSaving] = useState(false);
   const slideAnim = useRef(
     new Animated.Value(language === 'ta' ? LANG_THUMB_TRAVEL : 0)
   ).current;
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  const fetchDashboardData = useCallback(async () => {
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [dashboardError, setDashboardError] = useState(null);
+
+  const [collectionSummary, setCollectionSummary] = useState({ totalBalance: 0, count: 0 });
+  const [nipSummary, setNipSummary] = useState({ totalBalance: 0, count: 0 });
+
+  const loadHomeData = useCallback(async () => {
+    setLoadingDashboard(true);
+    setDashboardError(null);
+
+    const dashPromise = apiServices.dashboard.getTodayStats().catch((err) => {
+      console.error('Home dashboard error:', err);
+      return null;
+    });
+
+    const today = getCurrentDateString();
+    const summaryPromise = Promise.all([
+      apiServices.collection.getCollectionList({ collection_date: today }).catch(() => null),
+      apiServices.loan.getNIPList({ page: 1, limit: 500 }).catch(() => null),
+    ]);
+
     try {
-      setLoading(true);
-      setError(null);
-      const response = await apiServices.dashboard.getTodayStats();
-      if (response.success && response.data) {
-        const dashboard = Dashboard.fromApiResponse(response.data);
-        setDashboardData(dashboard);
+      const [res, [colRes, nipRes]] = await Promise.all([dashPromise, summaryPromise]);
+
+      if (res != null) {
+        const raw = dashboardDataFromTodayApi(res);
+        if (Object.keys(raw).length > 0) {
+          setDashboardData(Dashboard.fromApiResponse(raw));
+          setDashboardError(null);
+        } else {
+          setDashboardData(null);
+          setDashboardError(t('home.failedToLoadDashboard'));
+        }
+      } else {
+        setDashboardData(null);
+        setDashboardError(t('home.failedToLoadDashboard'));
       }
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      setError('Failed to load dashboard data');
+
+      if (colRes) {
+        const colRaw = colRes?.response ?? colRes?.data ?? [];
+        const colArr = Array.isArray(colRaw) ? colRaw : [];
+        const collections = Collection.fromApiResponseArray(colArr);
+        const totalColBalance = collections.reduce(
+          (sum, c) => sum + (parseFloat(c.balanceAmount) || 0),
+          0
+        );
+        setCollectionSummary({ totalBalance: totalColBalance, count: collections.length });
+      } else {
+        setCollectionSummary({ totalBalance: 0, count: 0 });
+      }
+
+      if (nipRes) {
+        const nipRaw = Array.isArray(nipRes?.data) ? nipRes.data : [];
+        const nips = NIPLoan.fromApiResponseArray(nipRaw);
+        const totalNipBalance = nips.reduce(
+          (sum, n) => sum + (parseFloat(n.balanceAmount) || 0),
+          0
+        );
+        setNipSummary({ totalBalance: totalNipBalance, count: nips.length });
+      } else {
+        setNipSummary({ totalBalance: 0, count: 0 });
+      }
     } finally {
-      setLoading(false);
+      setLoadingDashboard(false);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchDashboardData();
       runCheck();
-    }, [fetchDashboardData, runCheck])
+      loadHomeData();
+    }, [runCheck, loadHomeData])
   );
 
   useEffect(() => {
@@ -109,48 +180,62 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  
-
-  
-  const menuItems = [
-    {
-      id: 'collection',
-      title: t('home.collection'),
-      icon: 'cash-outline',
-      onPress: () => navigation.navigate('Collection'),
-    },
-    {
-      id: 'nip',
-      title: t('home.nip'),
-      icon: 'link-outline',
-      onPress: () => navigation.navigate('NIP'),
-    },
-    {
-      id: 'expenses',
-      title: t('home.expenses'),
-      icon: 'card-outline',
-      onPress: () => navigation.navigate('Expenses'),
-    },
-    {
-      id: 'loan',
-      title: t('home.loanManagement'),
-      icon: 'document-text-outline',
-      onPress: () => navigation.navigate('Loan'),
-    },
-    {
-      id: 'upfront-cash',
-      title: t('home.upfrontCash'),
-      icon: 'wallet-outline',
-      onPress: () => navigation.navigate('UpfrontCash'),
-    },
-    {
-      id: 'collection-history',
-      title: t('home.collectionHistory'),
-      icon: 'bar-chart-outline',
-      onPress: () => navigation.navigate('CollectionHistory'),
-    },
-
-  ];
+  const renderAmountCard = ({
+    cardKey,
+    backgroundColor,
+    iconName,
+    title,
+    amountText,
+    subText,
+    onPress,
+    outlined,
+    hideDetails,
+  }) => {
+    const isOutlined = Boolean(outlined);
+    return (
+      <TouchableOpacity
+        key={cardKey}
+        style={[
+          styles.amountCard,
+          isOutlined ? styles.amountCardOutlined : { backgroundColor },
+          hideDetails && styles.amountCardCentered,
+        ]}
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <View style={[styles.amountCardHeader, hideDetails && styles.amountCardHeaderCentered]}>
+          <Ionicons
+            name={iconName}
+            size={hideDetails ? 32 : 24}
+            color={isOutlined ? COLORS.primary : COLORS.white}
+          />
+          <Text
+            style={[
+              styles.amountCardHeaderText,
+              isOutlined && styles.amountCardHeaderTextOutlined,
+              hideDetails && styles.amountCardHeaderTextLarge,
+            ]}
+            numberOfLines={2}
+          >
+            {title}
+          </Text>
+        </View>
+        {!hideDetails && (
+          <>
+            <Text style={[styles.amountCardValue, isOutlined && styles.amountCardValueOutlined]}>
+              {amountText}
+            </Text>
+            <Text
+              style={[styles.amountCardSub, isOutlined && styles.amountCardSubOutlined]}
+              numberOfLines={2}
+            >
+              {subText}
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <>
@@ -202,133 +287,106 @@ const HomeScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Dashboard Section */}
         <View style={styles.dashboardSection}>
           <Text style={styles.dashboardTitle}>{t('home.todaysStatistics')}</Text>
 
-          {loading ? (
+          {loadingDashboard ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={COLORS.primary} />
               <Text style={styles.loadingText}>{t('home.loadingDashboard')}</Text>
             </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={24} color={COLORS.error} />
-              <Text style={styles.errorText}>{error || t('home.failedToLoadDashboard')}</Text>
-              <TouchableOpacity onPress={fetchDashboardData} style={styles.retryButton}>
-                <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : dashboardData ? (
-            <View style={styles.dashboardGrid}>
-              {/* Frontcash Card */}
-              <TouchableOpacity
-                style={[styles.dashboardCard, styles.frontcashCard]}
-                onPress={() => navigation.navigate('UpfrontCashAdd')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <Ionicons name="wallet" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>{t('home.frontcash')}</Text>
+          ) : (
+            <>
+              {dashboardError ? (
+                <View style={styles.dashboardBannerError}>
+                  <Ionicons name="alert-circle-outline" size={20} color={COLORS.error} />
+                  <Text style={styles.dashboardBannerErrorText}>{dashboardError}</Text>
+                  <TouchableOpacity onPress={loadHomeData} hitSlop={12}>
+                    <Text style={styles.dashboardBannerRetry}>{t('common.retry')}</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.cardAmount}>{dashboardData.getFormattedFrontcashAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.frontcash.count} {t('home.transactions')}</Text>
-              </TouchableOpacity>
+              ) : null}
+              <View style={styles.homeGrid}>
+                {renderAmountCard({
+                  cardKey: 'collection',
+                  backgroundColor: '#1d7ee2',
+                  iconName: 'cash-outline',
+                  title: t('home.collection'),
+                  amountText: formatRupee(collectionSummary.totalBalance),
+                  subText: `${collectionSummary.count} ${t('home.dueToday')}`,
+                  onPress: () => navigation.navigate('Collection'),
+                  hideDetails: true,
+                })}
 
-              {/* Loans Given Card */}
-              <TouchableOpacity
-                style={[styles.dashboardCard, styles.loansCard]}
-                onPress={() => navigation.navigate('Loan')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <Ionicons name="document-text" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>{t('home.loansGiven')}</Text>
-                </View>
-                <Text style={styles.cardAmount}>{dashboardData.getFormattedLoansGivenAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.loansGiven.count} {t('home.loans')}</Text>
-              </TouchableOpacity>
+                {renderAmountCard({
+                  cardKey: 'loan-mgmt',
+                  iconName: 'document-text-outline',
+                  title: t('home.loanManagement'),
+                  amountText: dashboardData
+                    ? dashboardData.getFormattedLoansGivenAmount()
+                    : formatRupee(0),
+                  subText: `${dashboardData?.loansGiven?.count ?? 0} ${t('home.loans')}`,
+                  onPress: () => navigation.navigate('Loan'),
+                  outlined: true,
+                })}
 
-              {/* Collections Card */}
-              <TouchableOpacity
-                style={[styles.dashboardCard, styles.collectionsCard]}
-                onPress={() => navigation.navigate('CollectionHistory')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <Ionicons name="cash" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>{t('home.collections')}</Text>
-                </View>
-                <Text style={styles.cardAmount}>{dashboardData.getFormattedCollectionsAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.collections.count} {t('home.collectionsCount')}</Text>
-              </TouchableOpacity>
+                {renderAmountCard({
+                  cardKey: 'upfront-cash',
+                  backgroundColor: '#34C759',
+                  iconName: 'wallet-outline',
+                  title: t('home.upfrontCash'),
+                  amountText: dashboardData
+                    ? dashboardData.getFormattedFrontcashAmount()
+                    : formatRupee(0),
+                  subText: `${dashboardData?.frontcash?.count ?? 0} ${t('home.transactions')}`,
+                  onPress: () => navigation.navigate('UpfrontCash'),
+                })}
 
-              {/* Expenses Card */}
-              <TouchableOpacity
-                style={[styles.dashboardCard, styles.expensesCard]}
-                onPress={() => navigation.navigate('Expenses')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <Ionicons name="card" size={24} color={COLORS.white} />
-                  <Text style={styles.cardHeaderText}>{t('home.expenses')}</Text>
-                </View>
-                <Text style={styles.cardAmount}>{dashboardData.getFormattedExpensesAmount()}</Text>
-                <Text style={styles.cardCount}>{dashboardData.expenses.count} {t('home.expensesCount')}</Text>
-              </TouchableOpacity>
+                {renderAmountCard({
+                  cardKey: 'expenses',
+                  backgroundColor: '#FF3B30',
+                  iconName: 'card-outline',
+                  title: t('home.expenses'),
+                  amountText: dashboardData
+                    ? dashboardData.getFormattedExpensesAmount()
+                    : formatRupee(0),
+                  subText: `${dashboardData?.expenses?.count ?? 0} ${t('home.expensesCount')}`,
+                  onPress: () => navigation.navigate('Expenses'),
+                })}
 
-              {/* Tracking Card - Full Width 
-              <View style={[styles.dashboardCard, styles.trackingCard, styles.fullWidthCard]}>
-                <View style={styles.cardHeader}>
-                  <Ionicons 
-                    name={dashboardData.tracking.isTracking ? "location" : "location-outline"} 
-                    size={24} 
-                    color={COLORS.white} 
-                  />
-                  <Text style={styles.cardHeaderText}>Tracking</Text>
-                  <View style={[
-                    styles.trackingStatusBadge,
-                    dashboardData.tracking.isTracking && styles.trackingActiveBadge
-                  ]}>
-                    <Text style={styles.trackingStatusText}>
-                      {dashboardData.tracking.isTracking ? 'Active' : 'Inactive'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.trackingStats}>
-                  <View style={styles.trackingStatItem}>
-                    <Ionicons name="time-outline" size={20} color={COLORS.white} />
-                    <Text style={styles.trackingStatLabel}>Time</Text>
-                    <Text style={styles.trackingStatValue}>
-                      {dashboardData.getFormattedTrackingTime()}
-                    </Text>
-                  </View>
-                  <View style={styles.trackingStatItem}>
-                    <Ionicons name="navigate-outline" size={20} color={COLORS.white} />
-                    <Text style={styles.trackingStatLabel}>Distance</Text>
-                    <Text style={styles.trackingStatValue}>
-                      {dashboardData.getFormattedTrackingDistance()}
-                    </Text>
-                  </View>
-                </View>
+                {renderAmountCard({
+                  cardKey: 'coll-hist',
+                  backgroundColor: '#FF9500',
+                  iconName: 'bar-chart-outline',
+                  title: t('home.collectionHistory'),
+                  amountText: dashboardData
+                    ? dashboardData.getFormattedCollectionsAmount()
+                    : formatRupee(0),
+                  subText: `${dashboardData?.collections?.count ?? 0} ${t('home.collectionsCount')}`,
+                  onPress: () => navigation.navigate('CollectionHistory'),
+                })}
+
+                {renderAmountCard({
+                  cardKey: 'nip',
+                  backgroundColor: '#5856D6',
+                  iconName: 'link-outline',
+                  title: t('home.nip'),
+                  amountText: formatRupee(nipSummary.totalBalance),
+                  subText: `${nipSummary.count} ${t('home.loans')}`,
+                  onPress: () => navigation.navigate('NIP'),
+                })}
               </View>
-              */}
-            </View>
-          ) : null}
-        </View>
 
-        <View style={styles.menuGrid}>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuCard}
-              onPress={item.onPress}
-              activeOpacity={0.7}
-            >
-              <Ionicons name={item.icon} size={28} color={COLORS.primary} />
-              <Text style={styles.cardTitle}>{item.title}</Text>
-            </TouchableOpacity>
-          ))}
+              <TouchableOpacity
+                style={styles.cashAccountCard}
+                onPress={() => navigation.navigate('CashAccount')}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="calculator-outline" size={22} color={COLORS.white} />
+                <Text style={styles.cashAccountCardText}>{t('cashAccount.closeAccount')}</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -356,39 +414,140 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SIZES.padding,
+    paddingBottom: SIZES.padding * 2,
   },
-  menuGrid: {
+  homeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    // marginTop: SIZES.margin * 2,
   },
-  menuCard: {
-    width: '30%',
-    backgroundColor: COLORS.white,
+  cashAccountCard: {
+    marginTop: SIZES.base,
+    backgroundColor: '#0F766E',
     borderRadius: SIZES.radius * 1.5,
-    padding: SIZES.base,
+    paddingVertical: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
     shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 3.84,
-    elevation: 3,
-    minHeight: 100,
-    marginBottom: SIZES.margin,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  cardTitle: {
+  cashAccountCardText: {
+    marginLeft: SIZES.base,
+    fontSize: SIZES.body3,
+    fontWeight: '700',
+    color: COLORS.white,
+    letterSpacing: -0.2,
+  },
+  amountCard: {
+    width: '48%',
+    minHeight: 132,
+    borderRadius: SIZES.radius * 1.5,
+    padding: SIZES.padding,
+    marginBottom: SIZES.margin,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  amountCardOutlined: {
+    backgroundColor: COLORS.white,
+    borderWidth: 2,
+    borderColor: '#1d7ee2',
+    shadowOpacity: 0.08,
+    elevation: 3,
+  },
+  amountCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.base,
+  },
+  amountCardCentered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  amountCardHeaderCentered: {
+    justifyContent: 'center',
+    marginBottom: 0,
+    flex: 1,
+  },
+  amountCardHeaderTextLarge: {
+    fontSize: SIZES.h3,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  amountCardHeaderText: {
+    flex: 1,
     fontSize: SIZES.body4,
     fontWeight: '600',
-    color: COLORS.text.primary,
-    textAlign: 'center',
-    letterSpacing: -0.2,
+    color: COLORS.white,
+    marginLeft: SIZES.base,
+  },
+  amountCardHeaderTextOutlined: {
+    color: COLORS.primary,
+  },
+  amountCardValue: {
+    fontSize: SIZES.h2,
+    fontWeight: '700',
+    color: COLORS.white,
+    marginBottom: SIZES.base / 2,
+  },
+  amountCardValueOutlined: {
+    color: COLORS.primary,
+  },
+  amountCardSub: {
+    fontSize: SIZES.body4,
+    color: COLORS.white,
+    opacity: 0.92,
+  },
+  amountCardSubOutlined: {
+    color: COLORS.text.secondary,
+    opacity: 1,
+  },
+  dashboardSection: {
+    marginBottom: SIZES.margin,
+  },
+  dashboardBannerError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    padding: SIZES.base,
+    marginBottom: SIZES.margin,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+  },
+  dashboardBannerErrorText: {
+    flex: 1,
+    minWidth: 120,
+    fontSize: SIZES.body4,
+    color: COLORS.error,
+    marginHorizontal: SIZES.base,
+  },
+  dashboardBannerRetry: {
+    fontSize: SIZES.body4,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  dashboardTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: '700',
+    color: COLORS.text.secondary,
+    marginBottom: SIZES.margin,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SIZES.padding * 2,
+  },
+  loadingText: {
+    marginTop: SIZES.margin,
+    fontSize: SIZES.body3,
+    color: COLORS.text.tertiary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -446,153 +605,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
     letterSpacing: 0.2,
-  },
-  notificationButton: {
-    padding: SIZES.padding / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dashboardSection: {
-    marginTop: 0,
-    marginBottom: SIZES.margin,
-    paddingTop: 0,
-  },
-  dashboardTitle: {
-    fontSize: SIZES.h3,
-    fontWeight: '700',
-    color: COLORS.text.secondary,
-    marginBottom: SIZES.margin,
-  },
-  dashboardGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  dashboardCard: {
-    width: '48%',
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius * 1.5,
-    padding: SIZES.padding,
-    marginBottom: SIZES.margin,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  fullWidthCard: {
-    width: '100%',
-  },
-  frontcashCard: {
-    backgroundColor: '#1d7ee2',
-  },
-  loansCard: {
-    backgroundColor: '#34C759',
-  },
-  collectionsCard: {
-    backgroundColor: '#FF9500',
-  },
-  expensesCard: {
-    backgroundColor: '#FF3B30',
-  },
-  trackingCard: {
-    backgroundColor: '#5856D6',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SIZES.padding,
-  },
-  cardHeaderText: {
-    fontSize: SIZES.body4,
-    fontWeight: '600',
-    color: COLORS.white,
-    marginLeft: SIZES.base,
-    flex: 1,
-  },
-  cardAmount: {
-    fontSize: SIZES.h2,
-    fontWeight: '700',
-    color: COLORS.white,
-    marginBottom: SIZES.base / 2,
-  },
-  cardCount: {
-    fontSize: SIZES.body4,
-    color: COLORS.white,
-    opacity: 0.9,
-  },
-  trackingStatusBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base / 2,
-    borderRadius: SIZES.radius,
-  },
-  trackingActiveBadge: {
-    backgroundColor: COLORS.success,
-  },
-  trackingStatusText: {
-    fontSize: SIZES.body5,
-    fontWeight: '600',
-    color: COLORS.white,
-  },
-  trackingStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: SIZES.padding,
-  },
-  trackingStatItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  trackingStatLabel: {
-    fontSize: SIZES.body4,
-    color: COLORS.white,
-    opacity: 0.9,
-    marginTop: SIZES.base / 2,
-    marginBottom: SIZES.base / 2,
-  },
-  trackingStatValue: {
-    fontSize: SIZES.body1,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SIZES.padding * 2,
-  },
-  loadingText: {
-    marginTop: SIZES.margin,
-    fontSize: SIZES.body3,
-    color: COLORS.text.tertiary,
-  },
-  errorContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SIZES.padding * 2,
-    backgroundColor: COLORS.lightGray,
-    borderRadius: SIZES.radius,
-  },
-  errorText: {
-    marginTop: SIZES.margin,
-    fontSize: SIZES.body3,
-    color: COLORS.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: SIZES.margin,
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.base,
-    backgroundColor: COLORS.primary,
-    borderRadius: SIZES.radius,
-  },
-  retryButtonText: {
-    color: COLORS.white,
-    fontSize: SIZES.body3,
-    fontWeight: '600',
   },
 });
 

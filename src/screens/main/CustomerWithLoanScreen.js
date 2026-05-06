@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import apiClient from '../../api/apiClient';
 import apiServices from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
 import FormPicker from '../../components/common/FormPicker';
@@ -16,8 +17,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 
 const CustomerWithLoanScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
@@ -30,6 +30,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [searchResult, setSearchResult] = useState(null);
   const [searchError, setSearchError] = useState(null);
   const searchDebounceRef = useRef(null);
+  const [showExistingLoanForm, setShowExistingLoanForm] = useState(false);
 
   // Form states
   const [customerPhone, setCustomerPhone] = useState('');
@@ -143,11 +144,33 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     return () => { cancelled = true; };
   }, [customerType]);
 
+  useEffect(() => {
+    if (customerType !== 'Existing') return;
+    let cancelled = false;
+    const loadDefaults = async () => {
+      try {
+        const storedLoanType = await AsyncStorage.getItem('loanType');
+        const storedLoanPeriod = await AsyncStorage.getItem('loanPeriod');
+        if (!cancelled) {
+          setLoanTypeId(storedLoanType || '1');
+          setLoanPeriod(storedLoanPeriod || '12');
+          setIsLoanTypeDisabled(true);
+          setIsLoanPeriodDisabled(true);
+        }
+      } catch (e) {
+        console.error('Error loading default loan data for existing customer:', e);
+      }
+    };
+    loadDefaults();
+    return () => { cancelled = true; };
+  }, [customerType]);
+
   const runCustomerSearch = useCallback(async (query) => {
     const q = (query || existingSearch || '').trim();
     if (!q) {
       setSearchResult(null);
       setSearchError(null);
+      setShowExistingLoanForm(false);
       return;
     }
     setSearchLoading(true);
@@ -176,7 +199,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       setSearchError(null);
       return;
     }
-    searchDebounceRef.current = setTimeout(() => runCustomerSearch(q), SEARCH_DEBOUNCE_MS);
+    searchDebounceRef.current = setTimeout(() => runCustomerSearch(q), DEBOUNCE_MS_DEFAULT);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
   }, [customerType, existingSearch, runCustomerSearch]);
 
@@ -217,8 +240,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     }
   };
 
-  // Validation
-  const validateForm = () => {
+  // Validation (New customer only)
+  const validateNewForm = () => {
     const newErrors = {};
 
     if (!customerPhone) {
@@ -268,6 +291,31 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     if (!addressProof) newErrors.addressProof = t('customer.imageRequired');
 
     setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateExistingCustomer = () => {
+    if (!searchResult) {
+      showError(t('common.error'), t('customer.noCustomerFound'));
+      return false;
+    }
+    if (hasOpenLoans) {
+      showError(t('common.error'), t('customer.customerHasOpenLoans'));
+      return false;
+    }
+    return true;
+  };
+
+  const validateExistingLoanForm = () => {
+    const newErrors = {};
+    if (!loanAmount.trim() || parseFloat(loanAmount) <= 0) newErrors.loanAmount = t('customer.loanAmountRequired');
+    if (!String(magimaiAmount ?? '').trim()) newErrors.magimaiAmount = t('customer.amountInvalidNonNegative') || 'Required';
+    if (!String(aathayamAmount ?? '').trim()) newErrors.aathayamAmount = t('customer.amountInvalidNonNegative') || 'Required';
+    if (!loanTypeId) newErrors.loanTypeId = t('customer.loanTypeRequired');
+    if (!loanPeriod.trim() || parseInt(loanPeriod, 10) <= 0) newErrors.loanPeriod = t('customer.loanPeriodRequired');
+    if (!customerPhoto) newErrors.customerPhoto = t('customer.imageRequired');
+    if (!addressProof) newErrors.addressProof = t('customer.imageRequired');
+    setErrors((prev) => ({ ...prev, ...newErrors }));
     return Object.keys(newErrors).length === 0;
   };
 
@@ -332,8 +380,18 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
   // Form submission
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    if (customerType === 'New') {
+      if (!validateNewForm()) return;
+    } else {
+      if (!validateExistingCustomer()) return;
+      if (!showExistingLoanForm) {
+        showError(t('common.error'), t('customer.fillRequiredFields') || 'Please open the form and fill required fields.');
+        return;
+      }
+      if (!validateExistingLoanForm()) return;
+    }
 
+    const isExisting = customerType === 'Existing';
     setLoading(true);
     try {
       // Get branch_id and line_id from storage (keys match login: branchId, lineId)
@@ -364,7 +422,75 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       const aathayamNum = String(aathayamAmount ?? '').trim() === '' ? 0 : Number(aathayamAmount) || 0;
       const magimaiNum = String(magimaiAmount ?? '').trim() === '' ? 0 : Number(magimaiAmount) || 0;
 
-      // POST /api/v1/customer/with-loan (multipart) — branch_id & line_id appended in apiServices
+      // Use correct MIME so backend receives binary image with proper Content-Type
+      const getImageType = (uri, defaultName) => {
+        const name = (uri ?? '').toLowerCase();
+        return name.includes('.png') ? 'image/png' : 'image/jpeg';
+      };
+
+      if (customerType === 'Existing') {
+        const customerId = searchResult?.id;
+        if (!customerId) {
+          showError(t('common.error'), t('customer.noCustomerFound'));
+          setLoading(false);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('loan_amount', String(Number(loanAmount) || 0));
+        formData.append('loan_period', String(Number(loanPeriod) || 0));
+        formData.append('loantype_id', String(Number(loanTypeId) || 0));
+        formData.append('processing_fees', String(magimaiNum));
+        formData.append('intrest_amount', String(aathayamNum));
+
+        if (customerPhoto) {
+          const name = getFileName(customerPhoto.uri, 'customer_photo.png');
+          formData.append('customer_photo', {
+            uri: customerPhoto.uri,
+            name,
+            type: getImageType(customerPhoto.uri, name),
+          });
+        }
+        if (addressProof) {
+          const name = getFileName(addressProof.uri, 'address_proof.png');
+          formData.append('address_proof', {
+            uri: addressProof.uri,
+            name,
+            type: getImageType(addressProof.uri, name),
+          });
+        }
+
+        console.log('📤 Existing customer loan request payload', {
+          endpoint: `/loan/existing-customer/${customerId}`,
+          fields: {
+            loan_amount: String(Number(loanAmount) || 0),
+            loan_period: String(Number(loanPeriod) || 0),
+            loantype_id: String(Number(loanTypeId) || 0),
+            processing_fees: String(magimaiNum),
+            intrest_amount: String(aathayamNum),
+          },
+          files: {
+            customer_photo: customerPhoto ? getFileName(customerPhoto.uri, 'customer_photo.png') : null,
+            address_proof: addressProof ? getFileName(addressProof.uri, 'address_proof.png') : null,
+          },
+        });
+
+        const response = await apiClient.post(`/loan/existing-customer/${customerId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const data = response?.data ?? response;
+        const success = data?.success !== false && (data?.status !== 400 && data?.status !== 500);
+        const message = data?.message || 'Loan request created successfully!';
+        if (success) {
+          showSuccess(t('common.success'), message, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        } else {
+          showError(t('common.error'), message || t('errors.somethingWentWrong'));
+        }
+        return;
+      }
+
+      // New customer flow (POST /customer/with-loan)
       const formData = new FormData();
       formData.append('customer_type', 'new');
       formData.append('customer_name', String(customerName));
@@ -373,16 +499,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       formData.append('loan_amount', String(Number(loanAmount) || 0));
       formData.append('loan_period', String(Number(loanPeriod) || 12));
       formData.append('loantype_id', String(Number(loanTypeId) || 1));
-      // Aathayam → processing_fees | Magimai → intrest_amount (API spelling)
       formData.append('processing_fees', String(magimaiNum));
       formData.append('intrest_amount', String(aathayamNum));
       formData.append('address_latitude', lat);
       formData.append('address_longitude', lng);
-      // Use correct MIME so backend receives binary image with proper Content-Type
-      const getImageType = (uri, defaultName) => {
-        const name = (uri ?? '').toLowerCase();
-        return name.includes('.png') ? 'image/png' : 'image/jpeg';
-      };
 
       if (aadharImage) {
         const name = getFileName(aadharImage.uri, 'aadhar_image.png');
@@ -412,10 +532,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       console.log('📤 CustomerWithLoan POST payload', {
         endpoint: '/api/v1/customer/with-loan',
         fields: {
-          customer_type: 'new',
-          customer_name: String(customerName),
-          customer_phone: String(customerPhone),
-          customer_address: String(customerAddress),
+          customer_type: isExisting ? 'existing' : 'new',
+          customer_id: isExisting ? (searchResult?.customer_id ?? searchResult?.id ?? searchResult?.customer_no ?? null) : null,
+          customer_name: String(isExisting ? (searchResult?.customer_name ?? '') : customerName),
+          customer_phone: String(isExisting ? (searchResult?.customer_phone ?? existingSearch ?? '') : customerPhone),
+          customer_address: String(isExisting ? (searchResult?.customer_address ?? '') : customerAddress),
           loan_amount: String(Number(loanAmount) || 0),
           loan_period: String(Number(loanPeriod) || 12),
           loantype_id: String(Number(loanTypeId) || 1),
@@ -433,9 +554,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           intrest_amount_from_magimaiNum: String(magimaiNum),
         },
         files: {
-          aadhar_image: aadharImage ? getFileName(aadharImage.uri, 'aadhar_image.png') : null,
-          customer_photo: customerPhoto ? getFileName(customerPhoto.uri, 'customer_photo.png') : null,
-          address_proof: addressProof ? getFileName(addressProof.uri, 'address_proof.png') : null,
+          aadhar_image: !isExisting && aadharImage ? getFileName(aadharImage.uri, 'aadhar_image.png') : null,
+          customer_photo: !isExisting && customerPhoto ? getFileName(customerPhoto.uri, 'customer_photo.png') : null,
+          address_proof: !isExisting && addressProof ? getFileName(addressProof.uri, 'address_proof.png') : null,
         },
         note: 'branch_id & line_id also re-appended in apiServices from AsyncStorage as strings.',
       });
@@ -531,7 +652,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       <View style={styles.radioRow}>
         <TouchableOpacity
           style={[styles.radioOption, customerType === 'New' && styles.radioOptionActive]}
-          onPress={() => { setCustomerType('New'); setSearchResult(null); setSearchError(null); setExistingSearch(''); }}
+          onPress={() => {
+            setCustomerType('New');
+            setSearchResult(null);
+            setSearchError(null);
+            setExistingSearch('');
+            setShowExistingLoanForm(false);
+          }}
         >
           <View style={[styles.radioCircle, customerType === 'New' && styles.radioCircleActive]}>
             {customerType === 'New' && <View style={styles.radioCircleInner} />}
@@ -540,7 +667,17 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.radioOption, customerType === 'Existing' && styles.radioOptionActive]}
-          onPress={() => { setCustomerType('Existing'); }}
+          onPress={() => {
+            setCustomerType('Existing');
+            setErrors({});
+            setShowExistingLoanForm(false);
+            setLoanAmount('');
+            setAathayamAmount('');
+            setMagimaiAmount('');
+            setCustomerPhoto(null);
+            setAddressProof(null);
+            setAadharImage(null);
+          }}
         >
           <View style={[styles.radioCircle, customerType === 'Existing' && styles.radioCircleActive]}>
             {customerType === 'Existing' && <View style={styles.radioCircleInner} />}
@@ -684,7 +821,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
               </View>
               {searchError && <Text style={styles.searchErrorText}>{searchError}</Text>}
               {searchResult && !searchLoading && (
-                <View style={styles.existingResultCard}>
+                <TouchableOpacity
+                  style={styles.existingResultCard}
+                  activeOpacity={canSubmitLoanForExisting ? 0.85 : 1}
+                  onPress={() => {
+                    if (!canSubmitLoanForExisting) return;
+                    setShowExistingLoanForm(true);
+                  }}
+                >
                   <Text style={styles.existingResultName}>{searchResult.customer_name ?? '—'}</Text>
                   <Text style={styles.existingResultMeta}>{t('customer.no')} {searchResult.customer_no ?? '—'} · {searchResult.customer_phone ?? '—'}</Text>
                   {searchResult.customer_address ? <Text style={styles.existingResultAddress} numberOfLines={2}>{searchResult.customer_address}</Text> : null}
@@ -699,6 +843,52 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                       <Text style={styles.canSubmitText}>{t('customer.noOpenLoansCanSubmit')}</Text>
                     </View>
                   )}
+                </TouchableOpacity>
+              )}
+
+              {customerType === 'Existing' && canSubmitLoanForExisting && showExistingLoanForm && (
+                <View style={styles.existingLoanForm}>
+                  <Input
+                    label={t('customer.loanAmount')}
+                    value={loanAmount}
+                    onChangeText={(text) => {
+                      setLoanAmount(text);
+                      if (errors.loanAmount) setErrors((prev) => ({ ...prev, loanAmount: null }));
+                    }}
+                    placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                    keyboardType="numeric"
+                    error={errors.loanAmount}
+                    required
+                  />
+
+                  <Input
+                    label={t('loan.processingFees') || 'Processing fees'}
+                    value={magimaiAmount}
+                    onChangeText={(text) => {
+                      setMagimaiAmount(text);
+                      if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
+                    }}
+                    placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                    keyboardType="decimal-pad"
+                    error={errors.magimaiAmount}
+                    required
+                  />
+
+                  <Input
+                    label={t('loan.interestAmount') || 'Interest amount'}
+                    value={aathayamAmount}
+                    onChangeText={(text) => {
+                      setAathayamAmount(text);
+                      if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
+                    }}
+                    placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                    keyboardType="decimal-pad"
+                    error={errors.aathayamAmount}
+                    required
+                  />
+
+                  {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer', 'customerPhoto', true)}
+                  {renderImageSection(t('customer.addressProof'), addressProof, 'address', 'addressProof', true)}
                 </View>
               )}
             </View>
@@ -720,9 +910,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       {customerType === 'Existing' && (
         <View style={[styles.fixedBottomContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
           <Button
-            title={t('customer.createCustomer')}
+            title={t('loan.createLoan')}
             onPress={handleSubmit}
             loading={loading}
+            disabled={!canSubmitLoanForExisting || !showExistingLoanForm}
             style={styles.submitButton}
           />
         </View>
@@ -842,6 +1033,9 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body3,
     color: COLORS.text.tertiary,
     marginBottom: SIZES.base,
+  },
+  existingLoanForm: {
+    marginTop: SIZES.padding,
   },
   openLoansBadge: {
     flexDirection: 'row',
