@@ -20,6 +20,7 @@ import CustomImagePicker from '../../components/common/ImagePicker';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const initialFormState = {
   category: '',
@@ -103,7 +104,7 @@ const ExpenseAddScreen = ({ navigation }) => {
         setSelectedImage(null);
         setErrors({});
         showSuccess(t('common.success'), message, [
-          { text: t('common.ok'), onPress: () => navigation.goBack() },
+          { text: t('common.ok'), onPress: () => safeGoBack(navigation) },
         ]);
       } else {
         showError(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
@@ -142,7 +143,7 @@ const ExpenseAddScreen = ({ navigation }) => {
       <Header
         title={t('expenses.addExpense')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <KeyboardAvoidingView

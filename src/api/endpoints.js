@@ -23,6 +23,8 @@ export const ENDPOINTS = {
   },
   COLLECTION: {
     LIST: '/collection',
+    UNPAID_LIST: '/collection/list/unpaid',
+    PAID_LIST: '/collection/list/paid',
     UPDATE_AMOUNT: (id) => `/collection/payment/${id}`,
     HISTORY: '/collection/history',
     /** Day-end closing summary (adjust path if your backend uses a different route). */
@@ -45,6 +47,7 @@ export const ENDPOINTS = {
     DELETE: (id) => `/expense/${id}`,
   },
   UPFRONT_CASH: {
+    CREATE: '/frontcash',
     LIST: '/frontcash',
     OPENING_BALANCE: '/frontcash/openingbalance',
     CLOSE_ACCOUNT: '/frontcash/openingbalance/closeaccount',

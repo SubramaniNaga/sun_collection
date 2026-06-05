@@ -100,7 +100,7 @@ const handleUnauthorized = async (error) => {
       console.warn('⚠️ No logout callback registered. Session cleared but logout not triggered.');
     }
   } catch (error) {
-    console.error('❌ Error during unauthorized handling:', error);
+    if (__DEV__) console.warn('❌ Error during unauthorized handling:', error);
     // Fallback: clear session and logout even if alert fails
     await clearSession();
     if (logoutCallback && typeof logoutCallback === 'function') {
@@ -173,7 +173,7 @@ apiClient.interceptors.request.use(
         loadingContext.startLoading();
       }
     } catch (error) {
-      console.error('Error in request interceptor:', error);
+      if (__DEV__) console.warn('Error in request interceptor:', error);
     }
     return config;
   },

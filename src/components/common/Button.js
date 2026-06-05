@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Keyboard, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 
 const Button = ({
@@ -85,10 +85,15 @@ const Button = ({
     return baseStyle;
   };
 
+  const handlePress = (...args) => {
+    Keyboard.dismiss();
+    onPress?.(...args);
+  };
+
   return (
     <TouchableOpacity
       style={[getButtonStyle(), style]}
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       activeOpacity={0.8}
       {...props}

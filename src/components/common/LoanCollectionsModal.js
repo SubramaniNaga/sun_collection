@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage } from '../../utils/alertService';
+import { getApiErrorMessage, showError } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
@@ -82,8 +82,9 @@ const LoanCollectionsModal = ({ visible, loanId, onClose }) => {
         : [];
       setRows(sorted);
     } catch (err) {
-      console.error('Loan collections modal load error:', err);
-      setError(getApiErrorMessage(err, t('loan.loanDetailsLoadError')));
+      if (__DEV__) console.warn('Loan collections modal load error:', err);
+      showError(t('common.error'), getApiErrorMessage(err, t('loan.loanDetailsLoadError')));
+      setError(null);
       setRows([]);
     } finally {
       setLoading(false);
@@ -135,10 +136,6 @@ const LoanCollectionsModal = ({ visible, loanId, onClose }) => {
             <View style={styles.centerBlock}>
               <ActivityIndicator size="large" color={COLORS.primary} />
               <Text style={styles.hint}>{t('loan.loadingCollections')}</Text>
-            </View>
-          ) : error ? (
-            <View style={styles.centerBlock}>
-              <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : rows.length === 0 ? (
             <View style={styles.centerBlock}>

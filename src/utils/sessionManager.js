@@ -32,7 +32,7 @@ export const clearSession = async () => {
     await AsyncStorage.multiRemove(SESSION_KEYS);
     console.log('✅ Session data cleared successfully');
   } catch (error) {
-    console.error('❌ Error clearing session data:', error);
+    if (__DEV__) console.warn('❌ Error clearing session data:', error);
     // Try to clear individually if multiRemove fails
     try {
       await Promise.all(
@@ -40,7 +40,7 @@ export const clearSession = async () => {
       );
       console.log('✅ Session data cleared (fallback method)');
     } catch (fallbackError) {
-      console.error('❌ Error in fallback session clear:', fallbackError);
+      if (__DEV__) console.warn('❌ Error in fallback session clear:', fallbackError);
       throw fallbackError;
     }
   }
@@ -64,7 +64,7 @@ export const hasActiveSession = async () => {
     const userData = await AsyncStorage.getItem('userData');
     return !!(token && userData);
   } catch (error) {
-    console.error('Error checking session:', error);
+    if (__DEV__) console.warn('Error checking session:', error);
     return false;
   }
 };

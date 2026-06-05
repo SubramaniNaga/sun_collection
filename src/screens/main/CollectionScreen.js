@@ -3,16 +3,21 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, InteractionManager, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import PaginationListFooter from '../../components/common/PaginationListFooter';
 import { COLORS, SIZES } from '../../constants/theme';
+import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { getApiErrorMessage, showAlert, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { formatCurrency } from '../../utils/amountFormatters';
+import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const openIosAppSettings = async () => {
   try {
@@ -21,9 +26,6 @@ const openIosAppSettings = async () => {
     await Linking.openSettings();
   }
 };
-import { formatCurrency } from '../../utils/amountFormatters';
-import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
-import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 
 const formatAmount = (val) => {
   const num = parseFloat(val);
@@ -38,6 +40,13 @@ const formatCurrencyOrDash = (val) => {
 };
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
+const UNPAID_LIMIT = 10;
+const PAID_LIMIT = 10;
+
+const parseCollectionsFromResponse = (response) => {
+  const raw = response?.data?.collections ?? response?.collections;
+  return Array.isArray(raw) ? raw : [];
+};
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
@@ -46,19 +55,145 @@ const getImageUrl = (imagePath) => {
   return `${API_BASE_URL}/api/v1${cleanPath}`;
 };
 
+const areListPanePropsEqual = (prev, next) =>
+  prev.isActive === next.isActive &&
+  prev.data === next.data &&
+  prev.loading === next.loading &&
+  prev.loadingMore === next.loadingMore &&
+  prev.hasNextPage === next.hasNextPage;
+
+const CollectionTabBar = memo(function CollectionTabBar({
+  activeTab,
+  onTabPress,
+  pendingLabel,
+  paidLabel,
+  pendingBadgeCount,
+  paidBadgeCount,
+  showPendingBadge,
+  showPaidBadge,
+}) {
+  return (
+    <View style={styles.tabBar}>
+      <Pressable
+        style={[styles.tabItem, activeTab === 'pending' && styles.tabItemActive]}
+        onPress={() => onTabPress('pending')}
+        android_ripple={{ color: 'rgba(0,0,0,0.08)' }}
+      >
+        <Text style={[styles.tabLabel, activeTab === 'pending' && styles.tabLabelActive]}>
+          {pendingLabel}
+        </Text>
+        {showPendingBadge ? (
+          <View style={[styles.tabBadge, activeTab === 'pending' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, activeTab === 'pending' && styles.tabBadgeTextActive]}>
+              {pendingBadgeCount}
+            </Text>
+          </View>
+        ) : null}
+      </Pressable>
+
+      <Pressable
+        style={[styles.tabItem, activeTab === 'paid' && styles.tabItemActive]}
+        onPress={() => onTabPress('paid')}
+        android_ripple={{ color: 'rgba(0,0,0,0.08)' }}
+      >
+        <Text style={[styles.tabLabel, activeTab === 'paid' && styles.tabLabelActive]}>
+          {paidLabel}
+        </Text>
+        {showPaidBadge ? (
+          <View style={[styles.tabBadge, activeTab === 'paid' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, activeTab === 'paid' && styles.tabBadgeTextActive]}>
+              {paidBadgeCount}
+            </Text>
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+});
+
+const CollectionListPane = memo(function CollectionListPane({
+  isActive,
+  data,
+  loading,
+  loadingMore,
+  hasNextPage,
+  renderItem,
+  keyExtractor,
+  ListEmptyComponent,
+  onEndReached,
+  onLayout,
+  onContentSizeChange,
+  contentContainerStyle,
+  ListFooterComponent,
+}) {
+  return (
+    <View
+      style={[StyleSheet.absoluteFillObject, !isActive && styles.hiddenTab]}
+      pointerEvents={isActive ? 'box-none' : 'none'}
+      collapsable={false}
+    >
+      <FlatList
+        data={data}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={contentContainerStyle}
+        onLayout={onLayout}
+        onContentSizeChange={onContentSizeChange}
+        ListEmptyComponent={ListEmptyComponent}
+        ListFooterComponent={ListFooterComponent}
+        onEndReached={isActive ? onEndReached : undefined}
+        onEndReachedThreshold={0.15}
+        removeClippedSubviews={Platform.OS === 'android'}
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        windowSize={7}
+      />
+    </View>
+  );
+}, areListPanePropsEqual);
+
 const CollectionScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const [searchText, setSearchText] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [collectionData, setCollectionData] = useState([]);
+  const [pendingList, setPendingList] = useState([]);
+  const [paidList, setPaidList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreUnpaid, setLoadingMoreUnpaid] = useState(false);
+  const [loadingPaid, setLoadingPaid] = useState(true);
+  const [loadingMorePaid, setLoadingMorePaid] = useState(false);
   const [error, setError] = useState(null);
+  const [paidError, setPaidError] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending');
+  const [tabSwitchLoading, setTabSwitchLoading] = useState(false);
+  const deferredTab = useDeferredValue(activeTab);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const [unpaidPagination, setUnpaidPagination] = useState({
+    currentPage: 1,
+    hasNextPage: false,
+    totalPages: 1,
+    totalRecords: 0,
+  });
+  const [paidPagination, setPaidPagination] = useState({
+    currentPage: 1,
+    hasNextPage: false,
+    totalPages: 1,
+    totalRecords: 0,
+  });
   const searchDebounceRef = useRef(null);
   const searchTextRef = useRef(searchText);
   searchTextRef.current = searchText;
   const selectedDateRef = useRef(selectedDate);
   selectedDateRef.current = selectedDate;
+  const pendingContentHeightRef = useRef(0);
+  const pendingContainerHeightRef = useRef(0);
+  const paidContentHeightRef = useRef(0);
+  const paidContainerHeightRef = useRef(0);
+  const unpaidLoadMoreLockRef = useRef(false);
+  const paidLoadMoreLockRef = useRef(false);
 
   // Payment collection modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -68,6 +203,8 @@ const CollectionScreen = ({ navigation }) => {
   const [remarks, setRemarks] = useState('');
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [photoModalUri, setPhotoModalUri] = useState(null);
 
   const shouldAllowPaymentWhenBalanceZero = (collection) => {
     const balanceAmount = parseFloat(collection?.balanceAmount) || 0;
@@ -82,40 +219,212 @@ const CollectionScreen = ({ navigation }) => {
     return completedCount === 0;
   };
 
-  const fetchCollectionData = useCallback(async (searchQuery = '', collectionDate = null) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const dateToUse = collectionDate || selectedDate;
-      const dateString = formatDateForAPI(dateToUse);
-      const trimmed = (searchQuery || '').trim();
-      const isNumeric = /^\d+$/.test(trimmed.replace(/\s/g, ''));
-      const response = await apiServices.collection.getCollectionList({
-        ...(trimmed && (isNumeric ? { customer_phone: trimmed } : { search: trimmed })),
-        collection_date: dateString,
-      });
-      const raw = response?.response ?? response?.data ?? response?.data?.response;
-      const list = Array.isArray(raw) ? raw : [];
-      // Convert to Collection model instances
-      const collectionModels = Collection.fromApiResponseArray(list);
-      setCollectionData(collectionModels);
-    } catch (err) {
-      console.error('Failed to fetch collection data:', err);
-      setError(t('collection.failedToLoad'));
-      setCollectionData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDate]);
+  /** Optional search filters: name → search, customer id → customer_id, phone → customer_phone */
+  const buildSearchParams = useCallback((searchQuery) => {
+    const trimmed = (searchQuery || '').trim();
+    if (!trimmed) return {};
 
-  // Load when screen is focused or date changes — use ref for search so typing does not double-fetch (debounce handles search)
-  useFocusEffect(
-    useCallback(() => {
-      fetchCollectionData(searchTextRef.current, selectedDate);
-    }, [fetchCollectionData, selectedDate])
+    const digitsOnly = trimmed.replace(/\s/g, '');
+    const isNumeric = /^\d+$/.test(digitsOnly);
+
+    if (isNumeric) {
+      // 10+ digits treated as phone number; shorter numeric as customer id
+      if (digitsOnly.length >= 10) {
+        return { customer_phone: digitsOnly };
+      }
+      return { customer_id: digitsOnly };
+    }
+
+    // Name or customer number (e.g. BA126)
+    return { search: trimmed };
+  }, []);
+
+  const fetchUnpaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null) => {
+    try {
+      if (page === 1 && !append) {
+        setLoading(true);
+        setError(null);
+        unpaidLoadMoreLockRef.current = false;
+      }
+
+      const dateToUse = collectionDate || selectedDateRef.current;
+      const dateString = formatDateForAPI(dateToUse);
+      const response = await apiServices.collection.getUnpaidCollections({
+        page,
+        limit: UNPAID_LIMIT,
+        collection_date: dateString,
+        ...buildSearchParams(searchQuery),
+      });
+
+      const list = parseCollectionsFromResponse(response);
+      const models = Collection.fromApiResponseArray(list);
+      const pag = response?.pagination || {};
+
+      setPendingList((prev) => (append ? [...prev, ...models] : models));
+      setUnpaidPagination((prev) => ({
+        currentPage: pag.currentPage ?? page,
+        hasNextPage: Boolean(pag.hasNextPage),
+        totalPages: pag.totalPages ?? 1,
+        totalRecords: pag.totalRecords != null ? pag.totalRecords : (append ? prev.totalRecords : models.length),
+      }));
+    } catch (err) {
+      if (page === 1 && !append) {
+        showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
+        setError(null);
+        setPendingList([]);
+      }
+    } finally {
+      if (page === 1 && !append) {
+        setLoading(false);
+      } else {
+        setLoadingMoreUnpaid(false);
+        unpaidLoadMoreLockRef.current = false;
+      }
+    }
+  }, [buildSearchParams, t]);
+
+  const fetchPaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null) => {
+    try {
+      if (page === 1 && !append) {
+        setLoadingPaid(true);
+        setPaidError(null);
+        paidLoadMoreLockRef.current = false;
+      }
+
+      const dateToUse = collectionDate || selectedDateRef.current;
+      const dateString = formatDateForAPI(dateToUse);
+      const response = await apiServices.collection.getPaidCollections({
+        page,
+        limit: PAID_LIMIT,
+        collection_date: dateString,
+        ...buildSearchParams(searchQuery),
+      });
+      const list = parseCollectionsFromResponse(response);
+      const models = Collection.fromApiResponseArray(list);
+      const pag = response?.pagination || {};
+
+      setPaidList((prev) => (append ? [...prev, ...models] : models));
+      setPaidPagination((prev) => ({
+        currentPage: pag.currentPage ?? page,
+        hasNextPage: Boolean(pag.hasNextPage),
+        totalPages: pag.totalPages ?? 1,
+        totalRecords: pag.totalRecords != null ? pag.totalRecords : (append ? prev.totalRecords : models.length),
+      }));
+    } catch (err) {
+      if (page === 1 && !append) {
+        showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
+        setPaidError(null);
+        setPaidList([]);
+      }
+    } finally {
+      if (page === 1 && !append) {
+        setLoadingPaid(false);
+      } else {
+        setLoadingMorePaid(false);
+        paidLoadMoreLockRef.current = false;
+      }
+    }
+  }, [buildSearchParams, t]);
+
+  const loadBothCollections = useCallback(
+    (searchQuery = '', collectionDate = null) => {
+      fetchUnpaidCollections(1, false, searchQuery, collectionDate);
+      fetchPaidCollections(1, false, searchQuery, collectionDate);
+    },
+    [fetchUnpaidCollections, fetchPaidCollections]
   );
 
-  // When user types in search bar, call API with customer_phone for server-side filtering (debounced)
+  const refreshListsForFilters = useCallback(
+    (searchQuery = '', collectionDate = null) => {
+      setLoading(true);
+      setLoadingPaid(true);
+      loadBothCollections(searchQuery, collectionDate);
+    },
+    [loadBothCollections]
+  );
+
+  const loadMoreUnpaid = useCallback(() => {
+    if (activeTab !== 'pending') return;
+    if (
+      loading ||
+      loadingMoreUnpaid ||
+      unpaidLoadMoreLockRef.current ||
+      !unpaidPagination.hasNextPage
+    ) {
+      return;
+    }
+    unpaidLoadMoreLockRef.current = true;
+    setLoadingMoreUnpaid(true);
+    const nextPage = unpaidPagination.currentPage + 1;
+    fetchUnpaidCollections(nextPage, true, searchTextRef.current, selectedDateRef.current);
+  }, [activeTab, loading, loadingMoreUnpaid, unpaidPagination, fetchUnpaidCollections]);
+
+  const loadMorePaid = useCallback(() => {
+    if (activeTab !== 'paid') return;
+    if (
+      loadingPaid ||
+      loadingMorePaid ||
+      paidLoadMoreLockRef.current ||
+      !paidPagination.hasNextPage
+    ) {
+      return;
+    }
+    paidLoadMoreLockRef.current = true;
+    setLoadingMorePaid(true);
+    const nextPage = paidPagination.currentPage + 1;
+    fetchPaidCollections(nextPage, true, searchTextRef.current, selectedDateRef.current);
+  }, [activeTab, loadingPaid, loadingMorePaid, paidPagination, fetchPaidCollections]);
+
+  /** When first page is shorter than the list viewport, onEndReached may not fire — load next page until scrollable or done. */
+  const maybeLoadMoreUnpaidIfShort = useCallback(() => {
+    if (
+      loading ||
+      loadingMoreUnpaid ||
+      !unpaidPagination.hasNextPage ||
+      pendingContentHeightRef.current <= 0 ||
+      pendingContainerHeightRef.current <= 0
+    ) {
+      return;
+    }
+    if (pendingContentHeightRef.current <= pendingContainerHeightRef.current) {
+      loadMoreUnpaid();
+    }
+  }, [loading, loadingMoreUnpaid, unpaidPagination.hasNextPage, loadMoreUnpaid]);
+
+  const maybeLoadMorePaidIfShort = useCallback(() => {
+    if (
+      loadingPaid ||
+      loadingMorePaid ||
+      !paidPagination.hasNextPage ||
+      paidContentHeightRef.current <= 0 ||
+      paidContainerHeightRef.current <= 0
+    ) {
+      return;
+    }
+    if (paidContentHeightRef.current <= paidContainerHeightRef.current) {
+      loadMorePaid();
+    }
+  }, [loadingPaid, loadingMorePaid, paidPagination.hasNextPage, loadMorePaid]);
+
+  useEffect(() => {
+    if (!loading && pendingList.length > 0) {
+      maybeLoadMoreUnpaidIfShort();
+    }
+  }, [loading, pendingList.length, unpaidPagination.hasNextPage, maybeLoadMoreUnpaidIfShort]);
+
+  useEffect(() => {
+    if (!loadingPaid && paidList.length > 0) {
+      maybeLoadMorePaidIfShort();
+    }
+  }, [loadingPaid, paidList.length, paidPagination.hasNextPage, maybeLoadMorePaidIfShort]);
+
+  // Initial load: fetch unpaid + paid in parallel when screen opens
+  useFocusEffect(
+    useCallback(() => {
+      loadBothCollections(searchTextRef.current, selectedDate);
+    }, [loadBothCollections, selectedDate])
+  );
+
   const isFirstMountRef = useRef(true);
   useEffect(() => {
     if (isFirstMountRef.current) {
@@ -126,14 +435,14 @@ const CollectionScreen = ({ navigation }) => {
       clearTimeout(searchDebounceRef.current);
     }
     searchDebounceRef.current = setTimeout(() => {
-      fetchCollectionData(searchText, selectedDateRef.current);
+      refreshListsForFilters(searchText, selectedDateRef.current);
     }, DEBOUNCE_MS_DEFAULT);
     return () => {
       if (searchDebounceRef.current) {
         clearTimeout(searchDebounceRef.current);
       }
     };
-  }, [searchText, fetchCollectionData]);
+  }, [searchText, refreshListsForFilters]);
 
   // Handle date change
   const handleDateChange = (event, date) => {
@@ -142,7 +451,7 @@ const CollectionScreen = ({ navigation }) => {
       if (event.type === 'set' && date) {
         setSelectedDate(date);
         // Fetch data with new date
-        fetchCollectionData(searchText, date);
+        refreshListsForFilters(searchText, date);
       }
     } else {
       // iOS - update date as user scrolls, but don't fetch until "Done" is pressed
@@ -152,8 +461,10 @@ const CollectionScreen = ({ navigation }) => {
     }
   };
 
-  const filteredData = Array.isArray(collectionData) ? collectionData : [];
   const isSelectedDateToday = formatDateForAPI(selectedDate) === getCurrentDateString();
+  const pendingBadgeCount = unpaidPagination.totalRecords || pendingList.length;
+  const paidBadgeCount = paidPagination.totalRecords || paidList.length;
+  const showListOverlay = tabSwitchLoading || loading || loadingPaid;
 
   const openPaymentModal = (collection) => {
     setSelectedCollection(collection);
@@ -219,7 +530,6 @@ const CollectionScreen = ({ navigation }) => {
         }
       })
       .catch((err) => {
-        console.error('Error opening phone dialer:', err);
         showError('Error', 'Could not open phone dialer');
       });
   };
@@ -247,10 +557,8 @@ const CollectionScreen = ({ navigation }) => {
         }
       })
       .catch((err) => {
-        console.error('Error opening Google Maps:', err);
         // Fallback to web version
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
-          console.error('Error opening Google Maps web:', fallbackErr);
           showError('Error', 'Could not open Google Maps. Please check if Google Maps is installed.');
         });
       });
@@ -423,7 +731,6 @@ const CollectionScreen = ({ navigation }) => {
     } catch (error) {
       // Only log if it's not a user cancellation
       if (!error.message?.includes('user cancelled')) {
-        console.error('Error getting location:', error);
       }
       throw error;
     }
@@ -501,13 +808,12 @@ const CollectionScreen = ({ navigation }) => {
           text: t('common.ok'),
           onPress: () => {
             setShowPaymentModal(false);
-            fetchCollectionData(searchText, selectedDate);
+            loadBothCollections(searchText, selectedDate);
           },
         },
       ]);
     } catch (err) {
-      console.error('Failed to update collection amount:', err);
-      showError(t('common.error'), err.response?.data?.message || t('errors.somethingWentWrong'));
+      showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
     } finally {
       setIsSubmitting(false);
     }
@@ -522,220 +828,389 @@ const CollectionScreen = ({ navigation }) => {
     setPaymentErrors({});
   };
 
+  const handleTabPress = useCallback((tab) => {
+    if (activeTabRef.current === tab) return;
+    setActiveTab(tab);
+    setTabSwitchLoading(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tabSwitchLoading || activeTab !== deferredTab) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        setTabSwitchLoading(false);
+      });
+    });
+
+    return () => task.cancel();
+  }, [tabSwitchLoading, activeTab, deferredTab]);
+
+  const renderUnpaidFooter = () => (
+    <PaginationListFooter
+      loadingMore={loadingMoreUnpaid}
+      hasNextPage={unpaidPagination.hasNextPage}
+    />
+  );
+
+  const renderPaidFooter = () => (
+    <PaginationListFooter
+      loadingMore={loadingMorePaid}
+      hasNextPage={paidPagination.hasNextPage}
+    />
+  );
+
+  const renderPendingEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>{t('collection.loadingCollections')}</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.emptyText}>{t('collection.noPendingCollections')}</Text>
+      </View>
+    );
+  };
+
+  const renderPaidEmpty = () => {
+    if (loadingPaid) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      );
+    }
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.emptyText}>{t('collection.noPaidCollections')}</Text>
+      </View>
+    );
+  };
+
+  const openPhotoModal = (imagePath) => {
+    const uri = getImageUrl(imagePath);
+    if (uri) {
+      setPhotoModalUri(uri);
+      setPhotoModalVisible(true);
+    }
+  };
+
+  const renderCollectionActionIcons = (collection) => (
+    <View style={styles.collectionCardIconsRow}>
+      {collection.customerAddress ? (
+        <TouchableOpacity
+          style={styles.collectionCardIconButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleMapPress(collection.customerAddress);
+          }}
+        >
+          <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+        </TouchableOpacity>
+      ) : null}
+      {collection.customerPhone ? (
+        <TouchableOpacity
+          style={styles.collectionCardIconButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            handlePhonePress(collection.customerPhone);
+          }}
+        >
+          <Ionicons name="call" size={18} color={COLORS.primary} />
+        </TouchableOpacity>
+      ) : null}
+      {collection.loanId ? (
+        <TouchableOpacity
+          style={styles.collectionCardIconButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleLoanInfoPress(collection);
+          }}
+        >
+          <Ionicons name="information-circle-outline" size={18} color={COLORS.primary} />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+
+  const renderCollectionItem = ({ item }) => {
+    const collection = item instanceof Collection ? item : new Collection(item);
+    const customerName = String(collection.customerName ?? '').trim();
+    const isLongCustomerName = customerName.length > 12;
+    const displayId = collection.customerId ?? collection.customerNo ?? '—';
+
+    return (
+      <TouchableOpacity
+        style={[styles.listItem, collection.isPending && styles.listItemPending, collection.isHighPendingCount && styles.listItemHighPending]}
+        onPress={() => handleItemPress(collection)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.collectionCardHeader}>
+          <TouchableOpacity
+            style={styles.collectionCardPhotoWrap}
+            onPress={(e) => {
+              e.stopPropagation();
+              openPhotoModal(collection.customerPhoto);
+            }}
+            activeOpacity={0.8}
+          >
+            {collection.customerPhoto ? (
+              <Image
+                source={{ uri: getImageUrl(collection.customerPhoto) }}
+                style={styles.collectionCardPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={require('../../../assets/images/favicon.png')}
+                style={styles.collectionCardPhoto}
+                resizeMode="cover"
+              />
+            )}
+          </TouchableOpacity>
+          <View style={styles.collectionCardHeaderBody}>
+            {isLongCustomerName ? (
+              <>
+                <Text style={styles.collectionCardNameLine} numberOfLines={2}>
+                  {displayId} - {customerName || '—'}
+                </Text>
+                {renderCollectionActionIcons(collection)}
+              </>
+            ) : (
+              <View style={styles.collectionCardNameRow}>
+                <Text
+                  style={[styles.collectionCardNameLine, styles.collectionCardNameLineInline]}
+                  numberOfLines={1}
+                >
+                  {displayId} - {customerName || '—'}
+                </Text>
+                {renderCollectionActionIcons(collection)}
+              </View>
+            )}
+          </View>
+        </View>
+        <View style={styles.itemDivider} />
+        <View style={styles.itemRow}>
+          <Text style={styles.itemAssets}>
+            {t('loan.week')} {collection.collectionWeek ?? '—'} · {collection.getFormattedCollectionDate()}
+          </Text>
+          <View style={[styles.statusBadge, { backgroundColor: collection.getStatusColor() }]}>
+            <Text style={styles.statusText}>{collection.getStatusText()}</Text>
+          </View>
+        </View>
+        <View style={styles.itemRow}>
+          <Text style={styles.itemMetaLeft}>{t('loan.loanPeriod')}:</Text>
+          <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
+        </View>
+
+        {/* Loan due status row hidden per product request
+        <View style={styles.itemRow}>
+          <Text style={styles.itemMetaLeft}>{t('collection.loanDueStatus')}:</Text>
+          <Text style={styles.itemMetaRight}>
+            {(() => {
+              return `${collection.completed_collection_count ?? collection.completedCount ?? 0}(${collection.pending_collection_count ?? collection.pendingCount ?? 0})/${collection.current_collection_due_count ?? collection.totalCount ?? 0}`;
+            })()}
+          </Text>
+        </View>
+        */}
+
+        <View style={styles.itemRow}>
+          <Text style={styles.itemMetaLeft}>{t('loan.interestAmount')}:</Text>
+          <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.intrestAmount)}</Text>
+        </View>
+        <View style={styles.itemRow}>
+          <Text style={styles.itemMetaLeft}>{t('loan.processingFees')}:</Text>
+          <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.processingFees)}</Text>
+        </View>
+        <View style={styles.itemRow}>
+          <Text style={styles.itemMetaLeft}>{t('loan.paid')}: {collection.getFormattedAmountPaid()}</Text>
+          <Text style={styles.itemMetaRight}>{t('loan.balance')}: {collection.getFormattedBalanceAmount()}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       <Header
         title={t('collection.title')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <View style={styles.content}>
-        <View style={styles.searchRow}>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t('common.search')}
-              placeholderTextColor={COLORS.text.tertiary}
-              value={searchText}
-              onChangeText={setSearchText}
-            />
+        <CollectionTabBar
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+          pendingLabel={t('collection.pendingTab')}
+          paidLabel={t('collection.paidTab')}
+          pendingBadgeCount={pendingBadgeCount}
+          paidBadgeCount={paidBadgeCount}
+          showPendingBadge={!loading}
+          showPaidBadge={!loadingPaid}
+        />
+
+        <View style={styles.filtersSection}>
+          <View style={styles.searchRow}>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={t('common.search')}
+                placeholderTextColor={COLORS.text.tertiary}
+                value={searchText}
+                onChangeText={setSearchText}
+              />
+            </View>
+            <Pressable
+              style={styles.datePickerButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.datePickerText}>
+                {formatDisplayDate(selectedDate)}
+              </Text>
+            </Pressable>
           </View>
-          <Pressable
-            style={styles.datePickerButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.datePickerText}>
-              {formatDisplayDate(selectedDate)}
-            </Text>
-          </Pressable>
+
+          {showDatePicker && (
+            Platform.OS === 'ios' ? (
+              <Modal
+                transparent={true}
+                animationType="slide"
+                visible={showDatePicker}
+                onRequestClose={() => setShowDatePicker(false)}
+              >
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Text style={styles.modalButton}>{t('common.cancel')}</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.modalTitle}>{t('collection.selectDate')}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowDatePicker(false);
+                          refreshListsForFilters(searchText, selectedDate);
+                        }}
+                      >
+                        <Text style={[styles.modalButton, styles.modalButtonDone]}>{t('common.ok')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={selectedDate}
+                      mode="date"
+                      display="spinner"
+                      onChange={handleDateChange}
+                    />
+                  </View>
+                </View>
+              </Modal>
+            ) : (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+              />
+            )
+          )}
         </View>
 
-        {showDatePicker && (
-          Platform.OS === 'ios' ? (
-            <Modal
-              transparent={true}
-              animationType="slide"
-              visible={showDatePicker}
-              onRequestClose={() => setShowDatePicker(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                  <View style={styles.modalHeader}>
-                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                      <Text style={styles.modalButton}>{t('common.cancel')}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.modalTitle}>{t('collection.selectDate')}</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setShowDatePicker(false);
-                        fetchCollectionData(searchText, selectedDate);
-                      }}
-                    >
-                      <Text style={[styles.modalButton, styles.modalButtonDone]}>{t('common.ok')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display="spinner"
-                    // maximumDate={new Date()}
-                    onChange={handleDateChange}
-                  />
-                </View>
-              </View>
-            </Modal>
-          ) : (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display="default"
-              // maximumDate={new Date()}
-              onChange={handleDateChange}
-            />
-          )
-        )}
-
-        <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {loading ? (
-            <View style={styles.centerContainer}>
+        <View style={styles.listContainer}>
+          {showListOverlay ? (
+            <View style={styles.tabSwitchOverlay} pointerEvents="box-none">
               <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.loadingText}>{t('collection.loadingCollections')}</Text>
+              <Text style={styles.tabSwitchLoadingText}>{t('collection.loadingCollections')}</Text>
             </View>
-          ) : error ? (
-            <View style={styles.centerContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => fetchCollectionData('', selectedDate)}>
-                <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filteredData.length === 0 ? (
-            <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>{t('collection.noCollections')}</Text>
-            </View>
-          ) : (
-            filteredData.map((item) => {
-              // Handle both Collection model instances and plain objects
-              const collection = item instanceof Collection ? item : new Collection(item);
-              return (
-                <TouchableOpacity
-                  key={collection.id}
-                  style={[styles.listItem, collection.isPending && styles.listItemPending, collection.isHighPendingCount && styles.listItemHighPending]}
-                  onPress={() => handleItemPress(collection)}
-                >
-                  <View style={styles.itemRow}>
-                    {collection.customerPhoto ? (
-                      <Image
-                        source={{ uri: getImageUrl(collection.customerPhoto) }}
-                        style={styles.itemCustomerPhoto}
-                      />
-                    ) : (
-                      <Image
-                        source={require('../../../assets/images/favicon.png')}
-                        style={styles.itemCustomerPhoto}
-                      />
-                    )}
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {(collection.customerId ?? collection.customerNo ?? '—')}{' - '}{(collection.customerName ?? '—')}
-                    </Text>
-                    <View style={styles.iconButtonContainer}>
-                      {collection.customerAddress && (
-                        <TouchableOpacity
-                          style={styles.inlineIconButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleMapPress(collection.customerAddress);
-                          }}
-                        >
-                          <Ionicons name="map-outline" size={18} color={COLORS.primary} />
-                        </TouchableOpacity>
-                      )}
-                      {collection.customerPhone && (
-                        <TouchableOpacity
-                          style={styles.inlineIconButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handlePhonePress(collection.customerPhone);
-                          }}
-                        >
-                          <Ionicons name="call" size={18} color={COLORS.primary} />
-                        </TouchableOpacity>
-                      )}
-                      {collection.loanId ? (
-                        <TouchableOpacity
-                          style={styles.inlineIconButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleLoanInfoPress(collection);
-                          }}
-                        >
-                          <Ionicons name="information-circle-outline" size={18} color={COLORS.primary} />
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </View>
-                  <View style={styles.itemDivider} />
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemAssets}>
-                      {t('loan.week')} {collection.collectionWeek ?? '—'} · {collection.getFormattedCollectionDate()}
-                    </Text>
-                    <View style={[styles.statusBadge, { backgroundColor: collection.getStatusColor() }]}>
-                      <Text style={styles.statusText}>{collection.getStatusText()}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemMetaLeft}>{t('loan.loanPeriod')}:</Text>
-                    <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
-                  </View>
+          ) : null}
 
-                  {/* Loan due status row hidden per product request
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemMetaLeft}>{t('collection.loanDueStatus')}:</Text>
-                    <Text style={styles.itemMetaRight}>
-                      {(() => {
-                        return `${collection.completed_collection_count ?? collection.completedCount ?? 0}(${collection.pending_collection_count ?? collection.pendingCount ?? 0})/${collection.current_collection_due_count ?? collection.totalCount ?? 0}`;
-                      })()}
-                    </Text>
-                  </View>
-                  */}
+          <CollectionListPane
+            isActive={deferredTab === 'pending'}
+            data={pendingList}
+            loading={loading}
+            loadingMore={loadingMoreUnpaid}
+            hasNextPage={unpaidPagination.hasNextPage}
+            renderItem={renderCollectionItem}
+            keyExtractor={(item, index) => `p-${item.id || index}`}
+            ListEmptyComponent={renderPendingEmpty}
+            ListFooterComponent={pendingList.length > 0 ? renderUnpaidFooter : null}
+            onEndReached={loadMoreUnpaid}
+            onLayout={(e) => {
+              pendingContainerHeightRef.current = e.nativeEvent.layout.height;
+              maybeLoadMoreUnpaidIfShort();
+            }}
+            onContentSizeChange={(_, h) => {
+              pendingContentHeightRef.current = h;
+              maybeLoadMoreUnpaidIfShort();
+            }}
+            contentContainerStyle={[
+              styles.flatListContent,
+              (loading || pendingList.length === 0) && styles.flatListContentGrow,
+            ]}
+          />
 
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemMetaLeft}>{t('loan.interestAmount')}:</Text>
-                    <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.intrestAmount)}</Text>
-                  </View>
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemMetaLeft}>{t('loan.processingFees')}:</Text>
-                    <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.processingFees)}</Text>
-                  </View>
-
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemMetaLeft}>{t('loan.paid')}: {collection.getFormattedAmountPaid()}</Text>
-                    <Text style={styles.itemMetaRight}>{t('loan.balance')}: {collection.getFormattedBalanceAmount()}</Text>
-                  </View>
-                  {/*{collection.locality && (
-                    <View style={[styles.itemRow, styles.itemRowLast]}>
-                      <Text style={styles.itemLocality} numberOfLines={1}>{collection.locality}</Text>
-                    </View>
-                  )}
-                  {(collection.customerNo || collection.branchName || collection.lineName) && (
-                    <View style={[styles.itemRow, styles.itemRowLast]}>
-                      {collection.customerNo && (
-                        <Text style={styles.itemMetaLeft}>Customer No: {collection.customerNo}</Text>
-                      )}
-                      {collection.branchName && (
-                        <Text style={styles.itemMetaRight}>{collection.branchName}</Text>
-                      )}
-                    </View>
-                  )}*/}
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
+          <CollectionListPane
+            isActive={deferredTab === 'paid'}
+            data={paidList}
+            loading={loadingPaid}
+            loadingMore={loadingMorePaid}
+            hasNextPage={paidPagination.hasNextPage}
+            renderItem={renderCollectionItem}
+            keyExtractor={(item, index) => `d-${item.id || index}`}
+            ListEmptyComponent={renderPaidEmpty}
+            ListFooterComponent={paidList.length > 0 ? renderPaidFooter : null}
+            onEndReached={loadMorePaid}
+            onLayout={(e) => {
+              paidContainerHeightRef.current = e.nativeEvent.layout.height;
+              maybeLoadMorePaidIfShort();
+            }}
+            onContentSizeChange={(_, h) => {
+              paidContentHeightRef.current = h;
+              maybeLoadMorePaidIfShort();
+            }}
+            contentContainerStyle={[
+              styles.flatListContent,
+              (loadingPaid || paidList.length === 0) && styles.flatListContentGrow,
+            ]}
+          />
+        </View>
       </View>
+
+      <Modal
+        visible={photoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.photoModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPhotoModalVisible(false)}
+        >
+          <View style={styles.photoModalContent}>
+            <TouchableOpacity
+              style={styles.photoModalClose}
+              onPress={() => setPhotoModalVisible(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close-circle" size={36} color={COLORS.white} />
+            </TouchableOpacity>
+            {photoModalUri ? (
+              <Image
+                source={{ uri: photoModalUri }}
+                style={styles.photoModalImage}
+                resizeMode="contain"
+              />
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal
         visible={showPaymentModal}
@@ -905,12 +1380,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: SIZES.padding,
+  },
+  filtersSection: {
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.base,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SIZES.margin,
     gap: SIZES.base,
   },
   searchContainer: {
@@ -949,8 +1427,85 @@ const styles = StyleSheet.create({
     color: COLORS.black,
     height: 44, // Match container height
   },
+  tabBar: {
+    flexDirection: 'row',
+    width: '100%',
+    backgroundColor: COLORS.lightGray,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SIZES.padding,
+    gap: SIZES.base / 2,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  tabItemActive: {
+    backgroundColor: COLORS.white,
+    borderBottomColor: COLORS.primary,
+  },
+  tabLabel: {
+    fontSize: SIZES.body3,
+    fontWeight: '500',
+    color: COLORS.text.secondary,
+  },
+  tabLabelActive: {
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  tabBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SIZES.base / 2,
+  },
+  tabBadgeActive: {
+    backgroundColor: COLORS.primary,
+  },
+  tabBadgeText: {
+    fontSize: SIZES.body5,
+    fontWeight: '700',
+    color: COLORS.text.secondary,
+  },
+  tabBadgeTextActive: {
+    color: COLORS.white,
+  },
   listContainer: {
     flex: 1,
+    paddingHorizontal: SIZES.padding,
+  },
+  tabSwitchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SIZES.base,
+  },
+  tabSwitchLoadingText: {
+    fontSize: SIZES.body3,
+    color: COLORS.text.secondary,
+    marginTop: SIZES.base,
+  },
+  flatListContent: {
+    paddingBottom: SIZES.padding,
+  },
+  flatListContentGrow: {
+    flexGrow: 1,
+  },
+  hiddenTab: {
+    opacity: 0,
+    zIndex: -1,
+  },
+  footerLoader: {
+    paddingVertical: SIZES.padding,
   },
   listItem: {
     backgroundColor: COLORS.white,
@@ -969,21 +1524,82 @@ const styles = StyleSheet.create({
     borderColor: '#FED7AA',
     borderWidth: 2,
   },
-  itemCustomerPhoto: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.lightGray,
-    marginRight: SIZES.base,
+  collectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
-  itemCustomerPhotoPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.lightGray,
+  collectionCardHeaderBody: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  collectionCardPhotoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
     marginRight: SIZES.base,
+    backgroundColor: COLORS.lightGray,
+  },
+  collectionCardPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  collectionCardNameLine: {
+    fontSize: SIZES.body1,
+    fontWeight: '600',
+    color: COLORS.black,
+    marginBottom: SIZES.base * 0.375,
+    lineHeight: Math.round((SIZES.body1 || 16) * 1.25),
+  },
+  collectionCardNameLineInline: {
+    marginBottom: 0,
+    flex: 1,
+    marginRight: SIZES.base * 0.75,
+    minWidth: 0,
+  },
+  collectionCardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  collectionCardIconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.base / 2,
+    alignSelf: 'flex-start',
+  },
+  collectionCardIconButton: {
+    padding: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
+    width: 32,
+    height: 32,
+  },
+  photoModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+  },
+  photoModalImage: {
+    width: '100%',
+    height: '80%',
   },
   itemDivider: {
     height: StyleSheet.hairlineWidth,
@@ -1000,27 +1616,6 @@ const styles = StyleSheet.create({
   },
   itemRowLast: {
     marginBottom: 0,
-  },
-  itemName: {
-    fontSize: SIZES.body1,
-    fontWeight: '600',
-    color: COLORS.black,
-    flex: 1,
-    marginRight: SIZES.base,
-  },
-  iconButtonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SIZES.base / 2,
-  },
-  inlineIconButton: {
-    padding: SIZES.base / 2,
-    borderRadius: SIZES.radius,
-    backgroundColor: COLORS.lightGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 36,
-    height: 36,
   },
   itemAssets: {
     fontSize: SIZES.body3,

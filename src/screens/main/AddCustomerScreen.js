@@ -12,6 +12,7 @@ import Header from '../../components/common/Header';
 import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const AddCustomerScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -73,7 +74,6 @@ const AddCustomerScreen = ({ navigation }) => {
       const asset = await pickFromCamera();
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
-      console.error('Photo capture error:', error?.message ?? error);
       showError('Error', error?.message || 'Failed to capture photo. Please try again.');
     }
   };
@@ -89,7 +89,6 @@ const AddCustomerScreen = ({ navigation }) => {
       const asset = await pickFromLibrary();
       if (asset) setAadharImage(asset);
     } catch (error) {
-      console.error('Aadhar upload error:', error?.message ?? error);
       showError('Error', error?.message || 'Failed to select Aadhar image. Please try again.');
     }
   };
@@ -142,13 +141,12 @@ const AddCustomerScreen = ({ navigation }) => {
 
       if (response.data.success) {
         showSuccess('Success', 'Customer created successfully!', [
-          { text: 'OK', onPress: () => navigation.goBack() },
+          { text: 'OK', onPress: () => safeGoBack(navigation) },
         ]);
       } else {
         showError('Error', response.data.message || 'Failed to create customer');
       }
     } catch (error) {
-      console.error('Create customer error:', error);
       showError('Error', getApiErrorMessage(error, 'Failed to create customer. Please try again.'));
     } finally {
       setLoading(false);
@@ -162,7 +160,7 @@ const AddCustomerScreen = ({ navigation }) => {
       <Header 
         title="Add Customer" 
         showBackButton={true}
-        onBackPress={() => navigation.goBack()} 
+        onBackPress={() => safeGoBack(navigation)} 
       />
 
       <KeyboardAvoidingView 

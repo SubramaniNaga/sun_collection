@@ -18,7 +18,8 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert } from '../../utils/alertService';
+import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
 
@@ -90,9 +91,9 @@ const ExpensesScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
       });
     } catch (err) {
-      console.error('Fetch expenses error:', err);
       if (page === 1) {
-        setError(t('expenses.noExpensesFound'));
+        showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
+        setError(null);
         setExpenses([]);
       }
     } finally {
@@ -144,7 +145,6 @@ const ExpensesScreen = ({ navigation }) => {
                   message: t('success.deleted'),
                 });
               } catch (err) {
-                console.error('Delete expense error:', err);
                 showAlert({
                   type: 'error',
                   title: t('common.error'),
@@ -275,17 +275,6 @@ const ExpensesScreen = ({ navigation }) => {
         </View>
       );
     }
-    if (error) {
-      return (
-        <View style={styles.emptyState}>
-          <Ionicons name="alert-circle-outline" size={48} color={COLORS.text.tertiary} />
-          <Text style={styles.emptyStateText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchExpenses(1, false)}>
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
     return (
       <View style={styles.emptyState}>
         <Ionicons name="receipt-outline" size={64} color={COLORS.text.tertiary} />
@@ -306,7 +295,7 @@ const ExpensesScreen = ({ navigation }) => {
       <Header
         title={t('expenses.title')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
         rightComponent={
           <TouchableOpacity
             style={styles.filterButton}

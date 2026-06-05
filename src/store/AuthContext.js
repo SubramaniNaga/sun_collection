@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }) => {
         dispatch({ type: 'AUTH_INITIALIZE' });
       }
     } catch (error) {
-      console.error('Auth initialization error:', error);
+      if (__DEV__) console.warn('Auth initialization error:', error);
       dispatch({ type: 'AUTH_INITIALIZE' });
     }
   };
@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }) => {
       
       return data;
     } catch (error) {
-      console.error('🔑 AuthContext login error:', error);
+      if (__DEV__) console.warn('🔑 AuthContext login error:', error);
       
       // Check for device conflict error (code 600) - don't treat as auth failure
       if (error.response?.data?.code === 600) {
@@ -148,7 +148,7 @@ export const AuthProvider = ({ children }) => {
       }
       
     } catch (error) {
-      console.error('Error handling language from login:', error);
+      if (__DEV__) console.warn('Error handling language from login:', error);
     }
   };
 
@@ -157,7 +157,7 @@ export const AuthProvider = ({ children }) => {
       await apiServices.auth.logout();
       dispatch({ type: 'AUTH_LOGOUT' });
     } catch (error) {
-      console.error('Logout error:', error);
+      if (__DEV__) console.warn('Logout error:', error);
       dispatch({ type: 'AUTH_LOGOUT' });
     }
   };
@@ -167,7 +167,7 @@ export const AuthProvider = ({ children }) => {
       await apiServices.auth.logout();
       dispatch({ type: 'AUTH_LOGOUT' });
     } catch (error) {
-      console.error('Force logout error:', error);
+      if (__DEV__) console.warn('Force logout error:', error);
       dispatch({ type: 'AUTH_LOGOUT' });
     }
   }, []);

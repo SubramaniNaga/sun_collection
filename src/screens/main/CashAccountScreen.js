@@ -12,6 +12,7 @@ import Collection from '../../models/Collection';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDateForAPI, getCurrentDateString } from '../../utils/dateFormatter';
 
@@ -316,7 +317,7 @@ const CashAccountScreen = ({ navigation }) => {
         }
       }
     } catch (err) {
-      console.error('CashAccountScreen: fetchTodaySummary error:', err);
+      showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
       setStats(null);
       setOpeningSummary(null);
       setProcessingFeeTotal(0);
@@ -618,7 +619,7 @@ const CashAccountScreen = ({ navigation }) => {
       <Header
         title={t('cashAccount.title')}
         showBackButton
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <View style={styles.filterSection}>

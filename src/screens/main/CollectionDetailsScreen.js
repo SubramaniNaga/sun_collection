@@ -7,6 +7,7 @@ import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatDateTimeDisplay } from '../../utils/dateFormatter';
 import { formatCurrency } from '../../utils/amountFormatters';
 
@@ -67,7 +68,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
                 try {
                   await apiServices.collection.getCollectionList();
                 } catch (_) {}
-                navigation.goBack();
+                safeGoBack(navigation);
               },
             },
           ]
@@ -89,7 +90,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
       <Header
         title="Collection Details"
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <KeyboardAvoidingView

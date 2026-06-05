@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,15 +17,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
-import ListSkeleton from '../../components/common/ListSkeleton';
+import PaginationListFooter from '../../components/common/PaginationListFooter';
 import LoanCollectionsModal from '../../components/common/LoanCollectionsModal';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
-import { showError } from '../../utils/alertService';
+import { getApiErrorMessage, showError } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const LIMIT = 10;
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -61,13 +62,16 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [photoModalUri, setPhotoModalUri] = useState(null);
   const [collectionsModalLoanId, setCollectionsModalLoanId] = useState(null);
+  const loadMoreLockRef = useRef(false);
+  const listContentHeightRef = useRef(0);
+  const listContainerHeightRef = useRef(0);
+
   const fetchLoans = useCallback(async (page = 1, append = false) => {
     try {
-      if (page === 1) {
+      if (page === 1 && !append) {
         setLoading(true);
         setError(null);
-      } else {
-        setLoadingMore(true);
+        loadMoreLockRef.current = false;
       }
 
       const response = await apiServices.loan.getLoanList({
@@ -88,14 +92,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
       });
     } catch (err) {
-      console.error('Fetch loans error:', err);
       if (page === 1) {
-        setError(t('loan.failedToLoad'));
+        showError(t('common.error'), getApiErrorMessage(err, t('loan.failedToLoad')));
+        setError(null);
         setLoanList([]);
       }
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (page === 1 && !append) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+        loadMoreLockRef.current = false;
+      }
     }
   }, []);
 
@@ -106,10 +114,35 @@ const LoanCustomerListScreen = ({ navigation }) => {
   );
 
   const loadMore = useCallback(() => {
-    if (loadingMore || !pagination.hasNextPage) return;
+    if (loading || loadingMore || loadMoreLockRef.current || !pagination.hasNextPage) {
+      return;
+    }
+    loadMoreLockRef.current = true;
+    setLoadingMore(true);
     const nextPage = pagination.currentPage + 1;
     fetchLoans(nextPage, true);
-  }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchLoans]);
+  }, [loading, loadingMore, pagination.hasNextPage, pagination.currentPage, fetchLoans]);
+
+  const maybeLoadMoreIfShort = useCallback(() => {
+    if (
+      loading ||
+      loadingMore ||
+      !pagination.hasNextPage ||
+      listContentHeightRef.current <= 0 ||
+      listContainerHeightRef.current <= 0
+    ) {
+      return;
+    }
+    if (listContentHeightRef.current <= listContainerHeightRef.current) {
+      loadMore();
+    }
+  }, [loading, loadingMore, pagination.hasNextPage, loadMore]);
+
+  useEffect(() => {
+    if (!loading && loanList.length > 0) {
+      maybeLoadMoreIfShort();
+    }
+  }, [loading, loanList.length, pagination.hasNextPage, maybeLoadMoreIfShort]);
 
   const filteredList = useMemo(() => {
     const q = debouncedSearchQuery.trim();
@@ -150,7 +183,6 @@ const LoanCustomerListScreen = ({ navigation }) => {
         }
       })
       .catch((err) => {
-        console.error('Error opening phone dialer:', err);
         showError(t('common.error'), t('collection.call'));
       });
   };
@@ -183,10 +215,8 @@ const LoanCustomerListScreen = ({ navigation }) => {
         }
       })
       .catch((err) => {
-        console.error('Error opening Google Maps:', err);
         // Fallback to web version
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
-          console.error('Error opening Google Maps web:', fallbackErr);
           showError(t('common.error'), t('collection.map'));
         });
       });
@@ -436,14 +466,12 @@ const LoanCustomerListScreen = ({ navigation }) => {
     );
   };
 
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    return (
-      <View style={styles.footerLoader}>
-        <ListSkeleton count={2} />
-      </View>
-    );
-  };
+  const renderFooter = () => (
+    <PaginationListFooter
+      loadingMore={loadingMore}
+      hasNextPage={pagination.hasNextPage}
+    />
+  );
 
   const renderEmpty = () => {
     // Initial load only: show spinner (never skeleton). Pagination uses ListFooterComponent (skeleton only).
@@ -452,17 +480,6 @@ const LoanCustomerListScreen = ({ navigation }) => {
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>{t('loan.loadingLoans')}</Text>
-        </View>
-      );
-    }
-    if (error) {
-      return (
-        <View style={styles.emptyState}>
-          <Ionicons name="alert-circle-outline" size={48} color={COLORS.text.tertiary} />
-          <Text style={styles.emptyStateText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchLoans(1, false)}>
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </TouchableOpacity>
         </View>
       );
     }
@@ -486,7 +503,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
       <Header
         title={t('loan.loanManagement')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
         rightComponent={
           <TouchableOpacity
             onPress={handleAddPress}
@@ -536,10 +553,18 @@ const LoanCustomerListScreen = ({ navigation }) => {
             : styles.customerListContainer
         }
         showsVerticalScrollIndicator={false}
+        onLayout={(e) => {
+          listContainerHeightRef.current = e.nativeEvent.layout.height;
+          maybeLoadMoreIfShort();
+        }}
+        onContentSizeChange={(_, h) => {
+          listContentHeightRef.current = h;
+          maybeLoadMoreIfShort();
+        }}
         onEndReached={loadMore}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.15}
         ListEmptyComponent={renderEmpty}
-        ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
+        ListFooterComponent={loanList.length > 0 ? renderFooter : null}
       />
 
       <Modal

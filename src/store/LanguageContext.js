@@ -28,7 +28,7 @@ export const LanguageProvider = ({ children }) => {
           console.log('🌐 Language updated:', currentLanguage);
         }
       } catch (error) {
-        console.error('Error checking language updates:', error);
+        if (__DEV__) console.warn('Error checking language updates:', error);
       }
     };
 
@@ -61,7 +61,7 @@ export const LanguageProvider = ({ children }) => {
       setLanguage(DEFAULT_LANGUAGE);
       console.log('🌐 Default language set: English');
     } catch (error) {
-      console.error('Error loading language:', error);
+      if (__DEV__) console.warn('Error loading language:', error);
       setLanguage(DEFAULT_LANGUAGE);
     } finally {
       setLoading(false);
@@ -85,7 +85,7 @@ export const LanguageProvider = ({ children }) => {
         console.log('🌐 Language manually changed to:', newLanguage);
       }
     } catch (error) {
-      console.error('Error saving language:', error);
+      if (__DEV__) console.warn('Error saving language:', error);
     }
   };
 

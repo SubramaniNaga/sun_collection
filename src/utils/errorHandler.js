@@ -174,14 +174,16 @@ export const ErrorHandler = {
   handleGlobalError: (error, context = {}) => {
     const analyzedError = ErrorHandler.analyzeError(error);
     
-    // Log error for debugging
-    console.error('API Error:', {
-      type: analyzedError.type,
-      message: analyzedError.message,
-      statusCode: analyzedError.statusCode,
-      context,
-      timestamp: new Date().toISOString(),
-    });
+    // Log for debugging without triggering LogBox snackbar (console.error shows on-screen toast)
+    if (__DEV__) {
+      console.warn('API Error:', {
+        type: analyzedError.type,
+        message: analyzedError.message,
+        statusCode: analyzedError.statusCode,
+        context,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Here you could add:
     // - Analytics tracking

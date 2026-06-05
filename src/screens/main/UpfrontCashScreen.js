@@ -1,5 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
@@ -8,6 +11,8 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
+import { getApiErrorMessage, showError } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const UpfrontCashScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -17,6 +22,11 @@ const UpfrontCashScreen = ({ navigation }) => {
   const [toDate, setToDate] = useState(new Date());
   const [showFromDatePicker, setShowFromDatePicker] = useState(false);
   const [showToDatePicker, setShowToDatePicker] = useState(false);
+  const [dateError, setDateError] = useState('');
+  // 'pending' → screen just opened, toDate disabled
+  // 'valid'   → valid fromDate chosen, toDate enabled
+  // 'error'   → future fromDate chosen, toDate hidden
+  const [fromDateStatus, setFromDateStatus] = useState('pending');
 
   // Local date formatter to avoid UTC conversion issues
   const formatDate = (date) => {
@@ -26,41 +36,21 @@ const UpfrontCashScreen = ({ navigation }) => {
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-
-  // Test date formatting on component mount
-  console.log('🧪 UpfrontCashScreen - Component mounted');
-  console.log('🧪 Today\'s date (local):', formatDate(new Date()));
-  console.log('🧪 Today\'s date (toISOString):', new Date().toISOString().split('T')[0]);
-  console.log('🧪 Initial fromDate:', formatDate(fromDate));
-  console.log('🧪 Initial toDate:', formatDate(toDate));
-
-  // API call function
   const fetchOpeningBalance = useCallback(async (fromDateParam, toDateParam) => {
     setLoading(true);
     try {
       const formattedFromDate = formatDate(fromDateParam);
       const formattedToDate = formatDate(toDateParam);
-
-      // Log API params before call
-      console.log('🌐 API Params:', {
-        from_date: formattedFromDate,
-        to_date: formattedToDate,
-        agent_id: '4',
-        page: 1,
-        limit: 20
-      });
+      const storedUserId = await AsyncStorage.getItem('userId');
+      const agentId = storedUserId && storedUserId.trim() ? storedUserId.trim() : '4';
 
       const requestParams = {
         from_date: formattedFromDate,
         to_date: formattedToDate,
-        agent_id: '4',
+        agent_id: agentId,
         page: 1,
         limit: 20,
       };
-
-      // Log final API request parameters
-      console.log('🌐 API Request Params:', JSON.stringify(requestParams, null, 2));
-      console.log('🌐 Expected URL: /api/v1/frontcash/openingbalance?' + new URLSearchParams(requestParams).toString());
 
       const response = await apiServices.upfrontCash.getOpeningBalance(requestParams);
 
@@ -69,35 +59,43 @@ const UpfrontCashScreen = ({ navigation }) => {
       setRecords(responseData);
 
     } catch (error) {
-      console.error('❌ Opening balance fetch error:', error);
-      console.error('❌ Error response status:', error.response?.status);
-      console.error('❌ Error response data:', error.response?.data);
-      console.error('❌ Error config:', error.config);
+      showError(t('common.error'), getApiErrorMessage(error, t('upfrontCash.failedToLoad')));
       setRecords([]);
     } finally {
       setLoading(false);
     }
-  }, []); // Keep empty dependency array to prevent recreation
+  }, [t]);
 
-  // API call when dates change (handles both initial load and subsequent changes)
-  useEffect(() => {
-    if (fromDate && toDate) {
-      console.log('🔄 Dates changed, triggering API call');
-      console.log('🔄 fromDate:', formatDate(fromDate));
-      console.log('🔄 toDate:', formatDate(toDate));
-      fetchOpeningBalance(fromDate, toDate);
-    }
-  }, [fromDate, toDate]); // Remove fetchOpeningBalance from dependencies to prevent infinite loop
+  useFocusEffect(
+    useCallback(() => {
+      if (fromDate && toDate && fromDateStatus !== 'error') {
+        fetchOpeningBalance(fromDate, toDate);
+      }
+    }, [fromDate, toDate, fromDateStatus, fetchOpeningBalance]),
+  );
 
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
 
-  // Updated date picker handlers (no immediate API calls)
   const handleFromDateChange = (event, selectedDate) => {
     setShowFromDatePicker(false);
     if (selectedDate) {
       console.log('📅 Date picker - From date selected:', selectedDate);
-      console.log('📅 Date picker - Formatted from date:', formatDate(selectedDate));
-      setFromDate(selectedDate);
-      // API call will be triggered by useEffect
+      if (selectedDate > today) {
+        // Future date — hide toDate entirely until user corrects fromDate
+        setFromDateStatus('error');
+        setDateError(t('upfrontCash.futureDateError'));
+      } else {
+        // Valid fromDate — enable toDate
+        setFromDateStatus('valid');
+        setFromDate(selectedDate);
+        if (selectedDate > toDate) {
+          // fromDate moved past current toDate — warn but keep toDate accessible
+          setDateError(t('upfrontCash.startDateError'));
+        } else {
+          setDateError('');
+        }
+      }
     }
   };
 
@@ -105,9 +103,14 @@ const UpfrontCashScreen = ({ navigation }) => {
     setShowToDatePicker(false);
     if (selectedDate) {
       console.log('📅 Date picker - To date selected:', selectedDate);
-      console.log('📅 Date picker - Formatted to date:', formatDate(selectedDate));
-      setToDate(selectedDate);
-      // API call will be triggered by useEffect
+      if (selectedDate > today) {
+        setDateError(t('upfrontCash.futureDateError'));
+      } else if (selectedDate < fromDate) {
+        setDateError(t('upfrontCash.endDateError'));
+      } else {
+        setDateError('');
+        setToDate(selectedDate);
+      }
     }
   };
 
@@ -124,6 +127,14 @@ const UpfrontCashScreen = ({ navigation }) => {
     return (
       <View style={styles.recordCard}>
         <View style={styles.fieldsContainer}>
+          {record.crondate ? (
+            <View style={[styles.fieldRow, styles.dateRow]}>
+              <Text style={styles.dateRowLabel}>{t('upfrontCash.date')}</Text>
+              <Text style={styles.dateRowValue}>
+                {formatDisplayDate(record.crondate)}
+              </Text>
+            </View>
+          ) : null}
           {fields.map((field) => (
             <View key={field.key} style={styles.fieldRow}>
               <Text style={styles.fieldLabel}>{t(`upfrontCash.${field.labelKey}`)}</Text>
@@ -176,22 +187,51 @@ const UpfrontCashScreen = ({ navigation }) => {
   };
 
   const renderDateFilters = () => (
-    <View style={styles.dateFilterContainer}>
-      <TouchableOpacity
-        style={styles.dateButton}
-        onPress={() => setShowFromDatePicker(true)}
-      >
-        <Text style={styles.dateLabel}>{t('upfrontCash.fromDate')}</Text>
-        <Text style={styles.dateValue}>{formatDisplayDate(fromDate.toISOString().split('T')[0])}</Text>
-      </TouchableOpacity>
+    <View style={styles.dateFilterWrapper}>
+      <View style={styles.dateFilterContainer}>
+        {/* From Date — always visible and enabled */}
+        <TouchableOpacity
+          style={[
+            styles.dateButton,
+            fromDateStatus === 'error' && styles.dateButtonError,
+          ]}
+          onPress={() => setShowFromDatePicker(true)}
+        >
+          <Text style={styles.dateLabel}>{t('upfrontCash.fromDate')}</Text>
+          <Text style={styles.dateValue}>
+            {formatDisplayDate(fromDate.toISOString().split('T')[0])}
+          </Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.dateButton}
-        onPress={() => setShowToDatePicker(true)}
-      >
-        <Text style={styles.dateLabel}>{t('upfrontCash.toDate')}</Text>
-        <Text style={styles.dateValue}>{formatDisplayDate(toDate.toISOString().split('T')[0])}</Text>
-      </TouchableOpacity>
+        {/* To Date — hidden on error, disabled until fromDate is valid */}
+        {fromDateStatus !== 'error' && (
+          <TouchableOpacity
+            style={[
+              styles.dateButton,
+              fromDateStatus === 'pending' && styles.dateButtonDisabled,
+            ]}
+            onPress={() => fromDateStatus === 'valid' && setShowToDatePicker(true)}
+            activeOpacity={fromDateStatus === 'valid' ? 0.7 : 1}
+          >
+            <Text style={[
+              styles.dateLabel,
+              fromDateStatus === 'pending' && styles.dateLabelDisabled,
+            ]}>
+              {t('upfrontCash.toDate')}
+            </Text>
+            <Text style={[
+              styles.dateValue,
+              fromDateStatus === 'pending' && styles.dateValueDisabled,
+            ]}>
+              {formatDisplayDate(toDate.toISOString().split('T')[0])}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {dateError ? (
+        <Text style={styles.dateErrorText}>{dateError}</Text>
+      ) : null}
     </View>
   );
 
@@ -200,7 +240,17 @@ const UpfrontCashScreen = ({ navigation }) => {
       <Header
         title={t('upfrontCash.title')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
+        rightComponent={
+          <TouchableOpacity
+            onPress={() => navigation.navigate('UpfrontCashAdd')}
+            style={styles.headerAddButton}
+            activeOpacity={0.7}
+            accessibilityLabel={t('upfrontCash.addUpfrontCash')}
+          >
+            <Ionicons name="add" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        }
       />
       {renderDateFilters()}
       <View style={styles.contentContainer}>
@@ -212,7 +262,6 @@ const UpfrontCashScreen = ({ navigation }) => {
           mode="date"
           display="default"
           onChange={handleFromDateChange}
-          maximumDate={toDate}
         />
       )}
       {showToDatePicker && (
@@ -221,7 +270,6 @@ const UpfrontCashScreen = ({ navigation }) => {
           mode="date"
           display="default"
           onChange={handleToDateChange}
-          minimumDate={fromDate}
         />
       )}
     </SafeAreaView>
@@ -306,11 +354,37 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     textAlign: 'center',
   },
-  dateFilterContainer: {
-    flexDirection: 'row',
+  dateFilterWrapper: {
     marginHorizontal: SIZES.margin,
     marginVertical: SIZES.base,
+  },
+  dateFilterContainer: {
+    flexDirection: 'row',
     gap: SIZES.base,
+  },
+  dateErrorText: {
+    marginTop: SIZES.base / 2,
+    fontSize: SIZES.body4,
+    color: COLORS.error || '#e53935',
+    textAlign: 'center',
+  },
+  dateRow: {
+    backgroundColor: COLORS.background,
+    borderRadius: SIZES.radius / 2,
+    marginBottom: SIZES.base / 2,
+    paddingVertical: SIZES.base,
+    borderBottomColor: COLORS.border,
+  },
+  dateRowLabel: {
+    flex: 1,
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  dateRowValue: {
+    fontSize: SIZES.body3,
+    fontWeight: '700',
+    color: COLORS.black,
   },
   dateButton: {
     flex: 1,
@@ -321,15 +395,34 @@ const styles = StyleSheet.create({
     padding: SIZES.base,
     alignItems: 'center',
   },
+  dateButtonDisabled: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+    opacity: 0.5,
+  },
+  dateButtonError: {
+    borderColor: COLORS.error || '#e53935',
+  },
   dateLabel: {
     fontSize: SIZES.body4,
     color: COLORS.text.secondary,
     marginBottom: SIZES.base / 2,
   },
+  dateLabelDisabled: {
+    color: COLORS.text.secondary,
+  },
   dateValue: {
     fontSize: SIZES.body3,
     fontWeight: '600',
     color: COLORS.black,
+  },
+  dateValueDisabled: {
+    color: COLORS.text.secondary,
+  },
+  headerAddButton: {
+    padding: SIZES.padding / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

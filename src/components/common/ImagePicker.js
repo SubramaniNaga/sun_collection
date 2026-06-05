@@ -39,7 +39,7 @@ const CustomImagePicker = ({
         if (asset) onImageChange(asset);
       }
     } catch (error) {
-      console.error('Image picker error:', error?.message ?? error);
+      if (__DEV__) console.warn('Image picker error:', error?.message ?? error);
       showError('Error', error?.message || 'Failed to pick image. Please try again.');
     }
   };

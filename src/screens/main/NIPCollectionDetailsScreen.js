@@ -22,6 +22,7 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError, showSuccess } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
@@ -96,7 +97,6 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       console.log('Current location captured:', { latitude, longitude });
       return { latitude, longitude };
     } catch (error) {
-      console.error('Error getting location:', error);
       showError('Location Error', 'Failed to capture current location. Please try again.');
       return null;
     } finally {
@@ -166,12 +166,11 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       if (response.success) {
         showSuccess('Success', 'NIP collection created successfully');
-        navigation.goBack();
+        safeGoBack(navigation);
       } else {
         showError('Error', response.message || 'Failed to create NIP collection');
       }
     } catch (error) {
-      console.error('Submit NIP collection error:', error);
       showError('Error', 'Failed to create NIP collection. Please try again.');
     } finally {
       setSubmitting(false);
@@ -380,7 +379,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
         <Header
           title={t('nip.collectionTitle')}
           showBackButton={true}
-          onBackPress={() => navigation.goBack()}
+          onBackPress={() => safeGoBack(navigation)}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -397,7 +396,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       <Header
         title={t('nip.collectionTitle')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <KeyboardAvoidingView

@@ -23,7 +23,8 @@ import Dashboard from '../../models/Dashboard';
 import NIPLoan from '../../models/NIPLoan';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { showAlert } from '../../utils/alertService';
+import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
+import ErrorHandler from '../../utils/errorHandler';
 import { getCurrentDateString } from '../../utils/dateFormatter';
 import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
@@ -65,23 +66,51 @@ const HomeScreen = ({ navigation }) => {
 
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
-  const [dashboardError, setDashboardError] = useState(null);
+  const dashboardAlertShownRef = useRef(false);
 
   const [collectionSummary, setCollectionSummary] = useState({ totalBalance: 0, count: 0 });
   const [nipSummary, setNipSummary] = useState({ totalBalance: 0, count: 0 });
+  const loadHomeDataRef = useRef(null);
+
+  const showDashboardLoadError = useCallback((error) => {
+    if (error && ErrorHandler.isAuthError(error)) {
+      return;
+    }
+    if (dashboardAlertShownRef.current) {
+      return;
+    }
+    dashboardAlertShownRef.current = true;
+    showError(
+      t('common.error'),
+      getApiErrorMessage(error, t('home.failedToLoadDashboard')),
+      [
+        {
+          text: t('common.retry'),
+          onPress: () => {
+            dashboardAlertShownRef.current = false;
+            loadHomeDataRef.current?.();
+          },
+        },
+        { text: t('common.ok') },
+      ],
+    );
+  }, [t]);
 
   const loadHomeData = useCallback(async () => {
     setLoadingDashboard(true);
-    setDashboardError(null);
 
+    let dashboardFetchError = null;
     const dashPromise = apiServices.dashboard.getTodayStats().catch((err) => {
-      console.error('Home dashboard error:', err);
+      dashboardFetchError = err;
       return null;
     });
 
     const today = getCurrentDateString();
     const summaryPromise = Promise.all([
-      apiServices.collection.getCollectionList({ collection_date: today }).catch(() => null),
+      // Collection API commented out — hideDetails: true on the home card means
+      // totalBalance/count are not displayed. Re-enable when the card shows details.
+      // apiServices.collection.getCollectionList({ collection_date: today }).catch(() => null),
+      Promise.resolve(null),
       apiServices.loan.getNIPList({ page: 1, limit: 500 }).catch(() => null),
     ]);
 
@@ -92,28 +121,30 @@ const HomeScreen = ({ navigation }) => {
         const raw = dashboardDataFromTodayApi(res);
         if (Object.keys(raw).length > 0) {
           setDashboardData(Dashboard.fromApiResponse(raw));
-          setDashboardError(null);
+          dashboardAlertShownRef.current = false;
         } else {
           setDashboardData(null);
-          setDashboardError(t('home.failedToLoadDashboard'));
+          showDashboardLoadError(dashboardFetchError);
         }
       } else {
         setDashboardData(null);
-        setDashboardError(t('home.failedToLoadDashboard'));
+        showDashboardLoadError(dashboardFetchError);
       }
 
-      if (colRes) {
-        const colRaw = colRes?.response ?? colRes?.data ?? [];
-        const colArr = Array.isArray(colRaw) ? colRaw : [];
-        const collections = Collection.fromApiResponseArray(colArr);
-        const totalColBalance = collections.reduce(
-          (sum, c) => sum + (parseFloat(c.balanceAmount) || 0),
-          0
-        );
-        setCollectionSummary({ totalBalance: totalColBalance, count: collections.length });
-      } else {
-        setCollectionSummary({ totalBalance: 0, count: 0 });
-      }
+      // Collection summary processing commented out — re-enable together with the API call above
+      // when the Collection home card shows hideDetails: false.
+      // if (colRes) {
+      //   const colRaw = colRes?.response ?? colRes?.data ?? [];
+      //   const colArr = Array.isArray(colRaw) ? colRaw : [];
+      //   const collections = Collection.fromApiResponseArray(colArr);
+      //   const totalColBalance = collections.reduce(
+      //     (sum, c) => sum + (parseFloat(c.balanceAmount) || 0),
+      //     0
+      //   );
+      //   setCollectionSummary({ totalBalance: totalColBalance, count: collections.length });
+      // } else {
+      //   setCollectionSummary({ totalBalance: 0, count: 0 });
+      // }
 
       if (nipRes) {
         const nipRaw = Array.isArray(nipRes?.data) ? nipRes.data : [];
@@ -129,7 +160,9 @@ const HomeScreen = ({ navigation }) => {
     } finally {
       setLoadingDashboard(false);
     }
-  }, [t]);
+  }, [showDashboardLoadError]);
+
+  loadHomeDataRef.current = loadHomeData;
 
   useFocusEffect(
     useCallback(() => {
@@ -165,7 +198,6 @@ const HomeScreen = ({ navigation }) => {
       await changeLanguage(newLanguage);
       updateUser({ language: newLanguage, lang: newLanguage });
     } catch (error) {
-      console.error('Home language change error:', error);
       const message =
         error?.code === 'NO_AUTH'
           ? t('profile.updateFailed') || 'Unable to update language. Please login again.'
@@ -297,15 +329,6 @@ const HomeScreen = ({ navigation }) => {
             </View>
           ) : (
             <>
-              {dashboardError ? (
-                <View style={styles.dashboardBannerError}>
-                  <Ionicons name="alert-circle-outline" size={20} color={COLORS.error} />
-                  <Text style={styles.dashboardBannerErrorText}>{dashboardError}</Text>
-                  <TouchableOpacity onPress={loadHomeData} hitSlop={12}>
-                    <Text style={styles.dashboardBannerRetry}>{t('common.retry')}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
               <View style={styles.homeGrid}>
                 {renderAmountCard({
                   cardKey: 'collection',
@@ -511,27 +534,6 @@ const styles = StyleSheet.create({
   },
   dashboardSection: {
     marginBottom: SIZES.margin,
-  },
-  dashboardBannerError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    padding: SIZES.base,
-    marginBottom: SIZES.margin,
-    backgroundColor: COLORS.lightGray,
-    borderRadius: SIZES.radius,
-  },
-  dashboardBannerErrorText: {
-    flex: 1,
-    minWidth: 120,
-    fontSize: SIZES.body4,
-    color: COLORS.error,
-    marginHorizontal: SIZES.base,
-  },
-  dashboardBannerRetry: {
-    fontSize: SIZES.body4,
-    fontWeight: '700',
-    color: COLORS.primary,
   },
   dashboardTitle: {
     fontSize: SIZES.h3,

@@ -51,7 +51,6 @@ const SplashScreen = ({ navigation }) => {
 
       navigateToMain();
     } catch (error) {
-      console.error('App check error:', error);
       navigateToMain();
     } finally {
       setCheckingVersion(false);

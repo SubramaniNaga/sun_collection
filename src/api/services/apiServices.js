@@ -39,7 +39,7 @@ const getLineAndBranchIds = async () => {
       lineIdsString: lineIds.join(',') // For query params: "1,2,3"
     };
   } catch (error) {
-    console.error('Error reading line/branch IDs:', error);
+    if (__DEV__) console.warn('Error reading line/branch IDs:', error);
     return {
       branchId: '1',
       lineIds: ['1'],
@@ -171,10 +171,10 @@ export const apiServices = {
         console.log('🔑 AUTH LOGIN - Final Result:', JSON.stringify(loginResult, null, 2));
         return loginResult;
       } catch (error) {
-        console.error('🔑 AUTH LOGIN - Error Details:', JSON.stringify(error, null, 2));
-        console.error('🔑 AUTH LOGIN - Error Message:', error.message);
-        console.error('🔑 AUTH LOGIN - Error Response:', JSON.stringify(error.response?.data, null, 2));
-        console.error('🔑 AUTH LOGIN - Error Status:', error.response?.status);
+        if (__DEV__) console.warn('🔑 AUTH LOGIN - Error Details:', JSON.stringify(error, null, 2));
+        if (__DEV__) console.warn('🔑 AUTH LOGIN - Error Message:', error.message);
+        if (__DEV__) console.warn('🔑 AUTH LOGIN - Error Response:', JSON.stringify(error.response?.data, null, 2));
+        if (__DEV__) console.warn('🔑 AUTH LOGIN - Error Status:', error.response?.status);
         throw error;
       }
     },
@@ -182,16 +182,16 @@ export const apiServices = {
     changeDevice: async (mobileNo, deviceId, token = null) => {
       try {
         console.log('🔄 CHANGE DEVICE - Request:', { mobileNo, deviceId, hasToken: !!token });
-        
+
         // Prepare headers with authorization if token is provided
         const headers = {
           'Content-Type': 'application/json',
         };
-        
+
         if (token) {
           headers.Authorization = `Bearer ${token}`;
         }
-        
+
         const response = await apiClient.post(ENDPOINTS.AUTH.CHANGE_DEVICE, {
           mobile_no: mobileNo,
           deviceId: deviceId
@@ -200,7 +200,7 @@ export const apiServices = {
         console.log('🔄 CHANGE DEVICE - Response:', response.data);
         return response.data;
       } catch (error) {
-        console.error('🔄 CHANGE DEVICE - Error:', error);
+        if (__DEV__) console.warn('🔄 CHANGE DEVICE - Error:', error);
         throw error;
       }
     },
@@ -211,7 +211,7 @@ export const apiServices = {
         await clearSession();
         return { success: true };
       } catch (error) {
-        console.error('Logout error:', error);
+        if (__DEV__) console.warn('Logout error:', error);
         throw error;
       }
     },
@@ -235,7 +235,7 @@ export const apiServices = {
           isAuthenticated: false
         };
       } catch (error) {
-        console.error('Get current user error:', error);
+        if (__DEV__) console.warn('Get current user error:', error);
         return {
           user: null,
           token: null,
@@ -257,7 +257,7 @@ export const apiServices = {
 
         return token;
       } catch (error) {
-        console.error('Refresh token error:', error);
+        if (__DEV__) console.warn('Refresh token error:', error);
         throw error;
       }
     },
@@ -292,7 +292,7 @@ export const apiServices = {
         });
         return response.data;
       } catch (error) {
-        console.error('Create customer error:', error);
+        if (__DEV__) console.warn('Create customer error:', error);
         throw error;
       }
     },
@@ -349,10 +349,10 @@ export const apiServices = {
         }
         return data;
       } catch (error) {
-        console.error('Create customer with loan error:', error);
-        console.error('Create customer with loan - error.message:', error?.message);
+        if (__DEV__) console.warn('Create customer with loan error:', error);
+        if (__DEV__) console.warn('Create customer with loan - error.message:', error?.message);
         if (error.name === 'AbortError') {
-          console.error('Create customer with loan - request timed out');
+          if (__DEV__) console.warn('Create customer with loan - request timed out');
         }
         throw error;
       }
@@ -365,7 +365,7 @@ export const apiServices = {
         console.log('👤 API: getCustomers - Response count:', response.data?.length ?? response.data?.data?.length ?? 'N/A');
         return response.data;
       } catch (error) {
-        console.error('Get customers error:', error);
+        if (__DEV__) console.warn('Get customers error:', error);
         throw error;
       }
     },
@@ -381,7 +381,7 @@ export const apiServices = {
         const response = await apiClient.get(ENDPOINTS.CUSTOMER.SEARCH, { params });
         return response.data;
       } catch (error) {
-        console.error('Search customer error:', error);
+        if (__DEV__) console.warn('Search customer error:', error);
         throw error;
       }
     },
@@ -393,7 +393,7 @@ export const apiServices = {
         console.log('👤 API: getCustomerById - Response received');
         return response.data;
       } catch (error) {
-        console.error('Get customer by ID error:', error);
+        if (__DEV__) console.warn('Get customer by ID error:', error);
         throw error;
       }
     },
@@ -408,7 +408,7 @@ export const apiServices = {
         });
         return response.data;
       } catch (error) {
-        console.error('Update customer error:', error);
+        if (__DEV__) console.warn('Update customer error:', error);
         throw error;
       }
     },
@@ -420,7 +420,7 @@ export const apiServices = {
         console.log('👤 API: deleteCustomer - Response received');
         return response.data;
       } catch (error) {
-        console.error('Delete customer error:', error);
+        if (__DEV__) console.warn('Delete customer error:', error);
         throw error;
       }
     }
@@ -457,7 +457,7 @@ export const apiServices = {
         console.log('💰 API: getLoanList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
         return response.data;
       } catch (error) {
-        console.error('Get loan list error:', error);
+        if (__DEV__) console.warn('Get loan list error:', error);
         throw error;
       }
     },
@@ -489,7 +489,7 @@ export const apiServices = {
         console.log('🔗 API: getNIPList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
         return response.data;
       } catch (error) {
-        console.error('Get NIP list error:', error);
+        if (__DEV__) console.warn('Get NIP list error:', error);
         throw error;
       }
     },
@@ -503,7 +503,7 @@ export const apiServices = {
         console.log('💰 API: getLoanTypes - Response: count:', list.length);
         return list;
       } catch (error) {
-        console.error('Get loan types error:', error);
+        if (__DEV__) console.warn('Get loan types error:', error);
         throw error;
       }
     },
@@ -515,7 +515,7 @@ export const apiServices = {
         console.log('💰 API: getLoanDetails - Response success');
         return response.data;
       } catch (error) {
-        console.error('Get loan details error:', error);
+        if (__DEV__) console.warn('Get loan details error:', error);
         throw error;
       }
     },
@@ -529,7 +529,7 @@ export const apiServices = {
         console.log('🌱 API: createNIPCollection - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('Create NIP collection error:', error);
+        if (__DEV__) console.warn('Create NIP collection error:', error);
         throw error;
       }
     },
@@ -584,10 +584,10 @@ export const apiServices = {
         }
         return data;
       } catch (error) {
-        console.error('Update loan given error:', error);
-        console.error('Update loan given - error.message:', error?.message);
+        if (__DEV__) console.warn('Update loan given error:', error);
+        if (__DEV__) console.warn('Update loan given - error.message:', error?.message);
         if (error.name === 'AbortError') {
-          console.error('Update loan given - request timed out');
+          if (__DEV__) console.warn('Update loan given - request timed out');
         }
         throw error;
       }
@@ -603,7 +603,7 @@ export const apiServices = {
         const list = Array.isArray(data) ? data : [];
         return list;
       } catch (error) {
-        console.error('Get active expense categories error:', error);
+        if (__DEV__) console.warn('Get active expense categories error:', error);
         throw error;
       }
     },
@@ -629,7 +629,7 @@ export const apiServices = {
           },
         };
       } catch (error) {
-        console.error('Get expense list error:', error);
+        if (__DEV__) console.warn('Get expense list error:', error);
         throw error;
       }
     },
@@ -683,9 +683,9 @@ export const apiServices = {
         }
         return data;
       } catch (error) {
-        console.error('Create expense error:', error);
+        if (__DEV__) console.warn('Create expense error:', error);
         if (error.name === 'AbortError') {
-          console.error('Create expense - request timed out');
+          if (__DEV__) console.warn('Create expense - request timed out');
         }
         throw error;
       }
@@ -700,7 +700,7 @@ export const apiServices = {
         const response = await apiClient.delete(ENDPOINTS.EXPENSE.DELETE(expenseId));
         return response.data;
       } catch (error) {
-        console.error('Delete expense error:', error);
+        if (__DEV__) console.warn('Delete expense error:', error);
         throw error;
       }
     },
@@ -733,7 +733,7 @@ export const apiServices = {
         console.log('📋 API: getCollectionList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| full:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('Get collection list error:', error);
+        if (__DEV__) console.warn('Get collection list error:', error);
         throw error;
       }
     },
@@ -766,7 +766,7 @@ export const apiServices = {
 
         return data;
       } catch (error) {
-        console.error('Update collection amount error:', error);
+        if (__DEV__) console.warn('Update collection amount error:', error);
         throw error;
       }
     },
@@ -799,7 +799,7 @@ export const apiServices = {
         console.log('📋 API: getCollectionHistory - Response: collections length:', Array.isArray(data?.collections) ? data.collections.length : 'N/A', '| stats:', JSON.stringify(data?.stats ?? {}), '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
         return response.data;
       } catch (error) {
-        console.error('Get collection history error:', error);
+        if (__DEV__) console.warn('Get collection history error:', error);
         throw error;
       }
     },
@@ -814,7 +814,7 @@ export const apiServices = {
         console.log('📱 API: getVersion - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('App version check error:', error);
+        if (__DEV__) console.warn('App version check error:', error);
         throw error;
       }
     }
@@ -826,12 +826,11 @@ export const apiServices = {
       try {
         const deviceId = await AsyncStorage.getItem('deviceId');
         const params = deviceId ? { device_id: deviceId } : {};
-        console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY, '| params:', params);
+        // console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY, '| params:', params);
         const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY, { params });
-        console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
+        // console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('Get today stats error:', error);
         throw error;
       }
     },
@@ -856,15 +855,89 @@ export const apiServices = {
           ...(collection_date && { collection_date }),
           ...(searchTrimmed && { search: searchTrimmed }),
         };
-        console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', JSON.stringify(requestParams, null, 2));
+        console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', requestParams);
         const response = await apiClient.get(ENDPOINTS.COLLECTION.LIST, {
           params: requestParams,
         });
         const list = response.data?.response ?? response.data?.data ?? response.data;
-        console.log('📋 API: getCollectionList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| full:', JSON.stringify(response.data, null, 2));
+        console.log('📋 API: getCollectionList - Response: data length:', Array.isArray(list) ? list.length : 'N/A', '| full:', response.data);
         return response.data;
       } catch (error) {
-        console.error('Get collection list error:', error);
+        if (__DEV__) console.warn('Get collection list error:', error);
+        throw error;
+      }
+    },
+
+    getUnpaidCollections: async (params = {}) => {
+      try {
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const {
+          page = 1,
+          limit = 10,
+          collection_date = '',
+          customer_phone = '',
+          search = '',
+          customer_id = '',
+        } = params;
+        const searchTrimmed = typeof search === 'string' ? search.trim() : '';
+        const requestParams = {
+          page,
+          limit,
+          branch_id: branchId,
+          line_id: lineIdsString,
+          ...(collection_date && { collection_date }),
+          ...(customer_phone && { customer_phone }),
+          ...(searchTrimmed && { search: searchTrimmed }),
+          ...(customer_id && { customer_id }),
+        };
+        console.log('📋 API: getUnpaidCollections - GET', ENDPOINTS.COLLECTION.UNPAID_LIST, '| params:', requestParams);
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.UNPAID_LIST, { params: requestParams });
+        const collections = response.data?.data?.collections ?? [];
+        const list = Array.isArray(collections) ? collections : [];
+        console.log('📋 API: getUnpaidCollections - count:', list.length, '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Get unpaid collections error:', error);
+        throw error;
+      }
+    },
+
+    getPaidCollections: async (params = {}) => {
+      try {
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const {
+          page = 1,
+          limit = 20,
+          collection_date = '',
+          customer_phone = '',
+          search = '',
+          customer_id = '',
+        } = params;
+        const searchTrimmed = typeof search === 'string' ? search.trim() : '';
+        const requestParams = {
+          page,
+          limit,
+          branch_id: branchId,
+          line_id: lineIdsString,
+          ...(collection_date && { collection_date }),
+          ...(customer_phone && { customer_phone }),
+          ...(searchTrimmed && { search: searchTrimmed }),
+          ...(customer_id && { customer_id }),
+        };
+        console.log('📋 API: getPaidCollections - GET', ENDPOINTS.COLLECTION.PAID_LIST, '| params:', requestParams);
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.PAID_LIST, { params: requestParams });
+        const collections = response.data?.data?.collections ?? [];
+        const list = Array.isArray(collections) ? collections : [];
+        console.log('📋 API: getPaidCollections - count:', list.length, '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Get paid collections error:', error);
         throw error;
       }
     },
@@ -876,7 +949,7 @@ export const apiServices = {
     //     const response = await apiClient.patch(url, payload);
     //     return response.data;
     //   } catch (error) {
-    //     console.error('Update collection amount error:', error);
+    //     if (__DEV__) console.warn('Update collection amount error:', error);
     //     throw error;
     //   }
     // },
@@ -909,7 +982,7 @@ export const apiServices = {
 
         return data;
       } catch (error) {
-        console.error('Update collection amount error:', error);
+        if (__DEV__) console.warn('Update collection amount error:', error);
         throw error;
       }
     },
@@ -942,7 +1015,7 @@ export const apiServices = {
         console.log('📋 API: getCollectionHistory - Response: collections length:', Array.isArray(data?.collections) ? data.collections.length : 'N/A', '| stats:', JSON.stringify(data?.stats ?? {}), '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
         return response.data;
       } catch (error) {
-        console.error('Get collection history error:', error);
+        if (__DEV__) console.warn('Get collection history error:', error);
         throw error;
       }
     },
@@ -962,7 +1035,7 @@ export const apiServices = {
         const response = await apiClient.post(ENDPOINTS.COLLECTION.CLOSING_ACCOUNT, body);
         return response.data;
       } catch (error) {
-        console.error('Submit closing account error:', error);
+        if (__DEV__) console.warn('Submit closing account error:', error);
         throw error;
       }
     },
@@ -977,7 +1050,7 @@ export const apiServices = {
         console.log('📱 API: getVersion - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('App version check error:', error);
+        if (__DEV__) console.warn('App version check error:', error);
         throw error;
       }
     }
@@ -1007,7 +1080,7 @@ export const apiServices = {
         console.log('💰 API: Full URL:', apiClient.defaults?.baseURL + ENDPOINTS.UPFRONT_CASH.OPENING_BALANCE);
         console.log('💰 API: Request Params:', JSON.stringify(requestParams, null, 2));
         console.log('💰 API: Query String:', new URLSearchParams(requestParams).toString());
-        
+
         // Validate no undefined/null params
         Object.keys(requestParams).forEach(key => {
           if (requestParams[key] === undefined || requestParams[key] === null) {
@@ -1021,26 +1094,26 @@ export const apiServices = {
         console.log('💰 API: Response Headers:', response.headers);
         console.log('💰 API: Response Data:', JSON.stringify(response.data, null, 2));
         console.log('💰 API: Records Count:', response.data?.data?.length ?? response.data?.length ?? 'N/A');
-        
+
         return response.data;
       } catch (error) {
-        console.error('❌ API: getOpeningBalance - Error Details:');
-        console.error('❌ Error Message:', error.message);
-        console.error('❌ Error Status:', error.response?.status);
-        console.error('❌ Error Data:', error.response?.data);
-        console.error('❌ Error Config:', error.config);
+        if (__DEV__) console.warn('❌ API: getOpeningBalance - Error Details:');
+        if (__DEV__) console.warn('❌ Error Message:', error.message);
+        if (__DEV__) console.warn('❌ Error Status:', error.response?.status);
+        if (__DEV__) console.warn('❌ Error Data:', error.response?.data);
+        if (__DEV__) console.warn('❌ Error Config:', error.config);
         throw error;
       }
     },
 
     createFrontCash: async (payload) => {
       try {
-        console.log('💰 API: createFrontCash - POST', ENDPOINTS.UPFRONT_CASH.LIST, '| body:', JSON.stringify(payload, null, 2));
-        const response = await apiClient.post(ENDPOINTS.UPFRONT_CASH.LIST, payload);
+        console.log('💰 API: createFrontCash - POST', ENDPOINTS.UPFRONT_CASH.CREATE, '| body:', JSON.stringify(payload, null, 2));
+        const response = await apiClient.post(ENDPOINTS.UPFRONT_CASH.CREATE, payload);
         console.log('💰 API: createFrontCash - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('Create front cash error:', error);
+        if (__DEV__) console.warn('Create front cash error:', error);
         throw error;
       }
     },
@@ -1052,7 +1125,7 @@ export const apiServices = {
         console.log('💰 API: closeOpeningAccount - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
-        console.error('Close opening account error:', error);
+        if (__DEV__) console.warn('Close opening account error:', error);
         throw error;
       }
     },

@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import apiServices from '../../api/services/apiServices';
@@ -16,6 +16,7 @@ import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 
@@ -30,7 +31,22 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [searchResult, setSearchResult] = useState(null);
   const [searchError, setSearchError] = useState(null);
   const searchDebounceRef = useRef(null);
+  const pickingImageRef = useRef(false);
   const [showExistingLoanForm, setShowExistingLoanForm] = useState(false);
+
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && pickingImageRef.current) {
+        pickingImageRef.current = false;
+        dismissKeyboard();
+      }
+    });
+    return () => subscription.remove();
+  }, [dismissKeyboard]);
 
   // Form states
   const [customerPhone, setCustomerPhone] = useState('');
@@ -124,8 +140,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                   setIsLoanPeriodDisabled(true);
                 }
               }
-            } catch (error) {
-              console.error('Error loading stored loan data:', error);
+            } catch {
+              // Non-blocking: loan type list still usable without stored defaults
             }
           };
 
@@ -134,15 +150,15 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error('Fetch loan types error:', err);
           setLoanTypeOptions([]);
+          showError(t('common.error'), getApiErrorMessage(err, t('customer.loadingLoanTypes')));
         }
       })
       .finally(() => {
         if (!cancelled) setLoanTypesLoading(false);
       });
     return () => { cancelled = true; };
-  }, [customerType]);
+  }, [customerType, t]);
 
   useEffect(() => {
     if (customerType !== 'Existing') return;
@@ -157,8 +173,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           setIsLoanTypeDisabled(true);
           setIsLoanPeriodDisabled(true);
         }
-      } catch (e) {
-        console.error('Error loading default loan data for existing customer:', e);
+      } catch {
+        // Non-blocking defaults for existing-customer flow
       }
     };
     loadDefaults();
@@ -182,9 +198,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       setSearchResult(data || null);
       if (!data) setSearchError(t('customer.noCustomerFound'));
     } catch (err) {
-      console.error('Customer search error:', err);
       setSearchResult(null);
-      setSearchError(err.response?.data?.message || err.message || t('customer.searchFailed'));
+      setSearchError(getApiErrorMessage(err, t('customer.searchFailed')));
     } finally {
       setSearchLoading(false);
     }
@@ -291,7 +306,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     if (!addressProof) newErrors.addressProof = t('customer.imageRequired');
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const isValid = Object.keys(newErrors).length === 0;
+    if (!isValid) {
+      dismissKeyboard();
+      showError(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
+    }
+    return isValid;
   };
 
   const validateExistingCustomer = () => {
@@ -316,7 +336,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     if (!customerPhoto) newErrors.customerPhoto = t('customer.imageRequired');
     if (!addressProof) newErrors.addressProof = t('customer.imageRequired');
     setErrors((prev) => ({ ...prev, ...newErrors }));
-    return Object.keys(newErrors).length === 0;
+    const isValid = Object.keys(newErrors).length === 0;
+    if (!isValid) {
+      dismissKeyboard();
+      showError(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
+    }
+    return isValid;
   };
 
   // Location capture - returns coords so formData uses them (setState is async)
@@ -336,8 +361,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       setAddressLongitude(lng);
       return { latitude: lat, longitude: lng };
     } catch (error) {
-      console.error('Location capture error:', error);
-      showError(t('common.error'), t('customer.locationRequired'));
+      showError(t('common.error'), getApiErrorMessage(error, t('customer.locationRequired')));
       throw error;
     } finally {
       setIsCapturingLocation(false);
@@ -346,6 +370,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
   // Image handlers
   const handleImagePick = async (type, source) => {
+    dismissKeyboard();
+    pickingImageRef.current = true;
     try {
       if (source === 'camera') {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -373,13 +399,16 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         }
       }
     } catch (error) {
-      console.error('Image pick error:', error?.message ?? error);
-      showError(t('common.error'), error?.message || t('customer.imageRequired'));
+      showError(t('common.error'), getApiErrorMessage(error, t('customer.imageRequired')));
+    } finally {
+      pickingImageRef.current = false;
+      dismissKeyboard();
     }
   };
 
   // Form submission
   const handleSubmit = async () => {
+    dismissKeyboard();
     if (customerType === 'New') {
       if (!validateNewForm()) return;
     } else {
@@ -483,7 +512,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         const success = data?.success !== false && (data?.status !== 400 && data?.status !== 500);
         const message = data?.message || 'Loan request created successfully!';
         if (success) {
-          showSuccess(t('common.success'), message, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+          showSuccess(t('common.success'), message, [{ text: 'OK', onPress: () => safeGoBack(navigation) }]);
         } else {
           showError(t('common.error'), message || t('errors.somethingWentWrong'));
         }
@@ -567,13 +596,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
       if (success) {
         showSuccess(t('common.success'), message || t('success.customerCreated'), [
-          { text: 'OK', onPress: () => navigation.goBack() },
+          { text: 'OK', onPress: () => safeGoBack(navigation) },
         ]);
       } else {
         showError(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
       }
     } catch (error) {
-      console.error('Create customer with loan error:', error);
       showError(t('common.error'), getApiErrorMessage(error, t('errors.somethingWentWrong')));
     } finally {
       setLoading(false);
@@ -618,14 +646,20 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         <View style={styles.imageOptions}>
           <TouchableOpacity
             style={styles.imageOptionButton}
-            onPress={() => handleImagePick(imageType, 'camera')}
+            onPress={() => {
+              dismissKeyboard();
+              handleImagePick(imageType, 'camera');
+            }}
           >
             <Ionicons name="camera" size={30} color={COLORS.primary} />
             <Text style={styles.imageOptionText}>{t('customer.takePhoto')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.imageOptionButton}
-            onPress={() => handleImagePick(imageType, 'gallery')}
+            onPress={() => {
+              dismissKeyboard();
+              handleImagePick(imageType, 'gallery');
+            }}
           >
             <Ionicons name="image-outline" size={30} color={COLORS.primary} />
             <Text style={styles.imageOptionText}>{t('customer.chooseFromLibrary')}</Text>
@@ -645,7 +679,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       <Header
         title={t('customer.createCustomerWithLoan')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       {/* New / Existing radio */}
@@ -695,6 +729,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {customerType === 'New' && (
             <>

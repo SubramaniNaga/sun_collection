@@ -48,6 +48,7 @@ import NIPLoan from '../../models/NIPLoan';
 import { useLanguage } from '../../store/LanguageContext';
 
 import { getApiErrorMessage, showError } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 import { formatCurrency } from '../../utils/amountFormatters';
 
@@ -223,14 +224,11 @@ const NIPScreen = ({ navigation }) => {
 
     } catch (err) {
 
-      console.error('Fetch NIP loans error:', err);
 
       if (page === 1) {
-
         setNipList([]);
-
-        setError(getApiErrorMessage(err, t('nip.failedToLoad')));
-
+        setError(null);
+        showError(t('common.error'), getApiErrorMessage(err, t('nip.failedToLoad')));
       }
 
     } finally {
@@ -327,7 +325,6 @@ const NIPScreen = ({ navigation }) => {
 
       .catch((err) => {
 
-        console.error('Error opening phone dialer:', err);
 
         showError(t('common.error'), t('collection.call'));
 
@@ -389,11 +386,9 @@ const NIPScreen = ({ navigation }) => {
 
       .catch((err) => {
 
-        console.error('Error opening Google Maps:', err);
 
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
 
-          console.error('Error opening Google Maps web:', fallbackErr);
 
           showError(t('common.error'), t('collection.map'));
 
@@ -737,28 +732,6 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-    if (error) {
-
-      return (
-
-        <View style={styles.emptyState}>
-
-          <Ionicons name="alert-circle-outline" size={48} color={COLORS.text.tertiary} />
-
-          <Text style={styles.emptyStateText}>{error}</Text>
-
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchNIPLoans(1, false)}>
-
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-
-          </TouchableOpacity>
-
-        </View>
-
-      );
-
-    }
-
     if (nipList.length > 0 && debouncedSearchQuery.trim() && filteredList.length === 0) {
 
       return (
@@ -809,7 +782,7 @@ const NIPScreen = ({ navigation }) => {
 
         showBackButton={true}
 
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
 
         searchExpanded={headerSearchOpen}
 

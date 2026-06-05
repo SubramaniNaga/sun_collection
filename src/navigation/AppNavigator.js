@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import CustomDrawerContent from '../components/navigation/CustomDrawerContent';
 import { COLORS, SIZES } from '../constants/theme';
+import { safeGoBack } from '../utils/navigationHelpers';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -34,7 +35,7 @@ const BackButton = () => {
   
   return (
     <TouchableOpacity
-      onPress={() => navigation.goBack()}
+      onPress={() => safeGoBack(navigation)}
       style={styles.backButton}
     >
       <Ionicons name="arrow-back" size={24} color={COLORS.white} />

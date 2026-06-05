@@ -12,6 +12,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const UpfrontCashAddScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -55,7 +56,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
       newErrors.type = t('upfrontCash.typeRequired');
     }
     if (!formData.message?.trim()) {
-      newErrors.message = t('upfrontCash.messageRequired');
+      newErrors.message = t('upfrontCash.descriptionRequired');
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -90,10 +91,9 @@ const UpfrontCashAddScreen = ({ navigation }) => {
       };
       await apiServices.upfrontCash.createFrontCash(payload);
       showSuccess(t('common.success'), t('upfrontCash.frontCashSuccess'), [
-        { text: t('common.ok'), onPress: () => navigation.goBack() },
+        { text: t('common.ok'), onPress: () => safeGoBack(navigation) },
       ]);
     } catch (error) {
-      console.error('Submit front cash error:', error);
       showError(t('common.error'), getApiErrorMessage(error, t('upfrontCash.failedToSubmitEntry')));
     } finally {
       setIsSubmitting(false);
@@ -103,7 +103,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
-      <Header title={t('upfrontCash.addUpfrontCash')} showBackButton={true} onBackPress={() => navigation.goBack()} />
+      <Header title={t('upfrontCash.addUpfrontCash')} showBackButton={true} onBackPress={() => safeGoBack(navigation)} />
       <View style={styles.mainContent}>
         <KeyboardAvoidingView
           style={styles.keyboardContainer}
@@ -159,10 +159,10 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 ) : null}
               </View>
               <FormInput
-                label={t('upfrontCash.messageLabel')}
+                label={t('upfrontCash.description')}
                 value={formData.message}
                 onChangeText={(v) => handleInputChange('message', v)}
-                placeholder={t('upfrontCash.enterMessage')}
+                placeholder={t('upfrontCash.enterDescription')}
                 multiline
                 numberOfLines={4}
                 error={errors.message}

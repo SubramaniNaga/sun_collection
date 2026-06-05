@@ -14,6 +14,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
 const ProfileScreen = ({ navigation }) => {
@@ -100,7 +101,6 @@ const ProfileScreen = ({ navigation }) => {
         message: t('profile.language') || 'Language updated successfully',
       });
     } catch (error) {
-      console.error('Error changing language:', error);
       showAlert({
         type: 'error',
         title: t('common.error'),
@@ -171,7 +171,6 @@ const ProfileScreen = ({ navigation }) => {
       });
       setShowPasswordModal(false);
     } catch (error) {
-      console.error('Change password error:', error);
       showAlert({
         type: 'error',
         title: t('common.error'),
@@ -185,7 +184,7 @@ const ProfileScreen = ({ navigation }) => {
   const handlePrivacyPress = () => {
     // Privacy policy URL - you can replace this with your actual privacy policy URL
     const privacyPolicyUrl = 'https://www.example.com/privacy-policy';
-    
+
     Linking.canOpenURL(privacyPolicyUrl)
       .then((supported) => {
         if (supported) {
@@ -199,7 +198,6 @@ const ProfileScreen = ({ navigation }) => {
         }
       })
       .catch((err) => {
-        console.error('Error opening privacy policy:', err);
         showAlert({
           type: 'error',
           title: t('common.error'),
@@ -214,7 +212,7 @@ const ProfileScreen = ({ navigation }) => {
   ];
 
   const menuItems = [
-   
+
     {
       id: 'language',
       title: t('profile.language'),
@@ -231,7 +229,7 @@ const ProfileScreen = ({ navigation }) => {
         setShowPasswordModal(true);
       },
     },
-   
+
     // {
     //   id: 'privacy',
     //   title: t('profile.privacySettings'),
@@ -249,15 +247,15 @@ const ProfileScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
-      
-      <Header 
-        title={t('profile.title')} 
+
+      <Header
+        title={t('profile.title')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()} 
+        onBackPress={() => safeGoBack(navigation)}
       />
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -290,11 +288,11 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.detailLabel}>{t('profile.id')}</Text>
               <Text style={styles.detailValue}>{user?.id ?? 'N/A'}</Text>
             </View>
-            {/* <View style={styles.detailRow}>
+            <View style={styles.detailRow}>
               <Ionicons name="phone-portrait-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
               <Text style={styles.detailLabel}>{t('profile.device')}</Text>
               <Text style={styles.detailValue} numberOfLines={1}>{user?.device || 'N/A'}</Text>
-            </View> */}
+            </View>
             <View style={styles.detailRow}>
               <Ionicons name="business-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
               <Text style={styles.detailLabel}>{t('profile.branch')}</Text>
@@ -312,21 +310,21 @@ const ProfileScreen = ({ navigation }) => {
         {isEditing && (
           <Card style={styles.editCard}>
             <Text style={styles.editTitle}>{t('profile.editProfile')}</Text>
-            
+
             <Input
               label={t('profile.firstName')}
               value={formData.firstName}
               onChangeText={(text) => setFormData({ ...formData, firstName: text })}
               style={styles.input}
             />
-            
+
             <Input
               label={t('profile.lastName')}
               value={formData.lastName}
               onChangeText={(text) => setFormData({ ...formData, lastName: text })}
               style={styles.input}
             />
-            
+
             <Input
               label={t('profile.email')}
               value={formData.email}
@@ -335,7 +333,7 @@ const ProfileScreen = ({ navigation }) => {
               autoCapitalize="none"
               style={styles.input}
             />
-            
+
             <Input
               label={t('profile.phone')}
               value={formData.phone}
@@ -343,7 +341,7 @@ const ProfileScreen = ({ navigation }) => {
               keyboardType="phone-pad"
               style={styles.input}
             />
-            
+
             <View style={styles.buttonRow}>
               <Button
                 title={t('common.cancel')}
@@ -365,7 +363,7 @@ const ProfileScreen = ({ navigation }) => {
           {menuItems.map((item) => (
             <TouchableOpacity key={item.id} style={styles.menuItem} onPress={item.onPress}>
               <View style={styles.menuContent}>
-            <Ionicons name={item.icon} size={20} color={COLORS.primary} style={styles.menuIcon} />
+                <Ionicons name={item.icon} size={20} color={COLORS.primary} style={styles.menuIcon} />
                 <Text style={styles.menuTitle}>{item.title}</Text>
               </View>
               <Text style={styles.menuArrow}>›</Text>
@@ -381,7 +379,7 @@ const ProfileScreen = ({ navigation }) => {
         animationType="fade"
         onRequestClose={() => setShowLanguageModal(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowLanguageModal(false)}
@@ -394,15 +392,15 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.modalTitle}>{t('profile.selectLanguage')}</Text>
               </View>
-              <TouchableOpacity 
-                style={styles.closeButton} 
+              <TouchableOpacity
+                style={styles.closeButton}
                 onPress={() => setShowLanguageModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.languageOptions}>
               {languages.map((lang, index) => {
                 const isSelected = language === lang.code;
@@ -422,10 +420,10 @@ const ProfileScreen = ({ navigation }) => {
                         styles.languageIconContainer,
                         isSelected && styles.languageIconContainerSelected
                       ]}>
-                        <Ionicons 
-                          name={lang.code === 'en' ? "globe-outline" : "book-outline"} 
-                          size={28} 
-                          color={isSelected ? COLORS.white : COLORS.primary} 
+                        <Ionicons
+                          name={lang.code === 'en' ? "globe-outline" : "book-outline"}
+                          size={28}
+                          color={isSelected ? COLORS.white : COLORS.primary}
                         />
                       </View>
                       <View style={styles.languageTextContainer}>
@@ -513,118 +511,118 @@ const ProfileScreen = ({ navigation }) => {
                 extraHeight={120}
                 nestedScrollEnabled
               >
-              {/* Current Password */}
-              <View style={styles.passwordInputContainer}>
-                <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
-                  {truncateText(t('profile.currentPassword') || 'Current Password', 24)}
-                </Text>
-                <View style={styles.passwordInputWrapper}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    placeholder={truncateText(t('profile.enterCurrentPassword') || 'Enter current password', 18)}
-                    placeholderTextColor={COLORS.text.tertiary}
-                    value={passwordData.currentPassword}
-                    onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
-                    secureTextEntry={!showPasswords.current}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeIcon}
-                    onPress={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
-                  >
-                    <Ionicons 
-                      name={showPasswords.current ? "eye-outline" : "eye-off-outline"} 
-                      size={22} 
-                      color={COLORS.text.tertiary} 
+                {/* Current Password */}
+                <View style={styles.passwordInputContainer}>
+                  <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
+                    {truncateText(t('profile.currentPassword') || 'Current Password', 24)}
+                  </Text>
+                  <View style={styles.passwordInputWrapper}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      placeholder={truncateText(t('profile.enterCurrentPassword') || 'Enter current password', 18)}
+                      placeholderTextColor={COLORS.text.tertiary}
+                      value={passwordData.currentPassword}
+                      onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
+                      secureTextEntry={!showPasswords.current}
+                      autoCapitalize="none"
                     />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                    >
+                      <Ionicons
+                        name={showPasswords.current ? "eye-outline" : "eye-off-outline"}
+                        size={22}
+                        color={COLORS.text.tertiary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* New Password */}
+                <View style={styles.passwordInputContainer}>
+                  <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
+                    {truncateText(t('profile.newPassword') || 'New Password', 24)}
+                  </Text>
+                  <View style={styles.passwordInputWrapper}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      placeholder={truncateText(t('profile.enterNewPassword') || 'Enter new password', 18)}
+                      placeholderTextColor={COLORS.text.tertiary}
+                      value={passwordData.newPassword}
+                      onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
+                      secureTextEntry={!showPasswords.new}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                    >
+                      <Ionicons
+                        name={showPasswords.new ? "eye-outline" : "eye-off-outline"}
+                        size={22}
+                        color={COLORS.text.tertiary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Confirm Password */}
+                <View style={styles.passwordInputContainer}>
+                  <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
+                    {truncateText(t('profile.confirmPassword') || 'Confirm Password', 24)}
+                  </Text>
+                  <View style={styles.passwordInputWrapper}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      placeholder={truncateText(t('profile.confirmNewPassword') || 'Confirm new password', 18)}
+                      placeholderTextColor={COLORS.text.tertiary}
+                      value={passwordData.confirmPassword}
+                      onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
+                      secureTextEntry={!showPasswords.confirm}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                    >
+                      <Ionicons
+                        name={showPasswords.confirm ? "eye-outline" : "eye-off-outline"}
+                        size={22}
+                        color={COLORS.text.tertiary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.passwordButtonRow}>
+                  <TouchableOpacity
+                    style={[styles.passwordButton, styles.passwordButtonCancel]}
+                    disabled={passwordSubmitting}
+                    onPress={() => {
+                      setShowPasswordModal(false);
+                      setPasswordData({
+                        currentPassword: '',
+                        newPassword: '',
+                        confirmPassword: '',
+                      });
+                    }}
+                  >
+                    <Text style={styles.passwordButtonCancelText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.passwordButton, styles.passwordButtonSubmit, passwordSubmitting && styles.passwordButtonSubmitDisabled]}
+                    onPress={handlePasswordChange}
+                    disabled={passwordSubmitting}
+                  >
+                    {passwordSubmitting ? (
+                      <ActivityIndicator color={COLORS.white} size="small" />
+                    ) : (
+                      <Text style={styles.passwordButtonSubmitText}>{t('common.save')}</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
-              </View>
-
-              {/* New Password */}
-              <View style={styles.passwordInputContainer}>
-                <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
-                  {truncateText(t('profile.newPassword') || 'New Password', 24)}
-                </Text>
-                <View style={styles.passwordInputWrapper}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    placeholder={truncateText(t('profile.enterNewPassword') || 'Enter new password', 18)}
-                    placeholderTextColor={COLORS.text.tertiary}
-                    value={passwordData.newPassword}
-                    onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
-                    secureTextEntry={!showPasswords.new}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeIcon}
-                    onPress={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
-                  >
-                    <Ionicons 
-                      name={showPasswords.new ? "eye-outline" : "eye-off-outline"} 
-                      size={22} 
-                      color={COLORS.text.tertiary} 
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Confirm Password */}
-              <View style={styles.passwordInputContainer}>
-                <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
-                  {truncateText(t('profile.confirmPassword') || 'Confirm Password', 24)}
-                </Text>
-                <View style={styles.passwordInputWrapper}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    placeholder={truncateText(t('profile.confirmNewPassword') || 'Confirm new password', 18)}
-                    placeholderTextColor={COLORS.text.tertiary}
-                    value={passwordData.confirmPassword}
-                    onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
-                    secureTextEntry={!showPasswords.confirm}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeIcon}
-                    onPress={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
-                  >
-                    <Ionicons 
-                      name={showPasswords.confirm ? "eye-outline" : "eye-off-outline"} 
-                      size={22} 
-                      color={COLORS.text.tertiary} 
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.passwordButtonRow}>
-                <TouchableOpacity
-                  style={[styles.passwordButton, styles.passwordButtonCancel]}
-                  disabled={passwordSubmitting}
-                  onPress={() => {
-                    setShowPasswordModal(false);
-                    setPasswordData({
-                      currentPassword: '',
-                      newPassword: '',
-                      confirmPassword: '',
-                    });
-                  }}
-                >
-                  <Text style={styles.passwordButtonCancelText}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.passwordButton, styles.passwordButtonSubmit, passwordSubmitting && styles.passwordButtonSubmitDisabled]}
-                  onPress={handlePasswordChange}
-                  disabled={passwordSubmitting}
-                >
-                  {passwordSubmitting ? (
-                    <ActivityIndicator color={COLORS.white} size="small" />
-                  ) : (
-                    <Text style={styles.passwordButtonSubmitText}>{t('common.save')}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
               </KeyboardAwareScrollView>
             </View>
           </TouchableOpacity>

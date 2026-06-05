@@ -155,7 +155,6 @@ const LoginScreen = ({ navigation }) => {
       await performLogin();
       
     } catch (error) {
-      console.error('🔄 Device change failed:', error);
       
       // Show error and reset loading state
       const errorMessage = error.response?.data?.message || error.message || 'Failed to change device';
@@ -320,7 +319,6 @@ const LoginScreen = ({ navigation }) => {
       setDeviceConflictData(null);
       
     } catch (error) {
-      console.error('🔑 Login error:', error);
       
       // Check if it's a device conflict error (code 600)
       if (error.response?.data?.code === 600) {
@@ -419,7 +417,6 @@ const LoginScreen = ({ navigation }) => {
       // Perform login
       await performLogin();
     } catch (error) {
-      console.error('🔑 Login error in handleLogin:', error);
       // Error is already handled in performLogin, but we need to ensure loading stops
       // if performLogin doesn't handle it properly
       if (error.response?.data?.code !== 600) {

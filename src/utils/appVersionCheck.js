@@ -76,7 +76,7 @@ export async function evaluateAppVersion() {
 
     return { kind: 'ok' };
   } catch (e) {
-    console.error('App version check error:', e);
+    if (__DEV__) console.warn('App version check error:', e);
     return { kind: 'error' };
   }
 }

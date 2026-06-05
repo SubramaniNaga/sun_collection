@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Platform } from 'react-native';
+import { Keyboard, Platform } from 'react-native';
 import { compressImageAssetIfNeeded } from './imageCompression';
 
 /**
@@ -27,6 +27,7 @@ const getLibraryOptions = () => ({
  * On Android, tries getPendingResultAsync if the main result was canceled (activity may have been killed).
  */
 export async function pickFromCamera() {
+  Keyboard.dismiss();
   const result = await ImagePicker.launchCameraAsync(getCameraOptions());
 
   if (!result.canceled && result.assets?.length > 0) {
@@ -51,6 +52,7 @@ export async function pickFromCamera() {
  * Launch image library and return the selected asset or null.
  */
 export async function pickFromLibrary() {
+  Keyboard.dismiss();
   const result = await ImagePicker.launchImageLibraryAsync(getLibraryOptions());
 
   if (!result.canceled && result.assets?.length > 0) {

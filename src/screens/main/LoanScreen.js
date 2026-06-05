@@ -13,6 +13,7 @@ import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
 
@@ -158,7 +159,7 @@ const LoanScreen = ({ navigation, route }) => {
   // Loan details and collections states
   const [loanDetails, setLoanDetails] = useState(null);
   const [collections, setCollections] = useState([]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(() => Boolean(loan?.id));
 
   // Location capture function (called on submit)
   const captureLocation = async () => {
@@ -181,7 +182,6 @@ const LoanScreen = ({ navigation, route }) => {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('Location capture error:', error);
       throw error;
     } finally {
       setIsCapturingLocation(false);
@@ -199,7 +199,6 @@ const LoanScreen = ({ navigation, route }) => {
       const asset = await pickFromCamera();
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
-      console.error('Photo capture error:', error?.message ?? error);
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
@@ -215,7 +214,6 @@ const LoanScreen = ({ navigation, route }) => {
       const asset = await pickFromCamera();
       if (asset) setAadharCardImage(asset);
     } catch (error) {
-      console.error('Aadhar capture error:', error?.message ?? error);
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
@@ -231,7 +229,6 @@ const LoanScreen = ({ navigation, route }) => {
       const asset = await pickFromLibrary();
       if (asset) setAadharCardImage(asset);
     } catch (error) {
-      console.error('Aadhar upload error:', error?.message ?? error);
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
     }
   };
@@ -247,7 +244,6 @@ const LoanScreen = ({ navigation, route }) => {
       const asset = await pickFromCamera();
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
-      console.error('Loan given photo capture error:', error?.message ?? error);
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
     }
   };
@@ -262,7 +258,6 @@ const LoanScreen = ({ navigation, route }) => {
       const asset = await pickFromLibrary();
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
-      console.error('Loan given photo upload error:', error?.message ?? error);
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
     }
   };
@@ -320,24 +315,24 @@ const LoanScreen = ({ navigation, route }) => {
   // Fetch loan details and collections when loan ID is available
   useEffect(() => {
     const fetchLoanDetails = async () => {
-      if (loan?.id) {
-        try {
-          setLoadingDetails(true);
-          const response = await apiServices.loan.getLoanDetails(loan.id);
-          // Use the detailed loan data from API response
-          setLoanDetails(response.data?.loan);
-          setCollections(response.data?.collections || []);
-        } catch (error) {
-          console.error('Failed to fetch loan details:', error);
-          showError(t('common.error'), 'Failed to load loan details');
-        } finally {
-          setLoadingDetails(false);
-        }
+      if (!loan?.id) {
+        setLoadingDetails(false);
+        return;
+      }
+      try {
+        setLoadingDetails(true);
+        const response = await apiServices.loan.getLoanDetails(loan.id);
+        setLoanDetails(response.data?.loan);
+        setCollections(response.data?.collections || []);
+      } catch (error) {
+        showError(t('common.error'), getApiErrorMessage(error, t('loan.loanDetailsLoadError')));
+      } finally {
+        setLoadingDetails(false);
       }
     };
 
     fetchLoanDetails();
-  }, [loan?.id]);
+  }, [loan?.id, t]);
 
   // Handle image icon press
   const handleImagePress = (imagePath, title) => {
@@ -385,9 +380,7 @@ const LoanScreen = ({ navigation, route }) => {
         }
       })
       .catch((err) => {
-        console.error('Error opening Google Maps:', err);
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
-          console.error('Error opening Google Maps web:', fallbackErr);
           showError(t('common.error'), t('collection.couldNotOpenGoogleMaps'));
         });
       });
@@ -448,11 +441,10 @@ const LoanScreen = ({ navigation, route }) => {
         showSuccess(
           t('common.success'),
           t('loan.loanGivenUpdated') || 'Loan given updated successfully.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          [{ text: 'OK', onPress: () => safeGoBack(navigation) }]
         );
       } catch (error) {
         showError(t('common.error'), getApiErrorMessage(error, t('loan.failedToProcessRenewal')));
-        console.error('Update loan given error:', error);
       } finally {
         setIsSubmitting(false);
       }
@@ -494,11 +486,27 @@ const LoanScreen = ({ navigation, route }) => {
       showSuccess(t('common.success'), t('loan.renewalSubmitted'));
     } catch (error) {
       showError(t('common.error'), getApiErrorMessage(error, t('loan.failedToProcessRenewal')));
-      console.error('Submission error:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (loadingDetails) {
+    return (
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+        <StatusBar style="light" backgroundColor={COLORS.statusBar} />
+        <Header
+          title={t('loan.loanDetails')}
+          showBackButton={true}
+          onBackPress={() => safeGoBack(navigation)}
+        />
+        <View style={styles.fullPageLoadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>{t('loan.loadingLoans')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -507,7 +515,7 @@ const LoanScreen = ({ navigation, route }) => {
       <Header
         title={t('loan.loanDetails')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <KeyboardAvoidingView
@@ -797,13 +805,7 @@ const LoanScreen = ({ navigation, route }) => {
           {collections.length > 0 && (
             <View style={styles.collectionsCard}>
               <Text style={styles.collectionsTitle}>Collection History</Text>
-              {loadingDetails ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={COLORS.primary} />
-                  <Text style={styles.loadingText}>Loading collections...</Text>
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={true}>
                   <View style={styles.collectionsTable}>
                     <View style={styles.tableHeader}>
                       <Text style={[styles.tableHeaderText, { width: 60 }]}>Week</Text>
@@ -835,7 +837,6 @@ const LoanScreen = ({ navigation, route }) => {
                     ))}
                   </View>
                 </ScrollView>
-              )}
             </View>
           )}
 
@@ -1399,6 +1400,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text?.primary || '#333',
     marginBottom: SIZES.base,
+  },
+  fullPageLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SIZES.padding,
   },
   loadingContainer: {
     alignItems: 'center',

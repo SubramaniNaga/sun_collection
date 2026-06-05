@@ -24,6 +24,7 @@ import CollectionHistory from '../../models/CollectionHistory';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatDateForAPI, getCurrentDateString } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
@@ -200,9 +201,9 @@ const CollectionHistoryScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
       });
     } catch (err) {
-      console.error('Failed to fetch collection history:', err);
       if (page === 1) {
-        setError(t('collectionHistory.failedToLoad'));
+        showError(t('common.error'), getApiErrorMessage(err, t('collectionHistory.failedToLoad')));
+        setError(null);
         setCollectionHistory([]);
       }
     } finally {
@@ -399,13 +400,6 @@ const CollectionHistoryScreen = ({ navigation }) => {
         </View>
       );
     }
-    if (error) {
-      return (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      );
-    }
     const filterText = selectedPaymentType === null
       ? t('collectionHistory.inSelectedDateRange')
       : selectedPaymentType === 'cash'
@@ -426,7 +420,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
       <Header
         title={t('collectionHistory.title')}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => safeGoBack(navigation)}
       />
 
       <Modal
