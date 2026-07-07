@@ -9,9 +9,9 @@ import apiServices from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
+import { getApiErrorMessage, showError } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
-import { getApiErrorMessage, showError } from '../../utils/alertService';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const UpfrontCashScreen = ({ navigation }) => {
@@ -114,12 +114,15 @@ const UpfrontCashScreen = ({ navigation }) => {
     }
   };
 
+  const getFrontCashTotal = (record) =>
+    Number(record?.total_frontcash || 0) + Number(record?.total_frontcash_online || 0);
+
   const renderRecordCard = (record) => {
     const fields = [
       { key: 'opening_balance', labelKey: 'openingBalance' },
       { key: 'total_collection', labelKey: 'totalCollection' },
       { key: 'total_expeses', labelKey: 'totalExpenses' },
-      { key: 'total_frontcash', labelKey: 'totalFrontCash' },
+      { key: 'total_frontcash_combined', labelKey: 'totalFrontCashCombined' },
       { key: 'total_loangiven', labelKey: 'totalLoanGiven' },
       { key: 'closing_balance', labelKey: 'closingBalance' },
     ];
@@ -140,7 +143,11 @@ const UpfrontCashScreen = ({ navigation }) => {
               <Text style={styles.fieldLabel}>{t(`upfrontCash.${field.labelKey}`)}</Text>
               <View style={styles.fieldValueContainer}>
                 <Text style={styles.fieldValue} numberOfLines={1}>
-                  {formatCurrency(record[field.key] || '0')}
+                  {formatCurrency(
+                    field.key === 'total_frontcash_combined'
+                      ? getFrontCashTotal(record)
+                      : (record[field.key] || 0),
+                  )}
                 </Text>
               </View>
             </View>

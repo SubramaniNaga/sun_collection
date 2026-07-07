@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
+import MarqueeText from './MarqueeText';
 
 const STATUS_BAR_COLOR = '#1d7ee2';
 
@@ -50,14 +51,22 @@ const Header = ({
           <View style={styles.headerSearchExpandedFill}>{searchExpandedContent}</View>
         ) : useInline ? (
           <>
-            <Text style={styles.headerTitleCompact} numberOfLines={1}>
+            <MarqueeText
+              style={styles.headerTitleCompact}
+              containerStyle={styles.headerTitleCompactContainer}
+            >
               {title}
-            </Text>
+            </MarqueeText>
             <View style={styles.headerInlineFill}>{inlineHeaderContent}</View>
           </>
         ) : (
           <>
-            <Text style={styles.headerTitle}>{title}</Text>
+            <MarqueeText
+              style={styles.headerTitle}
+              containerStyle={styles.headerTitleContainer}
+            >
+              {title}
+            </MarqueeText>
             {rightComponent ? (
               rightComponent
             ) : (
@@ -83,26 +92,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SIZES.padding,
+    overflow: 'hidden',
   },
   headerBottom: {
     backgroundColor: STATUS_BAR_COLOR,
     paddingHorizontal: SIZES.padding,
     paddingBottom: SIZES.base,
   },
-  headerTitle: {
+  headerTitleContainer: {
     flex: 1,
-    fontSize: SIZES.h4, // Reduced font size for Tamil text to fit on single line
+    flexShrink: 1,
+    flexGrow: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  headerTitle: {
+    fontSize: SIZES.h3,
     fontWeight: '600',
     color: COLORS.white,
-    textAlign: 'center',
+  },
+  headerTitleCompactContainer: {
+    flexShrink: 0,
+    maxWidth: 72,
+    marginRight: SIZES.base,
   },
   headerTitleCompact: {
-    flexShrink: 0,
     fontSize: SIZES.h4,
     fontWeight: '600',
     color: COLORS.white,
-    marginRight: SIZES.base,
-    maxWidth: 72,
   },
   headerInlineFill: {
     flex: 1,

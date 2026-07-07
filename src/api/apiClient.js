@@ -31,9 +31,20 @@ Backend team: to allow this app to call the API from the browser (web build), pl
    multipart/form-data with boundary).
 `;
 
-const API_BASE_URL = __DEV__
+export const API_BASE_URL = __DEV__
   ? 'http://65.0.100.65:6005/api/v1'
   : 'http://65.0.100.65:6005/api/v1';
+
+/** Host root for media paths (no /api/v1 suffix). */
+export const API_HOST_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+
+export const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+  if (imagePath.startsWith('/api')) return `${API_HOST_URL}${imagePath}`;
+  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${API_BASE_URL}${cleanPath}`;
+};
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

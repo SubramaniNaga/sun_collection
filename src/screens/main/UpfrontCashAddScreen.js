@@ -55,9 +55,6 @@ const UpfrontCashAddScreen = ({ navigation }) => {
     if (!formData.type) {
       newErrors.type = t('upfrontCash.typeRequired');
     }
-    if (!formData.message?.trim()) {
-      newErrors.message = t('upfrontCash.descriptionRequired');
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -166,7 +163,6 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={4}
                 error={errors.message}
-                required
               />
             </Card>
             <View style={styles.bottomPadding} />

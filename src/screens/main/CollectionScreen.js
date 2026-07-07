@@ -7,6 +7,7 @@ import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from
 import { ActivityIndicator, FlatList, Image, InteractionManager, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import PaginationListFooter from '../../components/common/PaginationListFooter';
@@ -39,20 +40,12 @@ const formatCurrencyOrDash = (val) => {
   return formatCurrency(val);
 };
 
-const API_BASE_URL = 'http://65.0.100.65:6005';
 const UNPAID_LIMIT = 10;
 const PAID_LIMIT = 10;
 
 const parseCollectionsFromResponse = (response) => {
   const raw = response?.data?.collections ?? response?.collections;
   return Array.isArray(raw) ? raw : [];
-};
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
-  if (imagePath.startsWith('/api')) return `${API_BASE_URL}${imagePath}`;
-  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-  return `${API_BASE_URL}/api/v1${cleanPath}`;
 };
 
 const areListPanePropsEqual = (prev, next) =>
