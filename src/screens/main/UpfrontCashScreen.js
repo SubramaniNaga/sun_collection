@@ -1,9 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
@@ -11,15 +10,16 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
-import { formatDisplayDate } from '../../utils/dateFormatter';
+import { formatDisplayDate, getCalendarDate } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const UpfrontCashScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [records, setRecords] = useState([]);
-  const [fromDate, setFromDate] = useState(new Date());
-  const [toDate, setToDate] = useState(new Date());
+  const [fromDate, setFromDate] = useState(getCalendarDate());
+  const [toDate, setToDate] = useState(getCalendarDate());
   const [showFromDatePicker, setShowFromDatePicker] = useState(false);
   const [showToDatePicker, setShowToDatePicker] = useState(false);
   const [dateError, setDateError] = useState('');
@@ -36,8 +36,8 @@ const UpfrontCashScreen = ({ navigation }) => {
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-  const fetchOpeningBalance = useCallback(async (fromDateParam, toDateParam) => {
-    setLoading(true);
+  const fetchOpeningBalance = useCallback(async (fromDateParam, toDateParam, skipPageLoader = false) => {
+    if (!skipPageLoader) setLoading(true);
     try {
       const formattedFromDate = formatDate(fromDateParam);
       const formattedToDate = formatDate(toDateParam);
@@ -62,9 +62,19 @@ const UpfrontCashScreen = ({ navigation }) => {
       showError(t('common.error'), getApiErrorMessage(error, t('upfrontCash.failedToLoad')));
       setRecords([]);
     } finally {
-      setLoading(false);
+      if (!skipPageLoader) setLoading(false);
     }
   }, [t]);
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing || !fromDate || !toDate || fromDateStatus === 'error') return;
+    setRefreshing(true);
+    try {
+      await fetchOpeningBalance(fromDate, toDate, true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, fromDate, toDate, fromDateStatus, fetchOpeningBalance]);
 
   useFocusEffect(
     useCallback(() => {
@@ -74,7 +84,7 @@ const UpfrontCashScreen = ({ navigation }) => {
     }, [fromDate, toDate, fromDateStatus, fetchOpeningBalance]),
   );
 
-  const today = new Date();
+  const today = getCalendarDate();
   today.setHours(23, 59, 59, 999);
 
   const handleFromDateChange = (event, selectedDate) => {
@@ -174,21 +184,25 @@ const UpfrontCashScreen = ({ navigation }) => {
   };
 
   const renderContent = () => {
-    if (loading) {
-      return renderEmpty();
-    }
-
-    if (!records || records.length === 0) {
-      return renderEmpty();
-    }
-
     return (
       <FlatList
         data={records}
         keyExtractor={(item, index) => String(item.id || index)}
         renderItem={({ item }) => renderRecordCard(item)}
-        contentContainerStyle={styles.recordsList}
+        contentContainerStyle={[
+          styles.recordsList,
+          records.length === 0 && styles.recordsListEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
       />
     );
   };
@@ -248,16 +262,16 @@ const UpfrontCashScreen = ({ navigation }) => {
         title={t('upfrontCash.title')}
         showBackButton={true}
         onBackPress={() => safeGoBack(navigation)}
-        rightComponent={
-          <TouchableOpacity
-            onPress={() => navigation.navigate('UpfrontCashAdd')}
-            style={styles.headerAddButton}
-            activeOpacity={0.7}
-            accessibilityLabel={t('upfrontCash.addUpfrontCash')}
-          >
-            <Ionicons name="add" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-        }
+        // rightComponent={
+        //   <TouchableOpacity
+        //     onPress={() => navigation.navigate('UpfrontCashAdd')}
+        //     style={styles.headerAddButton}
+        //     activeOpacity={0.7}
+        //     accessibilityLabel={t('upfrontCash.addUpfrontCash')}
+        //   >
+        //     <Ionicons name="add" size={24} color={COLORS.white} />
+        //   </TouchableOpacity>
+        // }
       />
       {renderDateFilters()}
       <View style={styles.contentContainer}>
@@ -294,6 +308,9 @@ const styles = StyleSheet.create({
   },
   recordsList: {
     paddingBottom: SIZES.padding,
+  },
+  recordsListEmpty: {
+    flexGrow: 1,
   },
   recordCard: {
     backgroundColor: COLORS.white,

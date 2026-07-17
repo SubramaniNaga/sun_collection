@@ -44,7 +44,7 @@ class Collection {
     this.customerId = data.customer_id || null;
     this.employeeId = data.employee_id || null;
     this.collectionDate = data.collection_date || null;
-    this.amountPaid = data.amount_paid || '0';
+    this.amountPaid = data.total_amount_paid || '0';
     this.balanceAmount = data.loanbalanceamount || '0';
     this.collectionWeek = data.collection_week || null;
     this.notes = data.notes || null;
@@ -66,6 +66,7 @@ class Collection {
     this.loanPeriod = data.loan_period ?? null;
     this.loanTypeName = data.loan_type_name || null;
     this.approvalStatus = data.approval_status || null;
+    this.extraAmount = data.extra_amount ?? null;
     this.isPending = isPendingBorder(data.is_pending ?? data.isPending ?? data.ispending);
     this.completedCount = data.completed_collection_count ?? null;
     this.pendingCount = data.pending_collection_count ?? null;
@@ -106,6 +107,17 @@ class Collection {
    */
   getFormattedBalanceAmount() {
     return formatCurrency(this.balanceAmount);
+  }
+
+  /**
+   * Get formatted extra amount (null stays dash via screen helpers)
+   * @returns {string}
+   */
+  getFormattedExtraAmount() {
+    if (this.extraAmount === null || this.extraAmount === undefined || this.extraAmount === '') {
+      return '—';
+    }
+    return formatCurrency(this.extraAmount);
   }
 
   /**

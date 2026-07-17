@@ -46,6 +46,9 @@ export const ENDPOINTS = {
     LIST: '/expense',
     DELETE: (id) => `/expense/${id}`,
   },
+  BRANCH_USERS: {
+    LIST: '/branch-users',
+  },
   UPFRONT_CASH: {
     CREATE: '/frontcash',
     LIST: '/frontcash',
@@ -54,6 +57,15 @@ export const ENDPOINTS = {
   },
   DASHBOARD: {
     TODAY: '/frontcash/dashboard/today',
+  },
+  COMPANY_VARAVU: {
+    CREATE: '/company-varavu/create',
+  },
+  ATTENDANCE: {
+    MARK: '/attendance',
+  },
+  LOCATION: {
+    TRACK: '/attendance/location-tracking',
   },
 };
 

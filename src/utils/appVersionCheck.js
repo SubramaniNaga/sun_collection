@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { apiServices } from '../api/services/apiServices';
 import { APP_VERSION } from '../constants/appVersion';
 
-/** Set to true when you want splash/login/home to show the update bottom sheet again. */
+/** Set true to show store-update bottom sheet when app version is behind API. */
 export const ENABLE_APP_UPDATE_PROMPT = false;
 
 export function compareVersions(version1, version2) {
@@ -24,14 +24,6 @@ export function compareVersions(version1, version2) {
   return 0;
 }
 
-/**
- * @returns {Promise<
- *   | { kind: 'ok' }
- *   | { kind: 'maintenance'; message: string }
- *   | { kind: 'update'; currentVersion: string; latestVersion: string; forceUpdate: boolean; storeUrl: string }
- *   | { kind: 'error' }
- * >}
- */
 function unwrapVersionPayload(raw) {
   if (raw && typeof raw === 'object' && raw.response != null && typeof raw.response === 'object') {
     return raw.response;
@@ -42,12 +34,13 @@ function unwrapVersionPayload(raw) {
 export async function evaluateAppVersion() {
   try {
     const raw = await apiServices.app.getVersion();
-    const versionData = unwrapVersionPayload(raw);
+    const versionData = unwrapVersionPayload(raw) || {};
 
     if (versionData.isMaintaince) {
       return {
         kind: 'maintenance',
         message: versionData.maitainnaceMessage || '',
+        payload: raw,
       };
     }
 
@@ -58,7 +51,7 @@ export async function evaluateAppVersion() {
 
     if (compareVersions(currentVersion, apiVersion) < 0) {
       if (!ENABLE_APP_UPDATE_PROMPT) {
-        return { kind: 'ok' };
+        return { kind: 'ok', payload: raw };
       }
       const storeUrl =
         platform === 'ios'
@@ -71,10 +64,11 @@ export async function evaluateAppVersion() {
         latestVersion: String(apiVersion),
         forceUpdate: Boolean(forceUpdate),
         storeUrl,
+        payload: raw,
       };
     }
 
-    return { kind: 'ok' };
+    return { kind: 'ok', payload: raw };
   } catch (e) {
     if (__DEV__) console.warn('App version check error:', e);
     return { kind: 'error' };

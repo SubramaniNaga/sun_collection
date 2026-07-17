@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -25,7 +26,7 @@ import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { safeGoBack } from '../../utils/navigationHelpers';
-import { formatDateForAPI, getCurrentDateString } from '../../utils/dateFormatter';
+import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
 
 const LIMIT = 10;
 
@@ -64,14 +65,15 @@ function dashboardDataFromTodayApi(res) {
 const CollectionHistoryScreen = ({ navigation }) => {
   const { t } = useLanguage();
   // State for date filters
-  const [startDate, setStartDate] = useState(new Date().toISOString());
-  const [endDate, setEndDate] = useState(new Date().toISOString());
+  const [startDate, setStartDate] = useState(getCalendarDateISO());
+  const [endDate, setEndDate] = useState(getCalendarDateISO());
   const [errors, setErrors] = useState({});
 
   // State for collection data
   const [collectionHistory, setCollectionHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   // Stats from API
@@ -147,13 +149,13 @@ const CollectionHistoryScreen = ({ navigation }) => {
   };
 
   // Fetch collection history from API
-  const fetchCollectionHistory = useCallback(async (page = 1, append = false) => {
+  const fetchCollectionHistory = useCallback(async (page = 1, append = false, skipPageLoader = false) => {
     if (!validateDates()) {
       return;
     }
 
     try {
-      if (page === 1) {
+      if (page === 1 && !skipPageLoader) {
         setLoading(true);
         setError(null);
       } else {
@@ -207,10 +209,20 @@ const CollectionHistoryScreen = ({ navigation }) => {
         setCollectionHistory([]);
       }
     } finally {
-      setLoading(false);
+      if (!skipPageLoader) setLoading(false);
       setLoadingMore(false);
     }
   }, [startDate, endDate]);
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchCollectionHistory(1, false, true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchCollectionHistory, refreshing]);
 
   // Load data when dates change
   useEffect(() => {
@@ -683,6 +695,14 @@ const CollectionHistoryScreen = ({ navigation }) => {
               <Text style={styles.sectionTitle}>{t('collectionHistory.title')}</Text>
             </View>
           </>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
         }
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}

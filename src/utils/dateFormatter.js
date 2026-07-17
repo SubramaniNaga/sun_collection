@@ -4,7 +4,30 @@
  * API format: YYYY-MM-DD (e.g. 2026-03-13)
  */
 
+import { CALENDAR_TZ } from '../config/appToggles';
+
 const FALLBACK = '—';
+
+/**
+ * Date for calendars — uses API server_date when set, else device now.
+ * @returns {Date}
+ */
+export function getCalendarDate() {
+  const sd = CALENDAR_TZ.server_date;
+  if (sd && /^\d{4}-\d{2}-\d{2}$/.test(sd)) {
+    const [y, m, day] = sd.split('-').map(Number);
+    return new Date(y, m - 1, day, 12, 0, 0);
+  }
+  return new Date();
+}
+
+/**
+ * ISO string for form DatePickers that store ISO values.
+ * @returns {string}
+ */
+export function getCalendarDateISO() {
+  return getCalendarDate().toISOString();
+}
 
 /**
  * Format a date for display in the app (dd-MM-yyyy).
@@ -19,6 +42,15 @@ export function formatDisplayDate(date) {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   return `${day}-${month}-${year}`;
+}
+
+export function formatDisplayDateWithDay(selectedDate) {
+  if (selectedDate == null || selectedDate === '') return FALLBACK;
+  const d = selectedDate instanceof Date ? selectedDate : new Date(selectedDate);
+  if (Number.isNaN(d.getTime())) return FALLBACK;
+  const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const dayName = days[d.getDay()];
+  return dayName;
 }
 
 /**
@@ -52,9 +84,12 @@ export function formatDateForAPI(date) {
 }
 
 /**
- * Get current date as YYYY-MM-DD (for API or comparison).
+ * Get current date as YYYY-MM-DD (API server_date when available).
  * @returns {string}
  */
 export function getCurrentDateString() {
+  if (CALENDAR_TZ.server_date && /^\d{4}-\d{2}-\d{2}$/.test(CALENDAR_TZ.server_date)) {
+    return CALENDAR_TZ.server_date;
+  }
   return formatDateForAPI(new Date());
 }

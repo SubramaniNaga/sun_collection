@@ -86,7 +86,9 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow SunCollection to use your location when recording collections, loan details, and upfront cash entries.",
-          "isAndroidBackgroundLocationEnabled": false,
+          "locationAlwaysAndWhenInUsePermission": "Allow SunCollection to track your location in the background while you are on duty.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": false
         }
       ]

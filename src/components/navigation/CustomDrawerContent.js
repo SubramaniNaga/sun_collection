@@ -33,6 +33,12 @@ const CustomDrawerContent = (props) => {
       icon: 'person-outline',
       onPress: () => navigation.navigate('Profile'),
     },
+    {
+      id: 'companyVaravu',
+      label: t('companyVaravu.title'),
+      icon: 'business-outline',
+      onPress: () => navigation.navigate('Home', { screen: 'CompanyVaravuAdd' }),
+    },
   ];
 
   const handleLogout = () => {

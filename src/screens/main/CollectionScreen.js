@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, InteractionManager, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, InteractionManager, Linking, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
@@ -15,9 +15,9 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showAlert, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess, showWarning } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
-import { formatDateForAPI, formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
+import { formatDateForAPI, formatDisplayDate, formatDisplayDateWithDay, getCalendarDate, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const openIosAppSettings = async () => {
@@ -53,17 +53,15 @@ const areListPanePropsEqual = (prev, next) =>
   prev.data === next.data &&
   prev.loading === next.loading &&
   prev.loadingMore === next.loadingMore &&
-  prev.hasNextPage === next.hasNextPage;
+  prev.hasNextPage === next.hasNextPage &&
+  prev.refreshing === next.refreshing &&
+  prev.onRefresh === next.onRefresh;
 
 const CollectionTabBar = memo(function CollectionTabBar({
   activeTab,
   onTabPress,
   pendingLabel,
   paidLabel,
-  pendingBadgeCount,
-  paidBadgeCount,
-  showPendingBadge,
-  showPaidBadge,
 }) {
   return (
     <View style={styles.tabBar}>
@@ -75,13 +73,6 @@ const CollectionTabBar = memo(function CollectionTabBar({
         <Text style={[styles.tabLabel, activeTab === 'pending' && styles.tabLabelActive]}>
           {pendingLabel}
         </Text>
-        {showPendingBadge ? (
-          <View style={[styles.tabBadge, activeTab === 'pending' && styles.tabBadgeActive]}>
-            <Text style={[styles.tabBadgeText, activeTab === 'pending' && styles.tabBadgeTextActive]}>
-              {pendingBadgeCount}
-            </Text>
-          </View>
-        ) : null}
       </Pressable>
 
       <Pressable
@@ -92,13 +83,6 @@ const CollectionTabBar = memo(function CollectionTabBar({
         <Text style={[styles.tabLabel, activeTab === 'paid' && styles.tabLabelActive]}>
           {paidLabel}
         </Text>
-        {showPaidBadge ? (
-          <View style={[styles.tabBadge, activeTab === 'paid' && styles.tabBadgeActive]}>
-            <Text style={[styles.tabBadgeText, activeTab === 'paid' && styles.tabBadgeTextActive]}>
-              {paidBadgeCount}
-            </Text>
-          </View>
-        ) : null}
       </Pressable>
     </View>
   );
@@ -118,6 +102,8 @@ const CollectionListPane = memo(function CollectionListPane({
   onContentSizeChange,
   contentContainerStyle,
   ListFooterComponent,
+  refreshing,
+  onRefresh,
 }) {
   return (
     <View
@@ -135,6 +121,14 @@ const CollectionListPane = memo(function CollectionListPane({
         onContentSizeChange={onContentSizeChange}
         ListEmptyComponent={ListEmptyComponent}
         ListFooterComponent={ListFooterComponent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
         onEndReached={isActive ? onEndReached : undefined}
         onEndReachedThreshold={0.15}
         removeClippedSubviews={Platform.OS === 'android'}
@@ -149,21 +143,31 @@ const CollectionListPane = memo(function CollectionListPane({
 const CollectionScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const [searchText, setSearchText] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(getCalendarDate());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingList, setPendingList] = useState([]);
   const [paidList, setPaidList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMoreUnpaid, setLoadingMoreUnpaid] = useState(false);
   const [loadingPaid, setLoadingPaid] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMorePaid, setLoadingMorePaid] = useState(false);
   const [error, setError] = useState(null);
   const [paidError, setPaidError] = useState(null);
   const [activeTab, setActiveTab] = useState('pending');
+  const [loanTypeTab, setLoanTypeTab] = useState('daily'); // daily | weekly tab UI
   const [tabSwitchLoading, setTabSwitchLoading] = useState(false);
   const deferredTab = useDeferredValue(activeTab);
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  const loanTypeTabRef = useRef(loanTypeTab);
+  loanTypeTabRef.current = loanTypeTab;
+  /** loan_type IDs from GET /loan-type/active/list — Daily=2, Weekly=1 */
+  const loanTypeIdsRef = useRef({ daily: 2, weekly: 1 });
+  const [loanTypeCounts, setLoanTypeCounts] = useState({
+    pending: { daily: 0, weekly: 0 },
+    paid: { daily: 0, weekly: 0 },
+  });
   const [unpaidPagination, setUnpaidPagination] = useState({
     currentPage: 1,
     hasNextPage: false,
@@ -212,6 +216,13 @@ const CollectionScreen = ({ navigation }) => {
     return completedCount === 0;
   };
 
+  const isAlreadyCollectedForSelectedDate = (collection) => {
+    if (!collection.isPaid()) return false;
+    const selected = formatDateForAPI(selectedDate);
+    const collectionDate = formatDateForAPI(collection.collectionDate);
+    return Boolean(selected && collectionDate && selected === collectionDate);
+  };
+
   /** Optional search filters: name → search, customer id → customer_id, phone → customer_phone */
   const buildSearchParams = useCallback((searchQuery) => {
     const trimmed = (searchQuery || '').trim();
@@ -232,9 +243,10 @@ const CollectionScreen = ({ navigation }) => {
     return { search: trimmed };
   }, []);
 
-  const fetchUnpaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null) => {
+  const fetchUnpaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null, skipPageLoader = false) => {
+    const requestedLoanType = loanTypeTabRef.current;
     try {
-      if (page === 1 && !append) {
+      if (page === 1 && !append && !skipPageLoader) {
         setLoading(true);
         setError(null);
         unpaidLoadMoreLockRef.current = false;
@@ -246,6 +258,7 @@ const CollectionScreen = ({ navigation }) => {
         page,
         limit: UNPAID_LIMIT,
         collection_date: dateString,
+        loan_type: loanTypeIdsRef.current[requestedLoanType],
         ...buildSearchParams(searchQuery),
       });
 
@@ -260,6 +273,13 @@ const CollectionScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
         totalRecords: pag.totalRecords != null ? pag.totalRecords : (append ? prev.totalRecords : models.length),
       }));
+      if (page === 1 && !append && !skipPageLoader) {
+        const count = Number(pag.totalRecords ?? models.length) || 0;
+        setLoanTypeCounts((prev) => ({
+          ...prev,
+          pending: { ...prev.pending, [requestedLoanType]: count },
+        }));
+      }
     } catch (err) {
       if (page === 1 && !append) {
         showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
@@ -276,9 +296,10 @@ const CollectionScreen = ({ navigation }) => {
     }
   }, [buildSearchParams, t]);
 
-  const fetchPaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null) => {
+  const fetchPaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null, skipPageLoader = false) => {
+    const requestedLoanType = loanTypeTabRef.current;
     try {
-      if (page === 1 && !append) {
+      if (page === 1 && !append && !skipPageLoader) {
         setLoadingPaid(true);
         setPaidError(null);
         paidLoadMoreLockRef.current = false;
@@ -290,6 +311,7 @@ const CollectionScreen = ({ navigation }) => {
         page,
         limit: PAID_LIMIT,
         collection_date: dateString,
+        loan_type: loanTypeIdsRef.current[requestedLoanType],
         ...buildSearchParams(searchQuery),
       });
       const list = parseCollectionsFromResponse(response);
@@ -303,6 +325,13 @@ const CollectionScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
         totalRecords: pag.totalRecords != null ? pag.totalRecords : (append ? prev.totalRecords : models.length),
       }));
+      if (page === 1 && !append && !skipPageLoader) {
+        const count = Number(pag.totalRecords ?? models.length) || 0;
+        setLoanTypeCounts((prev) => ({
+          ...prev,
+          paid: { ...prev.paid, [requestedLoanType]: count },
+        }));
+      }
     } catch (err) {
       if (page === 1 && !append) {
         showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
@@ -319,12 +348,49 @@ const CollectionScreen = ({ navigation }) => {
     }
   }, [buildSearchParams, t]);
 
+  const fetchOtherLoanTypeCounts = useCallback(async (searchQuery = '', collectionDate = null) => {
+    const currentType = loanTypeTabRef.current;
+    const otherType = currentType === 'daily' ? 'weekly' : 'daily';
+    const dateString = formatDateForAPI(collectionDate || selectedDateRef.current);
+    const params = {
+      page: 1,
+      limit: 1,
+      collection_date: dateString,
+      loan_type: loanTypeIdsRef.current[otherType],
+      ...buildSearchParams(searchQuery),
+    };
+
+    const [pendingResult, paidResult] = await Promise.allSettled([
+      apiServices.collection.getUnpaidCollections(params),
+      apiServices.collection.getPaidCollections(params),
+    ]);
+
+    setLoanTypeCounts((prev) => {
+      const next = {
+        pending: { ...prev.pending },
+        paid: { ...prev.paid },
+      };
+      if (pendingResult.status === 'fulfilled') {
+        const list = parseCollectionsFromResponse(pendingResult.value);
+        next.pending[otherType] =
+          Number(pendingResult.value?.pagination?.totalRecords ?? list.length) || 0;
+      }
+      if (paidResult.status === 'fulfilled') {
+        const list = parseCollectionsFromResponse(paidResult.value);
+        next.paid[otherType] =
+          Number(paidResult.value?.pagination?.totalRecords ?? list.length) || 0;
+      }
+      return next;
+    });
+  }, [buildSearchParams]);
+
   const loadBothCollections = useCallback(
     (searchQuery = '', collectionDate = null) => {
       fetchUnpaidCollections(1, false, searchQuery, collectionDate);
       fetchPaidCollections(1, false, searchQuery, collectionDate);
+      fetchOtherLoanTypeCounts(searchQuery, collectionDate);
     },
-    [fetchUnpaidCollections, fetchPaidCollections]
+    [fetchUnpaidCollections, fetchPaidCollections, fetchOtherLoanTypeCounts]
   );
 
   const refreshListsForFilters = useCallback(
@@ -335,6 +401,20 @@ const CollectionScreen = ({ navigation }) => {
     },
     [loadBothCollections]
   );
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchUnpaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true),
+        fetchPaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true),
+        fetchOtherLoanTypeCounts(searchTextRef.current, selectedDateRef.current),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, fetchUnpaidCollections, fetchPaidCollections, fetchOtherLoanTypeCounts]);
 
   const loadMoreUnpaid = useCallback(() => {
     if (activeTab !== 'pending') return;
@@ -411,10 +491,27 @@ const CollectionScreen = ({ navigation }) => {
     }
   }, [loadingPaid, paidList.length, paidPagination.hasNextPage, maybeLoadMorePaidIfShort]);
 
-  // Initial load: fetch unpaid + paid in parallel when screen opens
+  // Initial load: fetch loan type IDs, then unpaid + paid lists
   useFocusEffect(
     useCallback(() => {
-      loadBothCollections(searchTextRef.current, selectedDate);
+      const load = async () => {
+        try {
+          const list = await apiServices.loan.getLoanTypes();
+          (Array.isArray(list) ? list : []).forEach((item) => {
+            const name = String(item?.loan_type || '').toLowerCase();
+            if (name === 'daily' && item?.id != null) {
+              loanTypeIdsRef.current.daily = item.id;
+            }
+            if (name === 'weekly' && item?.id != null) {
+              loanTypeIdsRef.current.weekly = item.id;
+            }
+          });
+        } catch (e) {
+          // keep defaults daily=2, weekly=1
+        }
+        loadBothCollections(searchTextRef.current, selectedDate);
+      };
+      load();
     }, [loadBothCollections, selectedDate])
   );
 
@@ -455,8 +552,8 @@ const CollectionScreen = ({ navigation }) => {
   };
 
   const isSelectedDateToday = formatDateForAPI(selectedDate) === getCurrentDateString();
-  const pendingBadgeCount = unpaidPagination.totalRecords || pendingList.length;
-  const paidBadgeCount = paidPagination.totalRecords || paidList.length;
+  const dailyLoanTypeCount = loanTypeCounts[activeTab].daily;
+  const weeklyLoanTypeCount = loanTypeCounts[activeTab].weekly;
   const showListOverlay = tabSwitchLoading || loading || loadingPaid;
 
   const openPaymentModal = (collection) => {
@@ -482,32 +579,13 @@ const CollectionScreen = ({ navigation }) => {
     const balanceAmount = parseFloat(collection.balanceAmount) || 0;
     if (balanceAmount <= 0) {
       if (!shouldAllowPaymentWhenBalanceZero(collection)) {
-        showError(t('common.error'), t('collection.noBalanceToCollect'));
+        showInfo('', t('collection.noBalanceToCollect'));
         return;
       }
     }
 
-    if (collection.isPaid()) {
-      showAlert({
-        type: 'warning',
-        title: 'Payment done',
-        message: 'Want to pay again?',
-        buttons: [
-          { text: 'No', style: 'cancel' },
-          {
-            text: 'Yes',
-            onPress: () => {
-              if ((parseFloat(collection.balanceAmount) || 0) <= 0) {
-                if (!shouldAllowPaymentWhenBalanceZero(collection)) {
-                  showError(t('common.error'), t('collection.noBalanceToCollect'));
-                  return;
-                }
-              }
-              openPaymentModal(collection);
-            },
-          },
-        ],
-      });
+    if (isAlreadyCollectedForSelectedDate(collection)) {
+      showInfo('', t('collection.alreadyCollectedToday'));
       return;
     }
 
@@ -739,6 +817,11 @@ const CollectionScreen = ({ navigation }) => {
       return;
     }
 
+    if (isAlreadyCollectedForSelectedDate(selectedCollection)) {
+      showInfo('', t('collection.alreadyCollectedToday'));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Get current location
@@ -826,6 +909,13 @@ const CollectionScreen = ({ navigation }) => {
     setActiveTab(tab);
     setTabSwitchLoading(true);
   }, []);
+
+  const handleLoanTypeTabPress = useCallback((tab) => {
+    if (loanTypeTabRef.current === tab) return;
+    setLoanTypeTab(tab);
+    loanTypeTabRef.current = tab;
+    loadBothCollections(searchTextRef.current, selectedDateRef.current);
+  }, [loadBothCollections]);
 
   useEffect(() => {
     if (!tabSwitchLoading || activeTab !== deferredTab) return;
@@ -934,7 +1024,7 @@ const CollectionScreen = ({ navigation }) => {
     const collection = item instanceof Collection ? item : new Collection(item);
     const customerName = String(collection.customerName ?? '').trim();
     const isLongCustomerName = customerName.length > 12;
-    const displayId = collection.customerId ?? collection.customerNo ?? '—';
+    const displayId = collection.customerNo?? collection.customerId  ?? '—';
 
     return (
       <TouchableOpacity
@@ -1019,6 +1109,14 @@ const CollectionScreen = ({ navigation }) => {
           <Text style={styles.itemMetaLeft}>{t('loan.processingFees')}:</Text>
           <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.processingFees)}</Text>
         </View>
+        {collection.extraAmount != null && collection.extraAmount !== '' && (
+          <View style={styles.itemRow}>
+            <Text style={[styles.itemMetaLeft, styles.extraAmountText]}>{t('collection.extraAmount')}:</Text>
+            <Text style={[styles.itemMetaRight, styles.extraAmountText]}>
+              {formatCurrencyOrDash(collection.extraAmount)}
+            </Text>
+          </View>
+        )}
         <View style={styles.itemRow}>
           <Text style={styles.itemMetaLeft}>{t('loan.paid')}: {collection.getFormattedAmountPaid()}</Text>
           <Text style={styles.itemMetaRight}>{t('loan.balance')}: {collection.getFormattedBalanceAmount()}</Text>
@@ -1042,10 +1140,6 @@ const CollectionScreen = ({ navigation }) => {
           onTabPress={handleTabPress}
           pendingLabel={t('collection.pendingTab')}
           paidLabel={t('collection.paidTab')}
-          pendingBadgeCount={pendingBadgeCount}
-          paidBadgeCount={paidBadgeCount}
-          showPendingBadge={!loading}
-          showPaidBadge={!loadingPaid}
         />
 
         <View style={styles.filtersSection}>
@@ -1066,7 +1160,7 @@ const CollectionScreen = ({ navigation }) => {
             >
               <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
               <Text style={styles.datePickerText}>
-                {formatDisplayDate(selectedDate)}
+                {formatDisplayDate(selectedDate) + ' -- ' + formatDisplayDateWithDay(selectedDate)}
               </Text>
             </Pressable>
           </View>
@@ -1133,6 +1227,8 @@ const CollectionScreen = ({ navigation }) => {
             keyExtractor={(item, index) => `p-${item.id || index}`}
             ListEmptyComponent={renderPendingEmpty}
             ListFooterComponent={pendingList.length > 0 ? renderUnpaidFooter : null}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
             onEndReached={loadMoreUnpaid}
             onLayout={(e) => {
               pendingContainerHeightRef.current = e.nativeEvent.layout.height;
@@ -1158,6 +1254,8 @@ const CollectionScreen = ({ navigation }) => {
             keyExtractor={(item, index) => `d-${item.id || index}`}
             ListEmptyComponent={renderPaidEmpty}
             ListFooterComponent={paidList.length > 0 ? renderPaidFooter : null}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
             onEndReached={loadMorePaid}
             onLayout={(e) => {
               paidContainerHeightRef.current = e.nativeEvent.layout.height;
@@ -1172,6 +1270,37 @@ const CollectionScreen = ({ navigation }) => {
               (loadingPaid || paidList.length === 0) && styles.flatListContentGrow,
             ]}
           />
+        </View>
+
+        <View style={styles.loanTypeFooter}>
+          <Pressable
+            style={[styles.loanTypeTab, loanTypeTab === 'daily' && styles.loanTypeTabActive]}
+            onPress={() => handleLoanTypeTabPress('daily')}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+          >
+            <Text style={[styles.loanTypeTabText, loanTypeTab === 'daily' && styles.loanTypeTabTextActive]}>
+              {t('collection.dailyTab')}
+            </Text>
+            <View style={[styles.loanTypeBadge, loanTypeTab === 'daily' && styles.loanTypeBadgeActive]}>
+              <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'daily' && styles.loanTypeBadgeTextActive]}>
+                {dailyLoanTypeCount}
+              </Text>
+            </View>
+          </Pressable>
+          <Pressable
+            style={[styles.loanTypeTab, loanTypeTab === 'weekly' && styles.loanTypeTabActive]}
+            onPress={() => handleLoanTypeTabPress('weekly')}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+          >
+            <Text style={[styles.loanTypeTabText, loanTypeTab === 'weekly' && styles.loanTypeTabTextActive]}>
+              {t('collection.weeklyTab')}
+            </Text>
+            <View style={[styles.loanTypeBadge, loanTypeTab === 'weekly' && styles.loanTypeBadgeActive]}>
+              <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'weekly' && styles.loanTypeBadgeTextActive]}>
+                {weeklyLoanTypeCount}
+              </Text>
+            </View>
+          </Pressable>
         </View>
       </View>
 
@@ -1243,6 +1372,11 @@ const CollectionScreen = ({ navigation }) => {
                     <Text style={styles.customerInfoBalance}>
                       {t('collection.balanceAmount')}: {selectedCollection.getFormattedBalanceAmount()}
                     </Text>
+                    {selectedCollection.extraAmount != null && selectedCollection.extraAmount !== '' && (
+                      <Text style={styles.customerInfoExtraAmount}>
+                        {t('collection.extraAmount')}: {formatCurrencyOrDash(selectedCollection.extraAmount)}
+                      </Text>
+                    )}
                   </View>
 
                   {/* Payment Mode Radio Buttons */}
@@ -1450,29 +1584,57 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
-  tabBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.border,
+  listContainer: {
+    flex: 1,
+    paddingHorizontal: SIZES.padding,
+  },
+  loanTypeFooter: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  loanTypeTab: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SIZES.base / 2,
+    gap: SIZES.base,
+    paddingVertical: 10,
   },
-  tabBadgeActive: {
+  loanTypeTabActive: {
+    borderTopWidth: 2,
+    borderTopColor: COLORS.white,
     backgroundColor: COLORS.primary,
+    marginTop: -1,
   },
-  tabBadgeText: {
+  loanTypeTabText: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  loanTypeTabTextActive: {
+    color: COLORS.white,
+  },
+  loanTypeBadge: {
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 7,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.lightGray,
+  },
+  loanTypeBadgeActive: {
+    backgroundColor: COLORS.white,
+  },
+  loanTypeBadgeText: {
     fontSize: SIZES.body5,
     fontWeight: '700',
     color: COLORS.text.secondary,
   },
-  tabBadgeTextActive: {
-    color: COLORS.white,
-  },
-  listContainer: {
-    flex: 1,
-    paddingHorizontal: SIZES.padding,
+  loanTypeBadgeTextActive: {
+    color: COLORS.primary,
   },
   tabSwitchOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1624,6 +1786,10 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body3,
     color: COLORS.text.secondary,
     marginLeft: SIZES.base,
+  },
+  extraAmountText: {
+    color: COLORS.error || '#FF3B30',
+    fontWeight: '600',
   },
   itemLocality: {
     fontSize: SIZES.body4,
@@ -1798,6 +1964,12 @@ const styles = StyleSheet.create({
   customerInfoBalance: {
     fontSize: SIZES.body3,
     color: COLORS.text.secondary,
+  },
+  customerInfoExtraAmount: {
+    fontSize: SIZES.body3,
+    color: COLORS.error || '#FF3B30',
+    fontWeight: '600',
+    marginTop: SIZES.base / 2,
   },
   paymentModeContainer: {
     marginBottom: SIZES.margin,

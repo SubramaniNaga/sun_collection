@@ -14,11 +14,11 @@ import Header from '../../components/common/Header';
 import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
-import { safeGoBack } from '../../utils/navigationHelpers';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
-import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const CustomerWithLoanScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
@@ -812,7 +812,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 items={loanTypeOptions}
                 placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : (language === 'en' ? 'Select loan type' : 'கடன் வகையை தேர்ந்தெடுக்கவும்')}
                 error={errors.loanTypeId}
-                editable={!isLoanTypeDisabled}
+                // editable={!isLoanTypeDisabled}
                 required
               />
 

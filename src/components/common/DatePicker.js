@@ -3,7 +3,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
-import { formatDisplayDate } from '../../utils/dateFormatter';
+import { formatDisplayDate, getCalendarDate } from '../../utils/dateFormatter';
 
 const DatePicker = ({
   label,
@@ -20,7 +20,7 @@ const DatePicker = ({
   const [show, setShow] = useState(false);
 
   // Convert the ISO string from your formData back to a Date object for the picker
-  const dateValue = value ? new Date(value) : new Date();
+  const dateValue = value ? new Date(value) : getCalendarDate();
 
   const onChange = (event, selectedDate) => {
     // For Android, we must close the picker immediately
@@ -58,12 +58,7 @@ const DatePicker = ({
           },
         ]}
       >
-        <Ionicons 
-          name="calendar-outline" 
-          size={20} 
-          color={COLORS.text?.tertiary || '#7C7C7C'} 
-          style={{ marginRight: SIZES.base }}
-        />
+        
         
         <Text style={[
           styles.valueText,
@@ -74,10 +69,11 @@ const DatePicker = ({
 
         {editable && (
           <Ionicons 
-            name="chevron-down" 
-            size={18} 
-            color={COLORS.text?.tertiary || '#7C7C7C'} 
-          />
+          name="calendar-outline" 
+          size={20} 
+          color={COLORS.text?.tertiary || '#7C7C7C'} 
+          style={{ marginRight: SIZES.base }}
+        />
         )}
       </Pressable>
 

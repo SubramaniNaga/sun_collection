@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { setLoadingContext } from './src/api/apiClient';
+import { AppBlockGate } from './src/components/common/AppBlockOverlay';
 import GlobalLoader from './src/components/common/GlobalLoader';
 import { COLORS } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -11,9 +12,11 @@ import { AuthProvider, useAuthContext } from './src/store/AuthContext';
 import { LanguageProvider } from './src/store/LanguageContext';
 import { LoadingProvider, useLoading } from './src/store/LoadingContext';
 import {
-    registerForPushNotificationsAsync,
-    setNotificationHandler,
+  registerForPushNotificationsAsync,
+  setNotificationHandler,
 } from './src/utils/notifications';
+// Register background location task at app entry (required for LocationTaskService)
+import './src/utils/locationTracker';
 
 // How notifications appear when app is in foreground
 setNotificationHandler();
@@ -87,7 +90,9 @@ export default function App() {
       <LoadingProvider>
         <AuthProvider>
           <AlertProvider>
-            <AppContent />
+            <AppBlockGate>
+              <AppContent />
+            </AppBlockGate>
           </AlertProvider>
         </AuthProvider>
       </LoadingProvider>

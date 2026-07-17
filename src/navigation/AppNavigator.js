@@ -2,10 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useEffect, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import CustomDrawerContent from '../components/navigation/CustomDrawerContent';
+import { applyAppBlockFromResponse, applyAttendanceFromResponse } from '../config/appToggles';
 import { COLORS, SIZES } from '../constants/theme';
 import { safeGoBack } from '../utils/navigationHelpers';
+import { evaluateAppVersion } from '../utils/appVersionCheck';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -24,6 +27,7 @@ import NIPCollectionDetailsScreen from '../screens/main/NIPCollectionDetailsScre
 import NIPScreen from '../screens/main/NIPScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
+import CompanyVaravuAddScreen from '../screens/main/CompanyVaravuAddScreen';
 import UpfrontCashAddScreen from '../screens/main/UpfrontCashAddScreen';
 import UpfrontCashScreen from '../screens/main/UpfrontCashScreen';
 import { useAuthContext } from '../store/AuthContext';
@@ -178,6 +182,13 @@ const HomeStack = () => (
         headerShown: false,
       }}
     />
+    <Stack.Screen
+      name="CompanyVaravuAdd"
+      component={CompanyVaravuAddScreen}
+      options={{
+        headerShown: false,
+      }}
+    />
     <Stack.Screen 
       name="CollectionHistory" 
       component={CollectionHistoryScreen} 
@@ -236,8 +247,46 @@ const MainDrawer = () => (
 
 const AppNavigator = () => {
   const { isAuthenticated, loading } = useAuthContext();
+  const [bootReady, setBootReady] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    if (loading) return;
+
+    if (!isAuthenticated) {
+      setBootReady(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkAppBlock = async () => {
+      setBootReady(false);
+      try {
+        const result = await evaluateAppVersion();
+        if (result.payload) {
+          applyAppBlockFromResponse(result.payload);
+          applyAttendanceFromResponse(result.payload);
+          const { syncLocationTracking } = require('../utils/locationTracker');
+          syncLocationTracking().catch(() => {});
+        }
+      } catch (e) {
+        // Network error — keep last persisted within_time; do not false-block
+        if (__DEV__) console.warn('[AppNavigator] appversion check failed:', e?.message || e);
+      } finally {
+        if (!cancelled) {
+          setBootReady(true);
+        }
+      }
+    };
+
+    checkAppBlock();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, loading]);
+
+  if (loading || !bootReady) {
     return null;
   }
 

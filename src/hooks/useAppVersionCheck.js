@@ -1,11 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
+import {
+  applyAppBlockFromResponse,
+  applyAttendanceFromResponse,
+} from '../config/appToggles';
 import { useLanguage } from '../store/LanguageContext';
 import { showWarning } from '../utils/alertService';
 import { evaluateAppVersion } from '../utils/appVersionCheck';
+import { syncLocationTracking } from '../utils/locationTracker';
 
-/**
- * Calls /appversion on demand: maintenance alert + update bottom sheet when app is behind API.
- */
+/** /appversion: maintenance + update sheet + same attendance flags as dashboard/today. */
 export function useAppVersionCheck() {
   const { t } = useLanguage();
   const [updatePayload, setUpdatePayload] = useState(null);
@@ -14,6 +17,13 @@ export function useAppVersionCheck() {
   const implRef = useRef();
   implRef.current = async () => {
     const result = await evaluateAppVersion();
+
+    // Same attendance / within_time mapping as GET /frontcash/dashboard/today
+    if (result.payload) {
+      applyAppBlockFromResponse(result.payload);
+      applyAttendanceFromResponse(result.payload);
+      syncLocationTracking().catch(() => {});
+    }
 
     if (result.kind === 'maintenance') {
       showWarning(

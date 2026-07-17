@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -54,6 +55,7 @@ const ExpensesScreen = ({ navigation }) => {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
@@ -71,9 +73,9 @@ const ExpensesScreen = ({ navigation }) => {
     t('expenses.approved'),
   ];
 
-  const fetchExpenses = useCallback(async (page = 1, append = false) => {
+  const fetchExpenses = useCallback(async (page = 1, append = false, skipPageLoader = false) => {
     try {
-      if (page === 1) {
+      if (page === 1 && !skipPageLoader) {
         setLoading(true);
         setError(null);
       } else {
@@ -97,10 +99,20 @@ const ExpensesScreen = ({ navigation }) => {
         setExpenses([]);
       }
     } finally {
-      setLoading(false);
+      if (!skipPageLoader) setLoading(false);
       setLoadingMore(false);
     }
   }, [t]);
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchExpenses(1, false, true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchExpenses, refreshing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -319,6 +331,14 @@ const ExpensesScreen = ({ navigation }) => {
           onEndReachedThreshold={0.3}
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={filteredExpenses.length > 0 ? renderFooter : null}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
         />
       </View>
 

@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
@@ -160,6 +160,7 @@ const LoanScreen = ({ navigation, route }) => {
   const [loanDetails, setLoanDetails] = useState(null);
   const [collections, setCollections] = useState([]);
   const [loadingDetails, setLoadingDetails] = useState(() => Boolean(loan?.id));
+  const [refreshingDetails, setRefreshingDetails] = useState(false);
 
   // Location capture function (called on submit)
   const captureLocation = async () => {
@@ -312,27 +313,37 @@ const LoanScreen = ({ navigation, route }) => {
     return `${API_BASE_URL}/api/v1${cleanPath}`;
   };
 
+  const fetchLoanDetails = useCallback(async (skipPageLoader = false) => {
+    if (!loan?.id) {
+      setLoadingDetails(false);
+      return;
+    }
+    try {
+      if (!skipPageLoader) setLoadingDetails(true);
+      const response = await apiServices.loan.getLoanDetails(loan.id);
+      setLoanDetails(response.data?.loan);
+      setCollections(response.data?.collections || []);
+    } catch (error) {
+      showError(t('common.error'), getApiErrorMessage(error, t('loan.loanDetailsLoadError')));
+    } finally {
+      if (!skipPageLoader) setLoadingDetails(false);
+    }
+  }, [loan?.id, t]);
+
   // Fetch loan details and collections when loan ID is available
   useEffect(() => {
-    const fetchLoanDetails = async () => {
-      if (!loan?.id) {
-        setLoadingDetails(false);
-        return;
-      }
-      try {
-        setLoadingDetails(true);
-        const response = await apiServices.loan.getLoanDetails(loan.id);
-        setLoanDetails(response.data?.loan);
-        setCollections(response.data?.collections || []);
-      } catch (error) {
-        showError(t('common.error'), getApiErrorMessage(error, t('loan.loanDetailsLoadError')));
-      } finally {
-        setLoadingDetails(false);
-      }
-    };
-
     fetchLoanDetails();
-  }, [loan?.id, t]);
+  }, [fetchLoanDetails]);
+
+  const onRefreshDetails = useCallback(async () => {
+    if (refreshingDetails || !loan?.id) return;
+    setRefreshingDetails(true);
+    try {
+      await fetchLoanDetails(true);
+    } finally {
+      setRefreshingDetails(false);
+    }
+  }, [fetchLoanDetails, loan?.id, refreshingDetails]);
 
   // Handle image icon press
   const handleImagePress = (imagePath, title) => {
@@ -526,6 +537,14 @@ const LoanScreen = ({ navigation, route }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshingDetails}
+              onRefresh={onRefreshDetails}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
         >
           {/* Complete Loan Details (when opened from list) */}
           {(loan || loanDetails) && (

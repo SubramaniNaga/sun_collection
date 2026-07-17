@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDeviceId } from '../../utils/deviceId';
+import { ATTENDANCE, applyAttendanceFromResponse, isAttendanceCheckedIn } from '../../config/appToggles';
+import { notifyLocationSendResult } from '../../utils/locationTrackingNotifications';
 import { clearSession } from '../../utils/sessionManager';
 import apiClient from '../apiClient';
 import ENDPOINTS from '../endpoints';
@@ -595,6 +597,26 @@ export const apiServices = {
   },
 
   // Expense category (active list for expense type selection)
+  // expenseCategory: {
+  //   getActiveList: async () => {
+  //     try {
+  //        const userId = await AsyncStorage.getItem('userId');
+  //        const params = {};
+  //        if (userId && String(userId).trim()) {
+  //          params.user_id = String(userId).trim();
+  //        }
+  //        const response = await apiClient.get(ENDPOINTS.EXPENSE_CATEGORY.ACTIVE_LIST, { params });
+  //       const response = await apiClient.get(ENDPOINTS.EXPENSE_CATEGORY.ACTIVE_LIST);
+  //       const data = response.data?.data ?? response.data;
+  //       const list = Array.isArray(data) ? data : [];
+  //       return list;
+  //     } catch (error) {
+  //       if (__DEV__) console.warn('Get active expense categories error:', error);
+  //       throw error;
+  //     }
+  //   },
+  // },
+
   expenseCategory: {
     getActiveList: async () => {
       try {
@@ -608,6 +630,7 @@ export const apiServices = {
       }
     },
   },
+
 
   // Expense (list with pagination + create)
   expense: {
@@ -648,6 +671,9 @@ export const apiServices = {
         formData.append('description', String(payload.description ?? ''));
         formData.append('branch_id', String(branchId ?? '1'));
         formData.append('line_id', String(lineId ?? '1'));
+        if (payload.lineuser != null && payload.lineuser !== '') {
+          formData.append('lineuser', String(payload.lineuser));
+        }
 
         if (payload.receiptImageUri) {
           const uri = typeof payload.receiptImageUri === 'object' ? payload.receiptImageUri?.uri : payload.receiptImageUri;
@@ -657,6 +683,29 @@ export const apiServices = {
             formData.append('receipt_image', { uri, name, type });
           }
         }
+
+        const receiptUri = payload.receiptImageUri
+          ? (typeof payload.receiptImageUri === 'object' ? payload.receiptImageUri?.uri : payload.receiptImageUri)
+          : null;
+        console.log('💰 API: expense.create - POST', ENDPOINTS.EXPENSE.CREATE);
+        console.log(
+          '💰 API: expense.create - FormData fields:',
+          JSON.stringify(
+            {
+              title: payload.title ?? '',
+              category: payload.category ?? '',
+              amount: payload.amount ?? '',
+              date: payload.date ?? '',
+              description: payload.description ?? '',
+              branch_id: String(branchId ?? '1'),
+              line_id: String(lineId ?? '1'),
+              lineuser: payload.lineuser != null && payload.lineuser !== '' ? String(payload.lineuser) : null,
+              receipt_image: receiptUri ? { uri: receiptUri, name: receiptUri.split('/').pop()?.split('?')[0] || 'receipt_image.png' } : null,
+            },
+            null,
+            2
+          )
+        );
 
         const path = ENDPOINTS.EXPENSE.CREATE;
         const baseURL = apiClient.defaults?.baseURL || '';
@@ -675,6 +724,7 @@ export const apiServices = {
 
         clearTimeout(timeoutId);
         const data = await response.json().catch(() => ({}));
+        console.log('💰 API: expense.create - response:', JSON.stringify(data, null, 2));
 
         if (!response.ok) {
           const err = new Error(data?.message || `HTTP ${response.status}`);
@@ -701,6 +751,28 @@ export const apiServices = {
         return response.data;
       } catch (error) {
         if (__DEV__) console.warn('Delete expense error:', error);
+        throw error;
+      }
+    },
+  },
+
+  /** GET /branch-users?branch_id= — users with lines for expense lineuser picker */
+  branchUsers: {
+    getList: async (branchId) => {
+      try {
+        const id = branchId ?? (await AsyncStorage.getItem('branchId'));
+        if (!id) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const response = await apiClient.get(ENDPOINTS.BRANCH_USERS.LIST, {
+          params: { branch_id: id },
+        });
+        const body = response.data;
+        const data = body?.data ?? body;
+        const users = Array.isArray(data?.users) ? data.users : [];
+        return users;
+      } catch (error) {
+        if (__DEV__) console.warn('Get branch users error:', error);
         throw error;
       }
     },
@@ -807,10 +879,12 @@ export const apiServices = {
 
   // App Services
   app: {
-    getVersion: async () => {
+    getVersion: async (options = {}) => {
       try {
         console.log('📱 API: getVersion - GET', ENDPOINTS.APP.VERSION);
-        const response = await apiClient.get(ENDPOINTS.APP.VERSION);
+        const response = await apiClient.get(ENDPOINTS.APP.VERSION, {
+          skipGlobalLoader: Boolean(options.skipGlobalLoader),
+        });
         console.log('📱 API: getVersion - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
@@ -822,12 +896,15 @@ export const apiServices = {
 
   // Dashboard Services
   dashboard: {
-    getTodayStats: async () => {
+    getTodayStats: async (options = {}) => {
       try {
         const deviceId = await AsyncStorage.getItem('deviceId');
         const params = deviceId ? { device_id: deviceId } : {};
         // console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY, '| params:', params);
-        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY, { params });
+        const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY, {
+          params,
+          skipGlobalLoader: Boolean(options.skipGlobalLoader),
+        });
         // console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
@@ -881,6 +958,7 @@ export const apiServices = {
           customer_phone = '',
           search = '',
           customer_id = '',
+          loan_type = '',
         } = params;
         const searchTrimmed = typeof search === 'string' ? search.trim() : '';
         const requestParams = {
@@ -892,6 +970,7 @@ export const apiServices = {
           ...(customer_phone && { customer_phone }),
           ...(searchTrimmed && { search: searchTrimmed }),
           ...(customer_id && { customer_id }),
+          ...(loan_type && { loan_type }),
         };
         console.log('📋 API: getUnpaidCollections - GET', ENDPOINTS.COLLECTION.UNPAID_LIST, '| params:', requestParams);
         const response = await apiClient.get(ENDPOINTS.COLLECTION.UNPAID_LIST, { params: requestParams });
@@ -918,6 +997,7 @@ export const apiServices = {
           customer_phone = '',
           search = '',
           customer_id = '',
+          loan_type = '',
         } = params;
         const searchTrimmed = typeof search === 'string' ? search.trim() : '';
         const requestParams = {
@@ -929,6 +1009,7 @@ export const apiServices = {
           ...(customer_phone && { customer_phone }),
           ...(searchTrimmed && { search: searchTrimmed }),
           ...(customer_id && { customer_id }),
+          ...(loan_type && { loan_type }),
         };
         console.log('📋 API: getPaidCollections - GET', ENDPOINTS.COLLECTION.PAID_LIST, '| params:', requestParams);
         const response = await apiClient.get(ENDPOINTS.COLLECTION.PAID_LIST, { params: requestParams });
@@ -1041,21 +1122,6 @@ export const apiServices = {
     },
   },
 
-  // App Services
-  app: {
-    getVersion: async () => {
-      try {
-        console.log('📱 API: getVersion - GET', ENDPOINTS.APP.VERSION);
-        const response = await apiClient.get(ENDPOINTS.APP.VERSION);
-        console.log('📱 API: getVersion - Response:', JSON.stringify(response.data, null, 2));
-        return response.data;
-      } catch (error) {
-        if (__DEV__) console.warn('App version check error:', error);
-        throw error;
-      }
-    }
-  },
-
   upfrontCash: {
     getOpeningBalance: async (params = {}) => {
       try {
@@ -1127,6 +1193,198 @@ export const apiServices = {
       } catch (error) {
         if (__DEV__) console.warn('Close opening account error:', error);
         throw error;
+      }
+    },
+  },
+
+  companyVaravu: {
+    create: async (payload) => {
+      try {
+        console.log('🏢 API: companyVaravu.create - POST', ENDPOINTS.COMPANY_VARAVU.CREATE, '| body:', JSON.stringify(payload, null, 2));
+        const response = await apiClient.post(ENDPOINTS.COMPANY_VARAVU.CREATE, payload);
+        console.log('🏢 API: companyVaravu.create - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Create company varavu error:', error);
+        throw error;
+      }
+    },
+  },
+
+  attendance: {
+    /** Mark attendance. multipart FormData: user_id, status, time, latitude, longitude, address, image */
+    markPresent: async (formData) => {
+      try {
+        const path = ENDPOINTS.ATTENDANCE.MARK;
+        const baseURL = apiClient.defaults?.baseURL || '';
+        const fullUrl = `${baseURL}${path}`;
+        const token = await AsyncStorage.getItem('authToken');
+
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📤 API REQUEST [POST]', fullUrl);
+        if (formData && typeof formData.forEach === 'function') {
+          const keys = [];
+          formData.forEach((_, key) => keys.push(key));
+          console.log('📤 Request body: FormData (multipart), keys:', keys.join(', '));
+          formData.forEach((value, key) => {
+            if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value) {
+              console.log(
+                `📤   ${key}: [FILE] name=${value.name}, type=${value.type || 'n/a'}, uri=${
+                  typeof value.uri === 'string' ? value.uri.substring(0, 70) + '...' : value.uri
+                }`
+              );
+            } else {
+              console.log(`📤   ${key}:`, value);
+            }
+          });
+        }
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        // Use fetch so RN sets multipart boundary (axios Content-Type breaks file uploads)
+        const response = await fetch(fullUrl, {
+          method: 'POST',
+          headers: {
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: formData,
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📥 API RESPONSE [POST]', path, '| Status:', response.status);
+        console.log('📥 Response data:', JSON.stringify(data, null, 2));
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        if (!response.ok) {
+          const err = new Error(data?.message || `HTTP ${response.status}`);
+          err.response = { status: response.status, data };
+          throw err;
+        }
+        return data;
+      } catch (error) {
+        if (__DEV__) console.warn('Mark attendance error:', error);
+        throw error;
+      }
+    },
+  },
+
+  /** POST /attendance/location-tracking — only while checked in; no global loader */
+  location: {
+    send: async ({ user_id, latitude, longitude, location, time } = {}) => {
+      try {
+        // Headless / closed app: restore check-in flags from storage before gate.
+        try {
+          const pairs = await AsyncStorage.multiGet([
+            'attendance_allow_location',
+            'attendance_capture_time',
+            'attendance_status',
+          ]);
+          const allow = pairs?.[0]?.[1];
+          const capture = pairs?.[1]?.[1];
+          const status = pairs?.[2]?.[1];
+          if (allow === '0' || allow === '1') {
+            ATTENDANCE.allow_location = Number(allow);
+          }
+          if (capture != null && Number.isFinite(Number(capture))) {
+            ATTENDANCE.capture_time = Number(capture);
+          }
+          if (status != null && Number.isFinite(Number(status))) {
+            ATTENDANCE.attendance_status = Number(status);
+          }
+        } catch (e) {
+          // ignore — use in-memory ATTENDANCE
+        }
+
+        if (
+          ATTENDANCE.allow_location !== 1 ||
+          !isAttendanceCheckedIn() ||
+          Number(ATTENDANCE.capture_time) <= 0
+        ) {
+          return { success: false, skipped: true };
+        }
+
+        const storedUserId = await AsyncStorage.getItem('userId');
+        const finalUserId = user_id ?? (storedUserId != null ? Number(storedUserId) : null);
+        const payload = {
+          user_id: finalUserId,
+          latitude,
+          longitude,
+          location: location || '',
+          time: time || new Date().toISOString(),
+        };
+        if (__DEV__) {
+          console.log(
+            `[location.track] POST /location-tracking @ ${payload.time} (capture_time=${ATTENDANCE.capture_time}m)`
+          );
+        }
+        const response = await apiClient.post(ENDPOINTS.LOCATION.TRACK, payload, {
+          skipGlobalLoader: true,
+          skipApiLog: true,
+        });
+        const data = response.data;
+        if (__DEV__) {
+          console.log('[location.track] response:', JSON.stringify(data, null, 2));
+        }
+        applyAttendanceFromResponse(data);
+        const successMessage =
+          data?.message ||
+          (data?.success === false ? 'Location update rejected by server.' : 'Location update posted.');
+        await notifyLocationSendResult({
+          success: data?.success !== false,
+          message: successMessage,
+        });
+
+        const { syncLocationTracking, persistLocationTrackingFlags } = require('../../utils/locationTracker');
+        await persistLocationTrackingFlags();
+        if (ATTENDANCE.allow_location !== 1 || !isAttendanceCheckedIn()) {
+          await syncLocationTracking();
+        }
+        return data;
+      } catch (error) {
+        applyAttendanceFromResponse(error?.response?.data);
+        const msg = error?.response?.data?.message;
+        const companyOff =
+          error?.response?.data?.allow_location === 0 ||
+          error?.response?.data?.attendance?.allow_location === 0;
+        const notCheckedIn =
+          msg === 'Location tracking allowed only after check-in and before checkout' ||
+          error?.response?.data?.user_allow_location === 0 ||
+          error?.response?.data?.attendance?.user_allow_location === 0;
+
+        if (companyOff) {
+          ATTENDANCE.allow_location = 0;
+          try {
+            const { persistLocationTrackingFlags, syncLocationTracking } = require('../../utils/locationTracker');
+            persistLocationTrackingFlags();
+            syncLocationTracking();
+          } catch (e) {
+            // ignore
+          }
+        } else if (notCheckedIn) {
+          ATTENDANCE.user_allow_location = 0;
+          try {
+            const { persistLocationTrackingFlags, syncLocationTracking } = require('../../utils/locationTracker');
+            persistLocationTrackingFlags();
+            syncLocationTracking();
+          } catch (e) {
+            // ignore
+          }
+        }
+        if (__DEV__) {
+          console.warn('[location.track] error:', error?.message || error);
+          if (error?.response?.data) {
+            console.warn(
+              '[location.track] error response:',
+              JSON.stringify(error.response.data, null, 2)
+            );
+          }
+        }
+        await notifyLocationSendResult({
+          success: false,
+          message: msg || error?.message || 'Location update failed.',
+        });
+        return { success: false, dummy: true };
       }
     },
   },

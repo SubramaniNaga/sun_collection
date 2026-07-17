@@ -31,6 +31,14 @@ Backend team: to allow this app to call the API from the browser (web build), pl
    multipart/form-data with boundary).
 `;
 
+
+ 
+// export const API_BASE_URL = __DEV__
+//   ? 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1'
+//   : 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1';
+
+  // VITE_API_BASE_URL=
+
 export const API_BASE_URL = __DEV__
   ? 'http://65.0.100.65:6005/api/v1'
   : 'http://65.0.100.65:6005/api/v1';
@@ -137,38 +145,44 @@ apiClient.interceptors.request.use(
         console.warn(`⚠️ No auth token available for ${config.method?.toUpperCase()} ${config.url}`);
       }
 
-      // Log every API request – URL, params, and body (to verify data is passing correctly)
-      const method = (config.method || 'get').toUpperCase();
-      const fullUrl = config.baseURL + config.url + (config.params && Object.keys(config.params).length
-        ? '?' + new URLSearchParams(config.params).toString()
-        : '');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`📤 API REQUEST [${method}]`, fullUrl);
-      if (config.params && Object.keys(config.params).length > 0) {
-        console.log('📤 Request params:', JSON.stringify(config.params, null, 2));
-      }
-      if (config.data != null) {
-        if (typeof config.data === 'object' && config.data.constructor?.name === 'FormData') {
-          const keys = [];
-          config.data.forEach((_, key) => keys.push(key));
-          console.log('📤 Request body: FormData (multipart), keys:', keys.join(', '));
-          try {
-            config.data.forEach((value, key) => {
-              if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value) {
-                console.log(`📤   ${key}: [FILE] name=${value.name}, type=${value.type || 'n/a'}, uri=${typeof value.uri === 'string' ? value.uri.substring(0, 70) + '...' : value.uri}`);
-              } else {
-                console.log(`📤   ${key}:`, value);
-              }
-            });
-          } catch (e) {
-            console.log('📤   (FormData values not logged:', e?.message, ')');
-          }
-        } else {
-          console.log('📤 Request body:', JSON.stringify(config.data, null, 2));
+      // High-frequency endpoints: no verbose request logging (avoids console flood).
+      const isQuietEndpoint =
+        (config.url && config.url.includes('/attendance/location-tracking')) ||
+        config.skipApiLog === true;
+      if (!isQuietEndpoint) {
+        const method = (config.method || 'get').toUpperCase();
+        const fullUrl = config.baseURL + config.url + (config.params && Object.keys(config.params).length
+          ? '?' + new URLSearchParams(config.params).toString()
+          : '');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`📤 API REQUEST [${method}]`, fullUrl);
+        if (config.params && Object.keys(config.params).length > 0) {
+          console.log('📤 Request params:', JSON.stringify(config.params, null, 2));
         }
+        if (config.data != null) {
+          if (typeof config.data === 'object' && config.data.constructor?.name === 'FormData') {
+            const keys = [];
+            config.data.forEach((_, key) => keys.push(key));
+            console.log('📤 Request body: FormData (multipart), keys:', keys.join(', '));
+            try {
+              config.data.forEach((value, key) => {
+                if (value != null && typeof value === 'object' && 'uri' in value && 'name' in value) {
+                  console.log(`📤   ${key}: [FILE] name=${value.name}, type=${value.type || 'n/a'}, uri=${typeof value.uri === 'string' ? value.uri.substring(0, 70) + '...' : value.uri}`);
+                } else {
+                  console.log(`📤   ${key}:`, value);
+                }
+              });
+            } catch (e) {
+              console.log('📤   (FormData values not logged:', e?.message, ')');
+            }
+          } else {
+            console.log('📤 Request body:', JSON.stringify(config.data, null, 2));
+          }
+        }
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      } else {
+        config.skipApiLog = true;
       }
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
       // Skip global loader for list/pagination endpoints – screens show their own loaders:
       // initial load = spinner only, pagination = skeleton only (mutually exclusive).
       const listEndpoints = ['/loan', '/expense', '/collection', '/loan/nip', '/expense-category/active/list'];
@@ -196,12 +210,14 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // Log every API response – status and data (to verify response is coming correctly)
-    const method = (response.config?.method || 'get').toUpperCase();
-    const url = response.config?.url || '';
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📥 API RESPONSE [${method}]`, url, '| Status:', response.status);
-    console.log('📥 Response data:', JSON.stringify(response.data, null, 2));
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (!response.config?.skipApiLog) {
+      const method = (response.config?.method || 'get').toUpperCase();
+      const url = response.config?.url || '';
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(`📥 API RESPONSE [${method}]`, url, '| Status:', response.status);
+      console.log('📥 Response data:', JSON.stringify(response.data, null, 2));
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
 
     // Stop global loading only if we started it (skip for list/pagination)
     if (loadingContext && !response.config?.skipGlobalLoader) {
@@ -210,16 +226,17 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
-    // Log API error response
+    // Log API error response (keep errors visible even for quiet endpoints)
     const method = (error.config?.method || 'get').toUpperCase();
     const url = error.config?.url || '';
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📥 API ERROR [${method}]`, url, '| Status:', error.response?.status, '| Message:', error.message);
-    if (error.response?.data) {
-      console.log('📥 Error response data:', JSON.stringify(error.response.data, null, 2));
+    if (!error.config?.skipApiLog || __DEV__) {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(`📥 API ERROR [${method}]`, url, '| Status:', error.response?.status, '| Message:', error.message);
+      if (error.response?.data) {
+        console.log('📥 Error response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
     // Stop global loading only if we started it (skip for list/pagination)
     if (loadingContext && !error.config?.skipGlobalLoader) {
       loadingContext.stopLoading();

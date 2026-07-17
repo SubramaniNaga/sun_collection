@@ -8,6 +8,7 @@ import {
   Image,
   Linking,
   Modal,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -17,8 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
-import PaginationListFooter from '../../components/common/PaginationListFooter';
 import LoanCollectionsModal from '../../components/common/LoanCollectionsModal';
+import PaginationListFooter from '../../components/common/PaginationListFooter';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
@@ -53,6 +54,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const [loanList, setLoanList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -66,9 +68,9 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const listContentHeightRef = useRef(0);
   const listContainerHeightRef = useRef(0);
 
-  const fetchLoans = useCallback(async (page = 1, append = false) => {
+  const fetchLoans = useCallback(async (page = 1, append = false, skipPageLoader = false) => {
     try {
-      if (page === 1 && !append) {
+      if (page === 1 && !append && !skipPageLoader) {
         setLoading(true);
         setError(null);
         loadMoreLockRef.current = false;
@@ -98,7 +100,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
         setLoanList([]);
       }
     } finally {
-      if (page === 1 && !append) {
+      if (page === 1 && !append && !skipPageLoader) {
         setLoading(false);
       } else {
         setLoadingMore(false);
@@ -106,6 +108,16 @@ const LoanCustomerListScreen = ({ navigation }) => {
       }
     }
   }, []);
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchLoans(1, false, true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchLoans, refreshing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -565,6 +577,14 @@ const LoanCustomerListScreen = ({ navigation }) => {
         onEndReachedThreshold={0.15}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={loanList.length > 0 ? renderFooter : null}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
       />
 
       <Modal
@@ -633,7 +653,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 0, // No padding
     fontSize: SIZES.body4, // Reduced font size for better single line fit
-    color: COLORS.text.primary,
+    color: COLORS.black,
     backgroundColor: 'transparent',
     textAlign: 'left',
     height: 35, // Reduced height

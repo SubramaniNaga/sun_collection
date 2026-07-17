@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, Pressable, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 import { showAlert, showError, showWarning } from '../../utils/alertService';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
@@ -17,9 +17,12 @@ const CustomImagePicker = ({
   style = {},
 }) => {
   const [previewVisible, setPreviewVisible] = useState(false);
-  const pickImage = async (source) => {
-    if (!editable) return;
+  const [picking, setPicking] = useState(false);
 
+  const pickImage = async (source) => {
+    if (!editable || picking) return;
+
+    setPicking(true);
     try {
       if (source === 'camera') {
         const cameraPermission = await ExpoImagePicker.requestCameraPermissionsAsync();
@@ -41,11 +44,13 @@ const CustomImagePicker = ({
     } catch (error) {
       if (__DEV__) console.warn('Image picker error:', error?.message ?? error);
       showError('Error', error?.message || 'Failed to pick image. Please try again.');
+    } finally {
+      setPicking(false);
     }
   };
 
   const removeImage = () => {
-    if (editable) {
+    if (editable && !picking) {
       showAlert({
         type: 'warning',
         title: 'Remove Image',
@@ -57,6 +62,25 @@ const CustomImagePicker = ({
       });
     }
   };
+
+  const renderPickerLoader = () => (
+    <View style={{
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255,255,255,0.85)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2,
+    }}>
+      <ActivityIndicator size="large" color={COLORS.primary} />
+      <Text style={{
+        fontSize: SIZES.body2,
+        color: COLORS.text.secondary,
+        marginTop: SIZES.base,
+      }}>
+        Processing image...
+      </Text>
+    </View>
+  );
 
   return (
     <View style={[{ marginBottom: SIZES.margin }, style]}>
@@ -78,8 +102,9 @@ const CustomImagePicker = ({
           borderColor: error ? 'red' : COLORS.border,
           borderRadius: SIZES.radius,
           overflow: 'hidden',
+          position: 'relative',
         }}>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewVisible(true)}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => !picking && setPreviewVisible(true)} disabled={picking}>
             <Image
               source={{ uri: image.uri }}
               style={{
@@ -105,6 +130,7 @@ const CustomImagePicker = ({
               <Text style={{ color: COLORS.white, fontSize: 11, marginLeft: 3 }}>Preview</Text>
             </View>
           </TouchableOpacity>
+          {picking ? renderPickerLoader() : null}
           {editable && (
             <View style={{
               flexDirection: 'row',
@@ -113,6 +139,7 @@ const CustomImagePicker = ({
             }}>
               <Pressable
                 onPress={() => pickImage('camera')}
+                disabled={picking}
                 style={{
                   flex: 1,
                   flexDirection: 'row',
@@ -122,6 +149,7 @@ const CustomImagePicker = ({
                   backgroundColor: COLORS.primary,
                   borderRadius: SIZES.radius,
                   marginRight: SIZES.base,
+                  opacity: picking ? 0.5 : 1,
                 }}
               >
                 <Ionicons name="camera" size={16} color={COLORS.white} />
@@ -137,6 +165,7 @@ const CustomImagePicker = ({
               
               <Pressable
                 onPress={() => pickImage('gallery')}
+                disabled={picking}
                 style={{
                   flex: 1,
                   flexDirection: 'row',
@@ -146,6 +175,7 @@ const CustomImagePicker = ({
                   backgroundColor: COLORS.secondary,
                   borderRadius: SIZES.radius,
                   marginRight: SIZES.base,
+                  opacity: picking ? 0.5 : 1,
                 }}
               >
                 <Ionicons name="image" size={16} color={COLORS.white} />
@@ -161,6 +191,7 @@ const CustomImagePicker = ({
 
               <Pressable
                 onPress={removeImage}
+                disabled={picking}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -169,6 +200,7 @@ const CustomImagePicker = ({
                   paddingHorizontal: SIZES.base,
                   backgroundColor: '#FF5252',
                   borderRadius: SIZES.radius,
+                  opacity: picking ? 0.5 : 1,
                 }}
               >
                 <Ionicons name="trash" size={16} color={COLORS.white} />
@@ -185,65 +217,75 @@ const CustomImagePicker = ({
           padding: SIZES.padding * 2,
           alignItems: 'center',
           backgroundColor: COLORS.lightGray,
+          minHeight: 180,
+          position: 'relative',
+          justifyContent: 'center',
         }}>
-          <Ionicons name="image-outline" size={48} color={COLORS.text.tertiary} />
-          <Text style={{
-            fontSize: SIZES.body2,
-            color: COLORS.text.secondary,
-            marginTop: SIZES.base,
-            marginBottom: SIZES.margin,
-          }}>
-            Add receipt image
-          </Text>
-          
-          <View style={{
-            flexDirection: 'row',
-            gap: SIZES.base,
-          }}>
-            <Pressable
-              onPress={() => pickImage('camera')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: SIZES.base,
-                paddingHorizontal: SIZES.padding,
-                backgroundColor: COLORS.primary,
-                borderRadius: SIZES.radius,
-              }}
-            >
-              <Ionicons name="camera" size={16} color={COLORS.white} />
+          {!picking ? (
+            <>
+              <Ionicons name="image-outline" size={48} color={COLORS.text.tertiary} />
               <Text style={{
-                color: COLORS.white,
-                fontSize: SIZES.body3,
-                fontWeight: '500',
-                marginLeft: SIZES.base / 2,
+                fontSize: SIZES.body2,
+                color: COLORS.text.secondary,
+                marginTop: SIZES.base,
+                marginBottom: SIZES.margin,
               }}>
-                Camera
+                Add receipt image
               </Text>
-            </Pressable>
-            
-            <Pressable
-              onPress={() => pickImage('gallery')}
-              style={{
+
+              <View style={{
                 flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: SIZES.base,
-                paddingHorizontal: SIZES.padding,
-                backgroundColor: COLORS.secondary,
-                borderRadius: SIZES.radius,
-              }}
-            >
-              <Ionicons name="image" size={16} color={COLORS.white} />
-              <Text style={{
-                color: COLORS.white,
-                fontSize: SIZES.body3,
-                fontWeight: '500',
-                marginLeft: SIZES.base / 2,
+                gap: SIZES.base,
               }}>
-                Gallery
-              </Text>
-            </Pressable>
-          </View>
+                <Pressable
+                  onPress={() => pickImage('camera')}
+                  disabled={picking}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: SIZES.base,
+                    paddingHorizontal: SIZES.padding,
+                    backgroundColor: COLORS.primary,
+                    borderRadius: SIZES.radius,
+                  }}
+                >
+                  <Ionicons name="camera" size={16} color={COLORS.white} />
+                  <Text style={{
+                    color: COLORS.white,
+                    fontSize: SIZES.body3,
+                    fontWeight: '500',
+                    marginLeft: SIZES.base / 2,
+                  }}>
+                    Camera
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => pickImage('gallery')}
+                  disabled={picking}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: SIZES.base,
+                    paddingHorizontal: SIZES.padding,
+                    backgroundColor: COLORS.secondary,
+                    borderRadius: SIZES.radius,
+                  }}
+                >
+                  <Ionicons name="image" size={16} color={COLORS.white} />
+                  <Text style={{
+                    color: COLORS.white,
+                    fontSize: SIZES.body3,
+                    fontWeight: '500',
+                    marginLeft: SIZES.base / 2,
+                  }}>
+                    Gallery
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
+          {picking ? renderPickerLoader() : null}
         </View>
       )}
 

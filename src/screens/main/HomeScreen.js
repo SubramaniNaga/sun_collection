@@ -1,11 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,16 +20,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
 import Header from '../../components/common/Header';
+import {
+  ATTENDANCE,
+  applyAppBlockFromResponse,
+  applyAttendanceFromResponse,
+  isAttendanceCheckedIn,
+  isAttendanceClosed,
+  setLocalCheckInState,
+} from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
-import Collection from '../../models/Collection';
 import Dashboard from '../../models/Dashboard';
 import NIPLoan from '../../models/NIPLoan';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
-import ErrorHandler from '../../utils/errorHandler';
 import { getCurrentDateString } from '../../utils/dateFormatter';
+import ErrorHandler from '../../utils/errorHandler';
+import { compressImageAssetIfNeeded } from '../../utils/imageCompression';
+import { syncLocationTracking } from '../../utils/locationTracker';
 import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
 
 const LANG_SWITCH_W = 58;
@@ -60,9 +73,40 @@ const HomeScreen = ({ navigation }) => {
   const { user, updateUser } = useAuthContext();
   const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
   const [langSaving, setLangSaving] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(ATTENDANCE.allow_attendance === 1);
+  const [attendanceStatus, setAttendanceStatus] = useState(
+    isAttendanceCheckedIn() ? 'present' : 'absent'
+  );
+  const [attendanceClosed, setAttendanceClosed] = useState(isAttendanceClosed());
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const isAttendanceBusy = fetchingLocation || attendanceSaving;
   const slideAnim = useRef(
     new Animated.Value(language === 'ta' ? LANG_THUMB_TRAVEL : 0)
   ).current;
+  const attendanceSlideAnim = useRef(
+    new Animated.Value(isAttendanceCheckedIn() ? LANG_THUMB_TRAVEL : 0)
+  ).current; // A left, P right
+  const attendanceRetryRef = useRef(null); // last attempt payload for retry (no re-capture)
+
+  const syncAttendanceUiFromConfig = useCallback(() => {
+    const nextShow = ATTENDANCE.allow_attendance === 1;
+    const nextClosed = isAttendanceClosed();
+    const uiStatus = isAttendanceCheckedIn() ? 'present' : 'absent';
+    setShowAttendance((prev) => (prev === nextShow ? prev : nextShow));
+    setAttendanceClosed((prev) => (prev === nextClosed ? prev : nextClosed));
+    setAttendanceStatus((prev) => {
+      if (prev === uiStatus) return prev;
+      attendanceSlideAnim.setValue(uiStatus === 'present' ? LANG_THUMB_TRAVEL : 0);
+      return uiStatus;
+    });
+  }, [attendanceSlideAnim]);
+
+  const ensureLocationTracking = useCallback(() => {
+    syncLocationTracking().catch((e) => {
+      console.warn('[Home] location sync failed:', e?.message || e);
+    });
+  }, []);
 
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
@@ -71,6 +115,10 @@ const HomeScreen = ({ navigation }) => {
   const [collectionSummary, setCollectionSummary] = useState({ totalBalance: 0, count: 0 });
   const [nipSummary, setNipSummary] = useState({ totalBalance: 0, count: 0 });
   const loadHomeDataRef = useRef(null);
+  const syncAttendanceUiRef = useRef(syncAttendanceUiFromConfig);
+  syncAttendanceUiRef.current = syncAttendanceUiFromConfig;
+  const ensureLocationTrackingRef = useRef(ensureLocationTracking);
+  ensureLocationTrackingRef.current = ensureLocationTracking;
 
   const showDashboardLoadError = useCallback((error) => {
     if (error && ErrorHandler.isAuthError(error)) {
@@ -96,20 +144,19 @@ const HomeScreen = ({ navigation }) => {
     );
   }, [t]);
 
+  const showDashboardLoadErrorRef = useRef(showDashboardLoadError);
+  showDashboardLoadErrorRef.current = showDashboardLoadError;
+
   const loadHomeData = useCallback(async () => {
     setLoadingDashboard(true);
 
     let dashboardFetchError = null;
-    const dashPromise = apiServices.dashboard.getTodayStats().catch((err) => {
+    const dashPromise = apiServices.dashboard.getTodayStats({ skipGlobalLoader: true }).catch((err) => {
       dashboardFetchError = err;
       return null;
     });
 
-    const today = getCurrentDateString();
     const summaryPromise = Promise.all([
-      // Collection API commented out — hideDetails: true on the home card means
-      // totalBalance/count are not displayed. Re-enable when the card shows details.
-      // apiServices.collection.getCollectionList({ collection_date: today }).catch(() => null),
       Promise.resolve(null),
       apiServices.loan.getNIPList({ page: 1, limit: 500 }).catch(() => null),
     ]);
@@ -118,33 +165,23 @@ const HomeScreen = ({ navigation }) => {
       const [res, [colRes, nipRes]] = await Promise.all([dashPromise, summaryPromise]);
 
       if (res != null) {
+        applyAppBlockFromResponse(res);
+        applyAttendanceFromResponse(res);
+        syncAttendanceUiRef.current?.();
+        ensureLocationTrackingRef.current?.();
+
         const raw = dashboardDataFromTodayApi(res);
         if (Object.keys(raw).length > 0) {
           setDashboardData(Dashboard.fromApiResponse(raw));
           dashboardAlertShownRef.current = false;
         } else {
           setDashboardData(null);
-          showDashboardLoadError(dashboardFetchError);
+          showDashboardLoadErrorRef.current?.(dashboardFetchError);
         }
       } else {
         setDashboardData(null);
-        showDashboardLoadError(dashboardFetchError);
+        showDashboardLoadErrorRef.current?.(dashboardFetchError);
       }
-
-      // Collection summary processing commented out — re-enable together with the API call above
-      // when the Collection home card shows hideDetails: false.
-      // if (colRes) {
-      //   const colRaw = colRes?.response ?? colRes?.data ?? [];
-      //   const colArr = Array.isArray(colRaw) ? colRaw : [];
-      //   const collections = Collection.fromApiResponseArray(colArr);
-      //   const totalColBalance = collections.reduce(
-      //     (sum, c) => sum + (parseFloat(c.balanceAmount) || 0),
-      //     0
-      //   );
-      //   setCollectionSummary({ totalBalance: totalColBalance, count: collections.length });
-      // } else {
-      //   setCollectionSummary({ totalBalance: 0, count: 0 });
-      // }
 
       if (nipRes) {
         const nipRaw = Array.isArray(nipRes?.data) ? nipRes.data : [];
@@ -160,15 +197,257 @@ const HomeScreen = ({ navigation }) => {
     } finally {
       setLoadingDashboard(false);
     }
-  }, [showDashboardLoadError]);
+  }, []);
 
   loadHomeDataRef.current = loadHomeData;
 
+  const LOCATION_API_KEY = "adc5cbe3db4e4586be5b77d0e7b7f025";
+
+  const getAddress = async (latitude, longitude) => {
+    try {
+      const response = await fetch(
+        `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${LOCATION_API_KEY}`
+      );
+
+      const data = await response.json();
+
+      console.log(
+        "OpenCage Response:",
+        JSON.stringify(data, null, 2)
+      );
+
+      if (data.results && data.results.length > 0) {
+        return data.results[0].formatted;
+      }
+
+      return "";
+    } catch (error) {
+      console.log("Reverse Geocode Error:", error);
+      return "";
+    }
+  };
+
+  const submitAttendancePayload = async (payload, { manageSaving = true } = {}) => {
+    if (manageSaving) {
+      setAttendanceSaving(true);
+    }
+    try {
+      const formData = new FormData();
+      formData.append('user_id', String(payload.userId ?? ''));
+      formData.append('status', payload.status);
+      formData.append('time', new Date().toISOString());
+      formData.append('latitude', String(payload.latitude));
+      formData.append('longitude', String(payload.longitude));
+      formData.append('address', payload.address || '');
+      if (payload.imageUri) {
+        formData.append('image', {
+          uri: payload.imageUri,
+          name: 'attendance_image.jpg',
+          type: 'image/jpeg',
+        });
+      }
+
+      const res = await apiServices.attendance.markPresent(formData);
+      console.log('[Attendance] API response:', JSON.stringify(res, null, 2));
+      applyAttendanceFromResponse(res);
+      attendanceRetryRef.current = null;
+
+      const isCheckIn = payload.status === 'present';
+      setLocalCheckInState(isCheckIn);
+      setAttendanceClosed(false);
+      setAttendanceStatus(isCheckIn ? 'present' : 'absent');
+      Animated.spring(attendanceSlideAnim, {
+        toValue: isCheckIn ? LANG_THUMB_TRAVEL : 0,
+        useNativeDriver: true,
+        friction: 9,
+        tension: 80,
+      }).start();
+
+      // FS runs while checked in; stops on checkout.
+      ensureLocationTracking();
+
+      showAlert({
+        type: 'success',
+        title: t('common.success'),
+        message: isCheckIn
+          ? t('home.attendanceMarked')
+          : t('home.attendanceCheckedOut'),
+      });
+    } catch (error) {
+      console.warn('[Attendance Error]', error);
+      attendanceRetryRef.current = payload;
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: getApiErrorMessage(error, t('home.attendanceFailed')),
+        buttons: [
+          {
+            text: t('common.retry'),
+            onPress: () => {
+              if (attendanceRetryRef.current) {
+                submitAttendancePayload(attendanceRetryRef.current);
+              }
+            },
+          },
+          { text: t('common.cancel'), style: 'cancel' },
+        ],
+      });
+    } finally {
+      if (manageSaving) {
+        setAttendanceSaving(false);
+      }
+    }
+  };
+
+  const handleMarkAttendance = async () => {
+    if (isAttendanceBusy || attendanceClosed) return;
+
+    // Check-in: present + photo | Check-out: checkout, no photo
+    const apiStatus = attendanceStatus === 'present' ? 'checkout' : 'present';
+    // Keep busy continuously until camera opens on top (do not clear mid-flow — that flickers)
+    setFetchingLocation(true);
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert({
+          type: 'error',
+          title: t('common.error'),
+          message: t('home.locationPermissionDenied'),
+        });
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+      const storedUserId = await AsyncStorage.getItem('userId');
+      const userId = user?.id ?? storedUserId;
+
+      let rawImageAsset = null;
+      if (apiStatus === 'present') {
+        const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!cameraPermission.granted) {
+          showAlert({
+            type: 'error',
+            title: t('common.error'),
+            message: t('home.cameraPermissionDenied'),
+          });
+          return;
+        }
+
+        // Keep overlay on until camera covers the screen — then switch to upload busy
+        // without a clear/reload gap when returning from camera.
+        setAttendanceSaving(true);
+        setFetchingLocation(false);
+
+        const cameraResult = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: false,
+          quality: 0.5,
+        });
+
+        if (!cameraResult.canceled && cameraResult.assets?.length > 0) {
+          rawImageAsset = cameraResult.assets[0];
+        } else if (Platform.OS === 'android' && cameraResult.canceled) {
+          try {
+            const pending = await ImagePicker.getPendingResultAsync();
+            if (pending && !pending.canceled && pending.assets?.length > 0) {
+              rawImageAsset = pending.assets[0];
+            }
+          } catch (e) {
+            console.warn('getPendingResultAsync fallback failed:', e?.message);
+          }
+        }
+
+        if (!rawImageAsset) {
+          setAttendanceSaving(false);
+          return;
+        }
+      } else {
+        setAttendanceSaving(true);
+        setFetchingLocation(false);
+      }
+
+      try {
+        let imageUri = null;
+        if (rawImageAsset) {
+          const imageAsset = await compressImageAssetIfNeeded(rawImageAsset);
+          if (!imageAsset?.uri) {
+            return;
+          }
+          imageUri = imageAsset.uri;
+        }
+
+        const address = await getAddress(latitude, longitude);
+        await submitAttendancePayload(
+          {
+            userId,
+            status: apiStatus,
+            latitude,
+            longitude,
+            address: address || '',
+            imageUri,
+          },
+          { manageSaving: false },
+        );
+      } finally {
+        setAttendanceSaving(false);
+      }
+    } catch (error) {
+      console.warn('[Attendance Error]', error);
+      setAttendanceSaving(false);
+      showAlert({
+        type: 'error',
+        title: t('common.error'),
+        message: getApiErrorMessage(error, t('home.attendanceFailed')),
+      });
+    } finally {
+      setFetchingLocation(false);
+    }
+  };
+
+  // Refresh block + attendance when app returns to foreground (silent — no global loader).
+  // Re-sync FS when allow_location / capture_time / check-in gate change.
+  useEffect(() => {
+    let lastLocKey = `${ATTENDANCE.allow_location}:${ATTENDANCE.user_allow_location}:${ATTENDANCE.capture_time}:${ATTENDANCE.attendance_status}`;
+
+    const checkDashboardFlags = async () => {
+      try {
+        const res = await apiServices.dashboard.getTodayStats({ skipGlobalLoader: true });
+        applyAppBlockFromResponse(res);
+        applyAttendanceFromResponse(res);
+        syncAttendanceUiRef.current?.();
+
+        const nextLocKey = `${ATTENDANCE.allow_location}:${ATTENDANCE.user_allow_location}:${ATTENDANCE.capture_time}:${ATTENDANCE.attendance_status}`;
+        if (nextLocKey !== lastLocKey) {
+          lastLocKey = nextLocKey;
+          ensureLocationTrackingRef.current?.();
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        checkDashboardFlags();
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
+      syncAttendanceUiRef.current?.();
       runCheck();
-      loadHomeData();
-    }, [runCheck, loadHomeData])
+      loadHomeDataRef.current?.();
+    }, [runCheck])
   );
 
   useEffect(() => {
@@ -271,158 +550,212 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <>
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      <StatusBar style="light" backgroundColor={COLORS.statusBar} />
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+        <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
-      <Header
-        title={t('home.title')}
-        showMenuButton={true}
-        onMenuPress={() => navigation.openDrawer()}
-        rightComponent={
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={[
-                styles.langSwitchTrack,
-                langSaving && styles.langSwitchTrackDisabled,
-              ]}
-              onPress={() => handleHomeLanguageChange(language === 'en' ? 'ta' : 'en')}
-              disabled={langSaving}
-              activeOpacity={0.8}
-            >
-              {language === 'ta' && (
-                <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
-                  <Text style={styles.langSwitchInactiveText}>EN</Text>
-                </View>
-              )}
-              {language === 'en' && (
-                <View style={styles.langSwitchInactiveRight} pointerEvents="none">
-                  <Text style={styles.langSwitchInactiveText}>த</Text>
-                </View>
-              )}
-              <Animated.View
-                style={[
-                  styles.langSwitchThumb,
-                  { transform: [{ translateX: slideAnim }] },
-                ]}
-              >
-                <Text style={styles.langSwitchThumbText}>
-                  {language === 'en' ? 'EN' : 'த'}
-                </Text>
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
-        }
-      />
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.dashboardSection}>
-          <Text style={styles.dashboardTitle}>{t('home.todaysStatistics')}</Text>
-
-          {loadingDashboard ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.loadingText}>{t('home.loadingDashboard')}</Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.homeGrid}>
-                {renderAmountCard({
-                  cardKey: 'collection',
-                  backgroundColor: '#1d7ee2',
-                  iconName: 'cash-outline',
-                  title: t('home.collection'),
-                  amountText: formatRupee(collectionSummary.totalBalance),
-                  subText: `${collectionSummary.count} ${t('home.dueToday')}`,
-                  onPress: () => navigation.navigate('Collection'),
-                  hideDetails: true,
-                })}
-
-                {renderAmountCard({
-                  cardKey: 'loan-mgmt',
-                  iconName: 'document-text-outline',
-                  title: t('home.loanManagement'),
-                  amountText: dashboardData
-                    ? dashboardData.getFormattedLoansGivenAmount()
-                    : formatRupee(0),
-                  subText: `${dashboardData?.loansGiven?.count ?? 0} ${t('home.loans')}`,
-                  onPress: () => navigation.navigate('Loan'),
-                  outlined: true,
-                })}
-
-                {renderAmountCard({
-                  cardKey: 'upfront-cash',
-                  backgroundColor: '#34C759',
-                  iconName: 'wallet-outline',
-                  title: t('home.upfrontCash'),
-                  amountText: dashboardData
-                    ? dashboardData.getFormattedFrontcashAmount()
-                    : formatRupee(0),
-                  subText: `${dashboardData?.frontcash?.count ?? 0} ${t('home.transactions')}`,
-                  onPress: () => navigation.navigate('UpfrontCash'),
-                })}
-
-                {renderAmountCard({
-                  cardKey: 'expenses',
-                  backgroundColor: '#FF3B30',
-                  iconName: 'card-outline',
-                  title: t('home.expenses'),
-                  amountText: dashboardData
-                    ? dashboardData.getFormattedExpensesAmount()
-                    : formatRupee(0),
-                  subText: `${dashboardData?.expenses?.count ?? 0} ${t('home.expensesCount')}`,
-                  onPress: () => navigation.navigate('Expenses'),
-                })}
-
-                {renderAmountCard({
-                  cardKey: 'coll-hist',
-                  backgroundColor: '#FF9500',
-                  iconName: 'bar-chart-outline',
-                  title: t('home.collectionHistory'),
-                  amountText: dashboardData
-                    ? dashboardData.getFormattedCollectionsAmount()
-                    : formatRupee(0),
-                  subText: `${dashboardData?.collections?.count ?? 0} ${t('home.collectionsCount')}`,
-                  onPress: () => navigation.navigate('CollectionHistory'),
-                })}
-
-                {renderAmountCard({
-                  cardKey: 'nip',
-                  backgroundColor: '#5856D6',
-                  iconName: 'link-outline',
-                  title: t('home.nip'),
-                  amountText: formatRupee(nipSummary.totalBalance),
-                  subText: `${nipSummary.count} ${t('home.loans')}`,
-                  onPress: () => navigation.navigate('NIP'),
-                })}
-              </View>
-
+        <Header
+          title={t('home.title')}
+          showMenuButton={true}
+          onMenuPress={() => navigation.openDrawer()}
+          rightComponent={
+            <View style={styles.headerRight}>
               <TouchableOpacity
-                style={styles.cashAccountCard}
-                onPress={() => navigation.navigate('CashAccount')}
-                activeOpacity={0.85}
+                style={[
+                  styles.langSwitchTrack,
+                  langSaving && styles.langSwitchTrackDisabled,
+                ]}
+                onPress={() => handleHomeLanguageChange(language === 'en' ? 'ta' : 'en')}
+                disabled={langSaving}
+                activeOpacity={0.8}
               >
-                <Ionicons name="calculator-outline" size={22} color={COLORS.white} />
-                <Text style={styles.cashAccountCardText}>{t('cashAccount.closeAccount')}</Text>
+                {language === 'ta' && (
+                  <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
+                    <Text style={styles.langSwitchInactiveText}>EN</Text>
+                  </View>
+                )}
+                {language === 'en' && (
+                  <View style={styles.langSwitchInactiveRight} pointerEvents="none">
+                    <Text style={styles.langSwitchInactiveText}>த</Text>
+                  </View>
+                )}
+                <Animated.View
+                  style={[
+                    styles.langSwitchThumb,
+                    { transform: [{ translateX: slideAnim }] },
+                  ]}
+                >
+                  <Text style={styles.langSwitchThumbText}>
+                    {language === 'en' ? 'EN' : 'த'}
+                  </Text>
+                </Animated.View>
               </TouchableOpacity>
-            </>
-          )}
+            </View>
+          }
+        />
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.dashboardSection}>
+            <View style={styles.dashboardTitleRow}>
+              <Text style={styles.dashboardTitle}>{t('home.todaysStatistics')}</Text>
+              {showAttendance && (
+                <TouchableOpacity
+                  style={[
+                    styles.attendanceSwitchTrack,
+                    attendanceStatus === 'present'
+                      ? styles.attendanceSwitchTrackPresent
+                      : styles.attendanceSwitchTrackAbsent,
+                    attendanceClosed && styles.attendanceSwitchTrackDisabled,
+                  ]}
+                  onPress={handleMarkAttendance}
+                  disabled={isAttendanceBusy || attendanceClosed}
+                  activeOpacity={1}
+                  accessibilityLabel={t('home.attendance')}
+                >
+                  {attendanceStatus === 'present' && (
+                    <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
+                      <Text style={styles.attendanceSwitchInactiveText}>A</Text>
+                    </View>
+                  )}
+                  {attendanceStatus === 'absent' && (
+                    <View style={styles.langSwitchInactiveRight} pointerEvents="none">
+                      <Text style={styles.attendanceSwitchInactiveText}>P</Text>
+                    </View>
+                  )}
+                  <Animated.View
+                    style={[
+                      styles.langSwitchThumb,
+                      { transform: [{ translateX: attendanceSlideAnim }] },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.langSwitchThumbText,
+                        attendanceStatus === 'present'
+                          ? styles.attendanceThumbPresent
+                          : styles.attendanceThumbAbsent,
+                      ]}
+                    >
+                      {attendanceStatus === 'present' ? 'P' : 'A'}
+                    </Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              )}
+            </View>
+            {loadingDashboard ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>{t('home.loadingDashboard')}</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.homeGrid}>
+                  {renderAmountCard({
+                    cardKey: 'collection',
+                    backgroundColor: '#1d7ee2',
+                    iconName: 'cash-outline',
+                    title: t('home.collection'),
+                    amountText: formatRupee(collectionSummary.totalBalance),
+                    subText: `${collectionSummary.count} ${t('home.dueToday')}`,
+                    onPress: () => navigation.navigate('Collection'),
+                    hideDetails: true,
+                  })}
+
+                  {renderAmountCard({
+                    cardKey: 'loan-mgmt',
+                    iconName: 'document-text-outline',
+                    title: t('home.loanManagement'),
+                    amountText: dashboardData
+                      ? dashboardData.getFormattedLoansGivenAmount()
+                      : formatRupee(0),
+                    subText: `${dashboardData?.loansGiven?.count ?? 0} ${t('home.loans')}`,
+                    onPress: () => navigation.navigate('Loan'),
+                    outlined: true,
+                  })}
+
+                  {renderAmountCard({
+                    cardKey: 'upfront-cash',
+                    backgroundColor: '#34C759',
+                    iconName: 'wallet-outline',
+                    title: t('home.upfrontCash'),
+                    amountText: dashboardData
+                      ? dashboardData.getFormattedFrontcashAmount()
+                      : formatRupee(0),
+                    subText: `${dashboardData?.frontcash?.count ?? 0} ${t('home.transactions')}`,
+                    onPress: () => navigation.navigate('UpfrontCash'),
+                  })}
+
+                  {renderAmountCard({
+                    cardKey: 'expenses',
+                    backgroundColor: '#FF3B30',
+                    iconName: 'card-outline',
+                    title: t('home.expenses'),
+                    amountText: dashboardData
+                      ? dashboardData.getFormattedExpensesAmount()
+                      : formatRupee(0),
+                    subText: `${dashboardData?.expenses?.count ?? 0} ${t('home.expensesCount')}`,
+                    onPress: () => navigation.navigate('Expenses'),
+                  })}
+
+                  {renderAmountCard({
+                    cardKey: 'coll-hist',
+                    backgroundColor: '#FF9500',
+                    iconName: 'bar-chart-outline',
+                    title: t('home.collectionHistory'),
+                    amountText: dashboardData
+                      ? dashboardData.getFormattedCollectionsAmount()
+                      : formatRupee(0),
+                    subText: `${dashboardData?.collections?.count ?? 0} ${t('home.collectionsCount')}`,
+                    onPress: () => navigation.navigate('CollectionHistory'),
+                  })}
+
+                  {renderAmountCard({
+                    cardKey: 'nip',
+                    backgroundColor: '#5856D6',
+                    iconName: 'link-outline',
+                    title: t('home.nip'),
+                    amountText: formatRupee(nipSummary.totalBalance),
+                    subText: `${nipSummary.count} ${t('home.loans')}`,
+                    onPress: () => navigation.navigate('NIP'),
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.cashAccountCard}
+                  onPress={() => navigation.navigate('CashAccount')}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="calculator-outline" size={22} color={COLORS.white} />
+                  <Text style={styles.cashAccountCardText}>{t('cashAccount.closeAccount')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </ScrollView>
+
+        <View
+          style={[
+            styles.attendanceLoadingOverlay,
+            !isAttendanceBusy && styles.attendanceLoadingOverlayHidden,
+          ]}
+          pointerEvents={isAttendanceBusy ? 'auto' : 'none'}
+        >
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
-      </ScrollView>
-    </SafeAreaView>
-    {updatePayload && (
-      <AppUpdateBottomSheet
-        visible
-        currentVersion={updatePayload.currentVersion}
-        latestVersion={updatePayload.latestVersion}
-        forceUpdate={updatePayload.forceUpdate}
-        storeUrl={updatePayload.storeUrl}
-        onContinue={updatePayload.forceUpdate ? undefined : clearUpdate}
-      />
-    )}
+      </SafeAreaView>
+      {updatePayload && (
+        <AppUpdateBottomSheet
+          visible
+          currentVersion={updatePayload.currentVersion}
+          latestVersion={updatePayload.latestVersion}
+          forceUpdate={updatePayload.forceUpdate}
+          storeUrl={updatePayload.storeUrl}
+          onContinue={updatePayload.forceUpdate ? undefined : clearUpdate}
+        />
+      )}
     </>
   );
 };
@@ -431,6 +764,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  attendanceLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  attendanceLoadingOverlayHidden: {
+    opacity: 0,
   },
   scrollView: {
     flex: 1,
@@ -535,11 +878,18 @@ const styles = StyleSheet.create({
   dashboardSection: {
     marginBottom: SIZES.margin,
   },
+  dashboardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SIZES.margin,
+  },
   dashboardTitle: {
+    flex: 1,
     fontSize: SIZES.h3,
     fontWeight: '700',
     color: COLORS.text.secondary,
-    marginBottom: SIZES.margin,
+    marginRight: SIZES.base,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -554,6 +904,33 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  attendanceSwitchTrack: {
+    width: LANG_SWITCH_W,
+    height: LANG_SWITCH_H,
+    borderRadius: LANG_SWITCH_H / 2,
+    justifyContent: 'center',
+  },
+  attendanceSwitchTrackPresent: {
+    backgroundColor: 'rgba(52, 199, 89, 0.45)',
+  },
+  attendanceSwitchTrackAbsent: {
+    backgroundColor: 'rgba(255, 59, 48, 0.45)',
+  },
+  attendanceSwitchTrackDisabled: {
+    opacity: 0.55,
+  },
+  attendanceSwitchInactiveText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.42)',
+    letterSpacing: 0.2,
+  },
+  attendanceThumbPresent: {
+    color: '#34C759',
+  },
+  attendanceThumbAbsent: {
+    color: '#FF3B30',
   },
   langSwitchTrack: {
     width: LANG_SWITCH_W,

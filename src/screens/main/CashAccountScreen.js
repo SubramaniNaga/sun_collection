@@ -12,9 +12,9 @@ import Collection from '../../models/Collection';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
-import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatCurrency } from '../../utils/amountFormatters';
-import { formatDateForAPI, getCurrentDateString } from '../../utils/dateFormatter';
+import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 /**
  * `stats.closingbalance` (or `closing_balance`) from GET /collection/history:
@@ -181,8 +181,8 @@ const CashAccountScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [startDate, setStartDate] = useState(new Date().toISOString());
-  const [endDate, setEndDate] = useState(new Date().toISOString());
+  const [startDate, setStartDate] = useState(getCalendarDateISO());
+  const [endDate, setEndDate] = useState(getCalendarDateISO());
   const [stats, setStats] = useState(null); // from /collection/history
   const [openingSummary, setOpeningSummary] = useState(null); // from /frontcash/openingbalance
   const [processingFeeTotal, setProcessingFeeTotal] = useState(0);
@@ -270,9 +270,9 @@ const CashAccountScreen = ({ navigation }) => {
         }),
         useTodayDashboardForFees
           ? apiServices.dashboard.getTodayStats().catch((err) => {
-              console.warn('CashAccountScreen: dashboard today (processing fee):', err);
-              return null;
-            })
+            console.warn('CashAccountScreen: dashboard today (processing fee):', err);
+            return null;
+          })
           : Promise.resolve(null),
       ]);
 
@@ -334,10 +334,32 @@ const CashAccountScreen = ({ navigation }) => {
     }, [fetchSummary])
   );
 
+  // Prefer dashboard frontcashByType (cash vs upi+bank+other). Fall back to openingbalance totals.
+  const upfrontByCash =
+    todayDashboard != null
+      ? Number(todayDashboard.frontcashByType?.cash ?? 0) || 0
+      : Number(
+          openingSummary?.total_frontcash_by_type?.cash ??
+            openingSummary?.total_frontcash ??
+            0
+        ) || 0;
+  const upfrontByOnline =
+    todayDashboard != null
+      ? Number(
+          (todayDashboard.frontcashByType?.upi ?? 0) +
+            (todayDashboard.frontcashByType?.bank ?? 0) +
+            (todayDashboard.frontcashByType?.other ?? 0)
+        ) || 0
+      : Number(
+          openingSummary?.total_frontcash_online ??
+            openingSummary?.total_frontcash_by_type?.online ??
+            openingSummary?.total_frontcash_by_type?.upi ??
+            0
+        ) || 0;
   const upfrontCash =
     todayDashboard != null
-      ? Number(todayDashboard.frontcash?.totalAmount ?? 0) || 0
-      : Number(openingSummary?.total_frontcash ?? 0) || 0;
+      ? Number(todayDashboard.frontcash?.totalAmount ?? 0) || upfrontByCash + upfrontByOnline
+      : Number(openingSummary?.total_frontcash ?? 0) || upfrontByCash + upfrontByOnline;
   const loanGiven =
     todayDashboard != null
       ? Number(todayDashboard.loansGiven?.totalAmount ?? 0) || 0
@@ -704,7 +726,18 @@ const CashAccountScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {renderTableRow3('upfrontCash', t('cashAccount.upfrontCash'), null, formatCurrency(String(upfrontCash)))}
+            {renderTableRow3(
+              'upfrontByCash',
+              t('cashAccount.upfrontByCash'),
+              null,
+              formatCurrency(String(upfrontByCash))
+            )}
+            {renderTableRow3(
+              'upfrontByOnline',
+              t('cashAccount.upfrontByOnline'),
+              null,
+              formatCurrency(String(upfrontByOnline))
+            )}
             {renderTableRow3('collection', t('cashAccount.collection'), null, formatCurrency(String(collectionCompleted)))}
             {renderTableRow3(
               'processingFee',

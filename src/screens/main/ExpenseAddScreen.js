@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,14 +20,27 @@ import CustomImagePicker from '../../components/common/ImagePicker';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { getCalendarDateISO } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const initialFormState = {
   category: '',
   amount: '',
-  date: new Date().toISOString(),
+  date: getCalendarDateISO(),
   description: '',
+  lineuser: '',
 };
+
+const toBranchUserPickerItems = (users) =>
+  (Array.isArray(users) ? users : []).map((user) => {
+    const name = typeof user?.name === 'string' ? user.name.trim() : '';
+    const lines = (user?.lines || [])
+      .map((l) => (typeof l?.line_name === 'string' ? l.line_name.trim() : ''))
+      .filter(Boolean)
+      .join(', ');
+    const label = lines ? (name ? `${name} — ${lines}` : lines) : name || String(user?.id ?? '');
+    return { label, value: String(user.id) };
+  });
 
 const ExpenseAddScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -38,6 +51,9 @@ const ExpenseAddScreen = ({ navigation }) => {
   const [errors, setErrors] = useState({});
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [branchUserOptions, setBranchUserOptions] = useState([]);
+  const [branchUsersLoading, setBranchUsersLoading] = useState(false);
+  const branchUsersFetchRef = useRef(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -64,6 +80,27 @@ const ExpenseAddScreen = ({ navigation }) => {
     return () => { cancelled = true; };
   }, []);
 
+  const loadBranchUsers = async () => {
+    if (branchUsersFetchRef.current) return branchUsersFetchRef.current;
+
+    const fetchPromise = (async () => {
+      setBranchUsersLoading(true);
+      try {
+        const users = await apiServices.branchUsers.getList();
+        setBranchUserOptions(toBranchUserPickerItems(users));
+      } catch (err) {
+        setBranchUserOptions([]);
+        showError(t('common.error'), getApiErrorMessage(err, t('expenses.failedToLoadBranchUsers')));
+      } finally {
+        setBranchUsersLoading(false);
+        branchUsersFetchRef.current = null;
+      }
+    })();
+
+    branchUsersFetchRef.current = fetchPromise;
+    return fetchPromise;
+  };
+
   const validateForm = () => {
     const newErrors = {};
     if (!formData.category) newErrors.category = t('expenses.typeRequired');
@@ -87,6 +124,17 @@ const ExpenseAddScreen = ({ navigation }) => {
 
     setSubmitting(true);
     try {
+      const expensePayload = {
+        title,
+        category: formData.category,
+        amount: formData.amount,
+        date: formatExpenseDate(formData.date),
+        description: formData.description || '',
+        receiptImageUri: selectedImage?.uri ?? selectedImage ?? null,
+        lineuser: formData.lineuser || null,
+      };
+      console.log('💰 expense.submit - payload:', JSON.stringify(expensePayload, null, 2));
+
       const response = await apiServices.expense.create({
         title,
         category: formData.category,
@@ -94,6 +142,7 @@ const ExpenseAddScreen = ({ navigation }) => {
         date: formatExpenseDate(formData.date),
         description: formData.description || '',
         receiptImageUri: selectedImage,
+        lineuser: formData.lineuser,
       });
 
       const success = response?.success !== false && (response?.status !== 400 && response?.status !== 500);
@@ -163,6 +212,34 @@ const ExpenseAddScreen = ({ navigation }) => {
             placeholder={categoriesLoading ? t('common.loading') || 'Loading...' : t('expenses.expenseType')}
             error={errors.category}
             required
+            fullScreenModal
+            searchable
+            modalTitle={t('expenses.selectExpenseType')}
+            searchPlaceholder={t('expenses.searchExpenseType')}
+            noResultsText={t('expenses.noExpenseTypeMatches')}
+            loading={categoriesLoading}
+            loadingText={t('common.loading') || 'Loading...'}
+          />
+
+          <FormPicker
+            label={t('expenses.lineUser')}
+            value={formData.lineuser}
+            onValueChange={(value) => handleInputChange('lineuser', value)}
+            items={branchUserOptions}
+            placeholder={
+              branchUsersLoading
+                ? t('common.loading') || 'Loading...'
+                : t('expenses.selectLineUser')
+            }
+            error={errors.lineuser}
+            fullScreenModal
+            searchable
+            modalTitle={t('expenses.selectLineUser')}
+            searchPlaceholder={t('expenses.searchLineUser')}
+            noResultsText={t('expenses.noLineUserMatches')}
+            onOpen={loadBranchUsers}
+            loading={branchUsersLoading}
+            loadingText={t('common.loading') || 'Loading...'}
           />
 
           <FormInput
