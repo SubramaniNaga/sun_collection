@@ -3,8 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import apiServices from '../../api/services/apiServices';
@@ -12,11 +13,14 @@ import Button from '../../components/common/Button';
 import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import ImagePreviewModal from '../../components/common/ImagePreviewModal';
+import ImageProcessingLoader from '../../components/common/ImageProcessingLoader';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { applyCalendarTimezoneFromResponse } from '../../config/appToggles';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { getRegisterDayValueFromDate } from '../../utils/dateFormatter';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -32,6 +36,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [searchError, setSearchError] = useState(null);
   const searchDebounceRef = useRef(null);
   const pickingImageRef = useRef(false);
+  const [pickingImageType, setPickingImageType] = useState(null);
   const [showExistingLoanForm, setShowExistingLoanForm] = useState(false);
 
   const dismissKeyboard = useCallback(() => {
@@ -61,7 +66,6 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [loanPeriod, setLoanPeriod] = useState('');
   const [addressLatitude, setAddressLatitude] = useState('');
   const [addressLongitude, setAddressLongitude] = useState('');
-
   // Loan types from API (for dropdown)
   const [loanTypeOptions, setLoanTypeOptions] = useState([]);
   const [loanTypesLoading, setLoanTypesLoading] = useState(false);
@@ -78,10 +82,44 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [errors, setErrors] = useState({});
   const [previewImage, setPreviewImage] = useState(null);
+  const [registerDay, setRegisterDay] = useState('');
+  const [serverRegisterDay, setServerRegisterDay] = useState(() => getRegisterDayValueFromDate());
+  const registerDayOptions = useMemo(
+    () => [
+      { label: t('customer.monday'), value: '1' },
+      { label: t('customer.tuesday'), value: '2' },
+      { label: t('customer.wednesday'), value: '3' },
+      { label: t('customer.thursday'), value: '4' },
+      { label: t('customer.friday'), value: '5' },
+      { label: t('customer.saturday'), value: '6' },
+      { label: t('customer.sunday'), value: '7' },
+    ],
+    [t],
+  );
+  const loanDayOptions = useMemo(() => {
+    const match = registerDayOptions.find((option) => option.value === serverRegisterDay);
+    return match ? [match] : [];
+  }, [registerDayOptions, serverRegisterDay]);
 
-  // Fetch loan types from API when screen mounts (for New customer form)
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await apiServices.app.getVersion({ skipGlobalLoader: true });
+          if (!cancelled) applyCalendarTimezoneFromResponse(res);
+        } catch {
+          // Fall back to cached server_date or device date
+        }
+        if (!cancelled) {
+          setServerRegisterDay(getRegisterDayValueFromDate());
+        }
+      })();
+      return () => { cancelled = true; };
+    }, []),
+  );
+  // Fetch loan types from API (New + Existing customer forms)
   useEffect(() => {
-    if (customerType !== 'New') return;
     let cancelled = false;
     setLoanTypesLoading(true);
     apiServices.loan
@@ -94,7 +132,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           }));
           setLoanTypeOptions(options);
 
-          // Load stored loan data and handle login response
+          if (customerType !== 'New') return;
+
+          // Load stored loan data and handle login response (New customer only)
           const loadStoredLoanData = async () => {
             try {
               const storedLoanType = await AsyncStorage.getItem('loanType');
@@ -160,6 +200,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     return () => { cancelled = true; };
   }, [customerType, t]);
 
+  const existingLoanTypeOptions = useMemo(
+    () => loanTypeOptions.filter((option) => {
+      const lower = String(option.label).toLowerCase();
+      return lower === 'daily' || lower === 'weekly';
+    }),
+    [loanTypeOptions],
+  );
+
   useEffect(() => {
     if (customerType !== 'Existing') return;
     let cancelled = false;
@@ -168,10 +216,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         const storedLoanType = await AsyncStorage.getItem('loanType');
         const storedLoanPeriod = await AsyncStorage.getItem('loanPeriod');
         if (!cancelled) {
-          setLoanTypeId(storedLoanType || '1');
-          setLoanPeriod(storedLoanPeriod || '12');
-          setIsLoanTypeDisabled(true);
-          setIsLoanPeriodDisabled(true);
+          if (storedLoanType) setLoanTypeId(storedLoanType);
+          if (storedLoanPeriod) setLoanPeriod(storedLoanPeriod);
+          setIsLoanTypeDisabled(false);
+          setIsLoanPeriodDisabled(false);
         }
       } catch {
         // Non-blocking defaults for existing-customer flow
@@ -193,7 +241,16 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     setSearchError(null);
     try {
       const lineId = await AsyncStorage.getItem('lineId');
-      const response = await apiServices.customer.searchCustomer(q, lineId);
+      const selectedLabel = loanTypeOptions.find((o) => o.value === loanTypeId)?.label ?? '';
+      const loanTypeFilter = String(selectedLabel).toLowerCase();
+      const filters = {};
+      if (loanTypeFilter === 'daily' || loanTypeFilter === 'weekly') {
+        filters.loan_type = loanTypeFilter;
+      }
+      if (loanTypeFilter === 'weekly' && registerDay) {
+        filters.register_day = registerDay;
+      }
+      const response = await apiServices.customer.searchCustomer(q, lineId, filters);
       const data = response?.data ?? response;
       setSearchResult(data || null);
       if (!data) setSearchError(t('customer.noCustomerFound'));
@@ -203,7 +260,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     } finally {
       setSearchLoading(false);
     }
-  }, [existingSearch]);
+  }, [existingSearch, loanTypeId, loanTypeOptions, registerDay, t]);
 
   useEffect(() => {
     if (customerType !== 'Existing') return;
@@ -216,7 +273,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     }
     searchDebounceRef.current = setTimeout(() => runCustomerSearch(q), DEBOUNCE_MS_DEFAULT);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [customerType, existingSearch, runCustomerSearch]);
+  }, [customerType, existingSearch, loanTypeId, registerDay, runCustomerSearch]);
 
   const openLoans = searchResult?.open_loans;
   const hasOpenLoans = Array.isArray(openLoans) && openLoans.length > 0;
@@ -231,6 +288,21 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     if (lower === 'monthly') return t('loan.months') || 'months';
     return t('loan.months') || 'months';
   })();
+  const isWeeklyLoanType = String(selectedLoanTypeLabel).toLowerCase() === 'weekly';
+  const loanTypeParam = (() => {
+    const lower = String(selectedLoanTypeLabel).toLowerCase();
+    if (lower === 'daily' || lower === 'weekly') return lower;
+    return '';
+  })();
+
+  useEffect(() => {
+    if (!isWeeklyLoanType) {
+      setRegisterDay('');
+      setErrors((prev) => (prev.registerDay ? { ...prev, registerDay: null } : prev));
+      return;
+    }
+    setRegisterDay(getRegisterDayValueFromDate());
+  }, [isWeeklyLoanType, serverRegisterDay]);
 
   // Handle phone input change (same as LoginScreen)
   const handlePhoneChange = (text) => {
@@ -298,6 +370,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       }
     }
     if (!loanTypeId) newErrors.loanTypeId = t('customer.loanTypeRequired');
+    if (isWeeklyLoanType && !registerDay) {
+      newErrors.registerDay = t('customer.registerDayRequired');
+    }
     if (!loanPeriod.trim() || parseInt(loanPeriod) <= 0) {
       newErrors.loanPeriod = t('customer.loanPeriodRequired');
     }
@@ -332,6 +407,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     if (!String(magimaiAmount ?? '').trim()) newErrors.magimaiAmount = t('customer.amountInvalidNonNegative') || 'Required';
     if (!String(aathayamAmount ?? '').trim()) newErrors.aathayamAmount = t('customer.amountInvalidNonNegative') || 'Required';
     if (!loanTypeId) newErrors.loanTypeId = t('customer.loanTypeRequired');
+    if (isWeeklyLoanType && !registerDay) {
+      newErrors.registerDay = t('customer.registerDayRequired');
+    }
     if (!loanPeriod.trim() || parseInt(loanPeriod, 10) <= 0) newErrors.loanPeriod = t('customer.loanPeriodRequired');
     if (!customerPhoto) newErrors.customerPhoto = t('customer.imageRequired');
     if (!addressProof) newErrors.addressProof = t('customer.imageRequired');
@@ -372,6 +450,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const handleImagePick = async (type, source) => {
     dismissKeyboard();
     pickingImageRef.current = true;
+    setPickingImageType(type);
     try {
       if (source === 'camera') {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -402,6 +481,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       showError(t('common.error'), getApiErrorMessage(error, t('customer.imageRequired')));
     } finally {
       pickingImageRef.current = false;
+      setPickingImageType(null);
       dismissKeyboard();
     }
   };
@@ -469,8 +549,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         formData.append('loan_amount', String(Number(loanAmount) || 0));
         formData.append('loan_period', String(Number(loanPeriod) || 0));
         formData.append('loantype_id', String(Number(loanTypeId) || 0));
+        if (loanTypeParam) formData.append('loan_type', loanTypeParam);
         formData.append('processing_fees', String(magimaiNum));
         formData.append('intrest_amount', String(aathayamNum));
+        if (isWeeklyLoanType && registerDay) {
+          formData.append('register_day', String(registerDay));
+        }
 
         if (customerPhoto) {
           const name = getFileName(customerPhoto.uri, 'customer_photo.png');
@@ -495,8 +579,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
             loan_amount: String(Number(loanAmount) || 0),
             loan_period: String(Number(loanPeriod) || 0),
             loantype_id: String(Number(loanTypeId) || 0),
+            loan_type: loanTypeParam || null,
             processing_fees: String(magimaiNum),
             intrest_amount: String(aathayamNum),
+            register_day: isWeeklyLoanType && registerDay ? String(registerDay) : null,
           },
           files: {
             customer_photo: customerPhoto ? getFileName(customerPhoto.uri, 'customer_photo.png') : null,
@@ -528,10 +614,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       formData.append('loan_amount', String(Number(loanAmount) || 0));
       formData.append('loan_period', String(Number(loanPeriod) || 12));
       formData.append('loantype_id', String(Number(loanTypeId) || 1));
+      if (loanTypeParam) formData.append('loan_type', loanTypeParam);
       formData.append('processing_fees', String(magimaiNum));
       formData.append('intrest_amount', String(aathayamNum));
       formData.append('address_latitude', lat);
       formData.append('address_longitude', lng);
+      if (isWeeklyLoanType && registerDay) {
+        formData.append('register_day', String(registerDay));
+      }
 
       if (aadharImage) {
         const name = getFileName(aadharImage.uri, 'aadhar_image.png');
@@ -569,10 +659,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           loan_amount: String(Number(loanAmount) || 0),
           loan_period: String(Number(loanPeriod) || 12),
           loantype_id: String(Number(loanTypeId) || 1),
+          loan_type: loanTypeParam || null,
           processing_fees: String(magimaiNum),
           intrest_amount: String(aathayamNum),
           address_latitude: lat,
           address_longitude: lng,
+          register_day: isWeeklyLoanType && registerDay ? String(registerDay) : null,
           branch_id: storedBranchId,
           line_id: storedLineId,
         },
@@ -608,7 +700,9 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     }
   };
 
-  const renderImageSection = (title, image, imageType, errorKey, required = false) => (
+  const renderImageSection = (title, image, imageType, errorKey, required = false) => {
+    const isPicking = pickingImageType === imageType;
+    return (
     <View style={styles.imageSection}>
       <Text style={styles.imageLabel}>
         {title}
@@ -616,54 +710,62 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       </Text>
       {image ? (
         <View style={styles.imagePreview}>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewImage({ uri: image.uri, title })}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => !isPicking && setPreviewImage({ uri: image.uri, title })} disabled={isPicking}>
             <Image source={{ uri: image.uri }} style={styles.image} />
             <View style={styles.previewHint}>
               <Ionicons name="expand-outline" size={12} color={COLORS.white} />
               <Text style={styles.previewHintText}>Preview</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.removeImageButton}
-            onPress={() => {
-              switch (imageType) {
-                case 'aadhar':
-                  setAadharImage(null);
-                  break;
-                case 'customer':
-                  setCustomerPhoto(null);
-                  break;
-                case 'address':
-                  setAddressProof(null);
-                  break;
-              }
-            }}
-          >
-            <Ionicons name="close-circle" size={24} color={COLORS.white} />
-          </TouchableOpacity>
+          {!isPicking && (
+            <TouchableOpacity
+              style={styles.removeImageButton}
+              onPress={() => {
+                switch (imageType) {
+                  case 'aadhar':
+                    setAadharImage(null);
+                    break;
+                  case 'customer':
+                    setCustomerPhoto(null);
+                    break;
+                  case 'address':
+                    setAddressProof(null);
+                    break;
+                }
+              }}
+            >
+              <Ionicons name="close-circle" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          )}
+          {isPicking ? <ImageProcessingLoader message={t('common.processingImage')} /> : null}
         </View>
       ) : (
-        <View style={styles.imageOptions}>
-          <TouchableOpacity
-            style={styles.imageOptionButton}
-            onPress={() => {
-              dismissKeyboard();
-              handleImagePick(imageType, 'camera');
-            }}
-          >
-            <Ionicons name="camera" size={30} color={COLORS.primary} />
-            <Text style={styles.imageOptionText}>{t('customer.takePhoto')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.imageOptionButton}
-            onPress={() => {
-              dismissKeyboard();
-              handleImagePick(imageType, 'gallery');
-            }}
-          >
-            <Ionicons name="image-outline" size={30} color={COLORS.primary} />
-            <Text style={styles.imageOptionText}>{t('customer.chooseFromLibrary')}</Text>
-          </TouchableOpacity>
+        <View style={styles.imageOptionsWrap}>
+          {!isPicking ? (
+            <View style={styles.imageOptions}>
+              <TouchableOpacity
+                style={styles.imageOptionButton}
+                onPress={() => {
+                  dismissKeyboard();
+                  handleImagePick(imageType, 'camera');
+                }}
+              >
+                <Ionicons name="camera" size={30} color={COLORS.primary} />
+                <Text style={styles.imageOptionText}>{t('customer.takePhoto')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.imageOptionButton}
+                onPress={() => {
+                  dismissKeyboard();
+                  handleImagePick(imageType, 'gallery');
+                }}
+              >
+                <Ionicons name="image-outline" size={30} color={COLORS.primary} />
+                <Text style={styles.imageOptionText}>{t('customer.chooseFromLibrary')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          {isPicking ? <ImageProcessingLoader message={t('common.processingImage')} /> : null}
         </View>
       )}
       {errors[errorKey] && (
@@ -671,6 +773,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       )}
     </View>
   );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -711,6 +814,8 @@ const CustomerWithLoanScreen = ({ navigation }) => {
             setCustomerPhoto(null);
             setAddressProof(null);
             setAadharImage(null);
+            setRegisterDay('');
+            setLoanTypeId('');
           }}
         >
           <View style={[styles.radioCircle, customerType === 'Existing' && styles.radioCircleActive]}>
@@ -733,6 +838,42 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         >
           {customerType === 'New' && (
             <>
+              <FormPicker
+                label={t('customer.loanType')}
+                value={loanTypeId}
+                onValueChange={setLoanTypeId}
+                items={loanTypeOptions}
+                placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : (language === 'en' ? 'Select loan type' : 'கடன் வகையை தேர்ந்தெடுக்கவும்')}
+                error={errors.loanTypeId}
+                // editable={!isLoanTypeDisabled}
+                required
+              />
+
+              <Input
+                label={`${t('customer.loanPeriod')} (${periodUnit})`}
+                value={loanPeriod}
+                onChangeText={setLoanPeriod}
+                placeholder={language === 'en' ? 'Enter period' : 'காலத்தை உள்ளிடவும்'}
+                placeholderTextColor={COLORS.text.tertiary}
+                keyboardType="numeric"
+                error={errors.loanPeriod}
+                disabled={isLoanPeriodDisabled}
+                required
+              />
+
+              {isWeeklyLoanType && (
+                <FormPicker
+                  label={t('customer.registerDay')}
+                  value={registerDay}
+                  onValueChange={setRegisterDay}
+                  items={loanDayOptions}
+                  placeholder={t('customer.selectRegisterDay')}
+                  error={errors.registerDay}
+                  editable={false}
+                  required
+                />
+              )}
+
               <Input
                 label={t('customer.customerPhone')}
                 value={customerPhone}
@@ -805,30 +946,6 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 required
               />
 
-              <FormPicker
-                label={t('customer.loanType')}
-                value={loanTypeId}
-                onValueChange={setLoanTypeId}
-                items={loanTypeOptions}
-                placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : (language === 'en' ? 'Select loan type' : 'கடன் வகையை தேர்ந்தெடுக்கவும்')}
-                error={errors.loanTypeId}
-                // editable={!isLoanTypeDisabled}
-                required
-              />
-
-              <Input
-                label={`${t('customer.loanPeriod')} (${periodUnit})`}
-                value={loanPeriod}
-                onChangeText={setLoanPeriod}
-                placeholder={language === 'en' ? 'Enter period' : 'காலத்தை உள்ளிடவும்'}
-                placeholderTextColor={COLORS.text.tertiary}
-                keyboardType="numeric"
-                error={errors.loanPeriod}
-                disabled={isLoanPeriodDisabled}
-                required
-              />
-
-
               {renderImageSection(t('customer.aadharImage'), aadharImage, 'aadhar', 'aadharImage', true)}
               {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer', 'customerPhoto', true)}
               {renderImageSection(t('customer.addressProof'), addressProof, 'address', 'addressProof', true)}
@@ -837,6 +954,43 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
           {customerType === 'Existing' && (
             <View style={styles.existingSection}>
+              <View style={styles.existingPickerGrid}>
+                <View style={styles.existingPickerGridItem}>
+
+
+                  <FormPicker
+                    label={t('customer.loanType')}
+                    value={loanTypeId}
+                    onValueChange={(value) => {
+                      setLoanTypeId(value);
+                      if (errors.loanTypeId) {
+                        setErrors((prev) => ({ ...prev, loanTypeId: null }));
+                      }
+                    }}
+                    items={existingLoanTypeOptions}
+                    placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') : t('customer.selectLoanType')}
+                    error={errors.loanTypeId}
+                    style={styles.existingPickerCompact}
+                    required
+                  />
+                </View>
+                {isWeeklyLoanType && (
+                  <View style={styles.existingPickerGridItem}>
+                    <FormPicker
+                      label={t('customer.registerDay')}
+                      value={registerDay}
+                      onValueChange={setRegisterDay}
+                      items={loanDayOptions}
+                      placeholder={t('customer.selectRegisterDay')}
+                      error={errors.registerDay}
+                      editable={false}
+                      style={styles.existingPickerCompact}
+                      required
+                    />
+                  </View>
+                )}
+              </View>
+
               <Text style={styles.existingSearchLabel}>
                 {t('customer.searchCustomer')}
                 <Text style={styles.labelRequiredMark}> *</Text>
@@ -855,6 +1009,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 {searchLoading && <ActivityIndicator size="small" color={COLORS.primary} style={styles.searchLoader} />}
               </View>
               {searchError && <Text style={styles.searchErrorText}>{searchError}</Text>}
+
               {searchResult && !searchLoading && (
                 <TouchableOpacity
                   style={styles.existingResultCard}
@@ -1013,6 +1168,19 @@ const styles = StyleSheet.create({
   existingSection: {
     padding: SIZES.padding,
   },
+  existingPickerGrid: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SIZES.base,
+    marginBottom: SIZES.padding,
+  },
+  existingPickerGridItem: {
+    flex: 1,
+    minWidth: 0,
+  },
+  existingPickerCompact: {
+    marginBottom: 0,
+  },
   existingSearchLabel: {
     fontSize: SIZES.body2, // Increased font size for label
     fontWeight: '600', // Added font weight for emphasis
@@ -1158,6 +1326,11 @@ const styles = StyleSheet.create({
     right: 5,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 12,
+  },
+  imageOptionsWrap: {
+    position: 'relative',
+    minHeight: 120,
+    justifyContent: 'center',
   },
   imageOptions: {
     flexDirection: 'row',

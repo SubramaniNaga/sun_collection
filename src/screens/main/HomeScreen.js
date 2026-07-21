@@ -35,7 +35,7 @@ import NIPLoan from '../../models/NIPLoan';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
-import { getCurrentDateString } from '../../utils/dateFormatter';
+import { getCurrentDateString, getServerDateTimeISO } from '../../utils/dateFormatter';
 import ErrorHandler from '../../utils/errorHandler';
 import { compressImageAssetIfNeeded } from '../../utils/imageCompression';
 import { syncLocationTracking } from '../../utils/locationTracker';
@@ -174,6 +174,12 @@ const HomeScreen = ({ navigation }) => {
         if (Object.keys(raw).length > 0) {
           setDashboardData(Dashboard.fromApiResponse(raw));
           dashboardAlertShownRef.current = false;
+
+          // Store loan_period from dashboard so CustomerWithLoanScreen can use it
+          const dashLoanPeriod = raw.loan_period ?? res?.data?.loan_period ?? res?.loan_period;
+          if (dashLoanPeriod != null && dashLoanPeriod !== '') {
+            AsyncStorage.setItem('loanPeriod', String(dashLoanPeriod)).catch(() => {});
+          }
         } else {
           setDashboardData(null);
           showDashboardLoadErrorRef.current?.(dashboardFetchError);
@@ -235,7 +241,7 @@ const HomeScreen = ({ navigation }) => {
       const formData = new FormData();
       formData.append('user_id', String(payload.userId ?? ''));
       formData.append('status', payload.status);
-      formData.append('time', new Date().toISOString());
+      formData.append('time', getServerDateTimeISO());
       formData.append('latitude', String(payload.latitude));
       formData.append('longitude', String(payload.longitude));
       formData.append('address', payload.address || '');

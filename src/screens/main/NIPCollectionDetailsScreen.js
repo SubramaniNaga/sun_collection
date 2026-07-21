@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,15 @@ import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
 
+/** Android edge-to-edge often reports 0 bottom inset — reserve space for 3-button nav bar */
+const ANDROID_NAV_BAR_HEIGHT = 56;
+
+const getBottomInset = (insets) => (
+  Platform.OS === 'android'
+    ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
+    : Math.max(insets.bottom, SIZES.base)
+);
+
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
@@ -39,6 +48,8 @@ const getImageUrl = (imagePath) => {
 const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const bottomInset = getBottomInset(insets);
+  const submitBarReservedHeight = 52 + SIZES.padding + bottomInset + SIZES.base;
   const { loan } = route.params || {};
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -117,6 +128,24 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       payment_type: type
     }));
   };
+
+  const isFormComplete = useMemo(() => {
+    const amount = parseFloat(formData.amount_paid);
+    return (
+      Boolean(formData.nip_date) &&
+      !Number.isNaN(amount) &&
+      amount > 0 &&
+      Boolean(formData.payment_type) &&
+      formData.notes.trim().length > 0
+    );
+  }, [formData]);
+
+  const renderRequiredLabel = (label) => (
+    <Text style={styles.formLabel}>
+      {label}
+      <Text style={styles.requiredMark}> *</Text>
+    </Text>
+  );
 
   const validateForm = () => {
     if (!formData.amount_paid || parseFloat(formData.amount_paid) <= 0) {
@@ -253,6 +282,13 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       </View>
 
       <View style={styles.infoRow}>
+        <Text style={styles.infoLabel}>{t('nip.nipPaidTotal')}</Text>
+        <Text style={styles.infoValueAmount}>
+          {formatCurrency(loan?.nipPaidTotal ?? loan?.nip_paid_total ?? 0)}
+        </Text>
+      </View>
+
+      <View style={styles.infoRow}>
         <Text style={styles.infoLabel}>{t('loan.loanPeriod')}</Text>
         <Text style={styles.infoValue}>
           {loan?.loanPeriod ?? loan?.loan_period ?? '—'} {loan?.loanTypeName ?? loan?.loan_type_name ?? t('loan.months')}
@@ -277,7 +313,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       {/* NIP Date */}
       <View style={styles.formRow}>
-        <Text style={styles.formLabel}>{t('nip.nipDate')}</Text>
+        {renderRequiredLabel(t('nip.nipDate'))}
         <View style={styles.dateInput}>
           <Ionicons name="calendar-outline" size={16} color={COLORS.text.tertiary} />
           <Text style={styles.dateText}>{formatDate(formData.nip_date)}</Text>
@@ -286,7 +322,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       {/* Amount Paid */}
       <View style={styles.formRow}>
-        <Text style={styles.formLabel}>{t('nip.amountPaid')}</Text>
+        {renderRequiredLabel(t('nip.amountPaid'))}
         <TextInput
           style={styles.textInput}
           placeholder={t('nip.enterAmountPaid')}
@@ -308,7 +344,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       {/* Payment Type */}
       <View style={styles.formRow}>
-        <Text style={styles.formLabel}>{t('nip.paymentType')}</Text>
+        {renderRequiredLabel(t('nip.paymentType'))}
         <View style={styles.paymentTypesContainer}>
           {paymentTypes.map((type) => (
             <TouchableOpacity
@@ -339,7 +375,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       {/* Notes */}
       <View style={styles.formRow}>
-        <Text style={styles.formLabel}>{t('nip.notes')}</Text>
+        {renderRequiredLabel(t('nip.notes'))}
         <TextInput
           style={[styles.textInput, styles.notesInput]}
           placeholder={t('nip.enterNotes')}
@@ -390,7 +426,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <View style={styles.container}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
       <Header
@@ -405,7 +441,12 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isFormComplete
+              ? { paddingBottom: submitBarReservedHeight }
+              : styles.scrollContentNoSubmit,
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -415,23 +456,24 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Fixed button bar outside KeyboardAvoidingView so it never moves */}
-      <View style={[styles.fixedBottomContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
-        <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
-              <Text style={styles.submitButtonText}>{t('nip.submitCollection')}</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
+      {isFormComplete ? (
+        <View style={[styles.fixedBottomContainer, { paddingBottom: bottomInset }]}>
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
+                <Text style={styles.submitButtonText}>{t('nip.submitCollection')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <Modal
         visible={photoModalVisible}
@@ -462,7 +504,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -475,7 +517,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SIZES.padding,
-    paddingBottom: 120,
+  },
+  scrollContentNoSubmit: {
+    paddingBottom: SIZES.padding,
   },
   container: {
     flex: 1,
@@ -614,6 +658,10 @@ const styles = StyleSheet.create({
     color: COLORS.black,
     marginBottom: 6,
   },
+  requiredMark: {
+    color: COLORS.error,
+    fontWeight: '600',
+  },
   textInput: {
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -704,11 +752,17 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
   },
   fixedBottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: COLORS.white,
     paddingHorizontal: SIZES.padding,
     paddingTop: SIZES.padding,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    zIndex: 10,
+    elevation: 12,
   },
   submitButton: {
     flexDirection: 'row',

@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 import { ATTENDANCE, isAttendanceCheckedIn } from '../config/appToggles';
+import { getServerDateTimeISO } from './dateFormatter';
 import { ensureLocationTrackingNotificationSetup } from './locationTrackingNotifications';
 
 export const LOCATION_TASK_NAME = 'ATTENDANCE_LOCATION_TASK';
@@ -177,7 +178,7 @@ async function sendLocationToApi(coords) {
       latitude: coords.latitude,
       longitude: coords.longitude,
       location,
-      time: new Date().toISOString(),
+      time: getServerDateTimeISO(),
     });
 
     await markLocationSent(now);
@@ -273,7 +274,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,
       location,
-      time: new Date().toISOString(),
+      time: getServerDateTimeISO(),
     });
     await markLocationSent(now);
   } catch (e) {

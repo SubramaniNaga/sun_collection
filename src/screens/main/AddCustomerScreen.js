@@ -10,8 +10,10 @@ import apiClient from '../../api/apiClient';
 import Button from '../../components/common/Button';
 import Header from '../../components/common/Header';
 import ImagePreviewModal from '../../components/common/ImagePreviewModal';
+import ImageProcessingLoader from '../../components/common/ImageProcessingLoader';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const AddCustomerScreen = ({ navigation }) => {
@@ -26,6 +28,7 @@ const AddCustomerScreen = ({ navigation }) => {
   const [customerPhoto, setCustomerPhoto] = useState(null);
   const [aadharImage, setAadharImage] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [pickingImage, setPickingImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -65,6 +68,7 @@ const AddCustomerScreen = ({ navigation }) => {
 
   // Handle photo capture
   const handlePhotoCapture = async () => {
+    setPickingImage('customer');
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
@@ -75,11 +79,14 @@ const AddCustomerScreen = ({ navigation }) => {
       if (asset) setCustomerPhoto(asset);
     } catch (error) {
       showError('Error', error?.message || 'Failed to capture photo. Please try again.');
+    } finally {
+      setPickingImage(null);
     }
   };
 
   // Handle Aadhar image upload
   const handleAadharUpload = async () => {
+    setPickingImage('aadhar');
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -90,6 +97,8 @@ const AddCustomerScreen = ({ navigation }) => {
       if (asset) setAadharImage(asset);
     } catch (error) {
       showError('Error', error?.message || 'Failed to select Aadhar image. Please try again.');
+    } finally {
+      setPickingImage(null);
     }
   };
 
@@ -228,22 +237,30 @@ const AddCustomerScreen = ({ navigation }) => {
             <View style={styles.photoContainer}>
               {customerPhoto ? (
                 <View style={styles.photoPreview}>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewImage({ uri: customerPhoto.uri, title: 'Customer Photo' })}>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => pickingImage !== 'customer' && setPreviewImage({ uri: customerPhoto.uri, title: 'Customer Photo' })} disabled={pickingImage === 'customer'}>
                     <Image source={{ uri: customerPhoto.uri }} style={styles.photoImage} />
                     <View style={styles.previewHint}>
                       <Ionicons name="expand-outline" size={12} color={COLORS.white} />
                       <Text style={styles.previewHintText}>Preview</Text>
                     </View>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.removePhotoButton} onPress={() => setCustomerPhoto(null)}>
-                    <Ionicons name="close-circle" size={24} color={COLORS.white} />
-                  </TouchableOpacity>
+                  {pickingImage !== 'customer' && (
+                    <TouchableOpacity style={styles.removePhotoButton} onPress={() => setCustomerPhoto(null)}>
+                      <Ionicons name="close-circle" size={24} color={COLORS.white} />
+                    </TouchableOpacity>
+                  )}
+                  {pickingImage === 'customer' ? <ImageProcessingLoader /> : null}
                 </View>
               ) : (
-                <TouchableOpacity style={styles.photoPlaceholder} onPress={handlePhotoCapture}>
-                  <Ionicons name="camera" size={40} color={COLORS.text.tertiary} />
-                  <Text style={styles.photoPlaceholderText}>Take Photo</Text>
-                </TouchableOpacity>
+                <View style={styles.photoPlaceholderWrap}>
+                  {pickingImage !== 'customer' ? (
+                    <TouchableOpacity style={styles.photoPlaceholder} onPress={handlePhotoCapture}>
+                      <Ionicons name="camera" size={40} color={COLORS.text.tertiary} />
+                      <Text style={styles.photoPlaceholderText}>Take Photo</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {pickingImage === 'customer' ? <ImageProcessingLoader /> : null}
+                </View>
               )}
             </View>
             {errors.customerPhoto && (
@@ -256,22 +273,30 @@ const AddCustomerScreen = ({ navigation }) => {
             <View style={styles.photoContainer}>
               {aadharImage ? (
                 <View style={styles.photoPreview}>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewImage({ uri: aadharImage.uri, title: 'Aadhar Card Image' })}>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => pickingImage !== 'aadhar' && setPreviewImage({ uri: aadharImage.uri, title: 'Aadhar Card Image' })} disabled={pickingImage === 'aadhar'}>
                     <Image source={{ uri: aadharImage.uri }} style={styles.aadharImage} />
                     <View style={styles.previewHint}>
                       <Ionicons name="expand-outline" size={12} color={COLORS.white} />
                       <Text style={styles.previewHintText}>Preview</Text>
                     </View>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.removePhotoButton} onPress={() => setAadharImage(null)}>
-                    <Ionicons name="close-circle" size={24} color={COLORS.white} />
-                  </TouchableOpacity>
+                  {pickingImage !== 'aadhar' && (
+                    <TouchableOpacity style={styles.removePhotoButton} onPress={() => setAadharImage(null)}>
+                      <Ionicons name="close-circle" size={24} color={COLORS.white} />
+                    </TouchableOpacity>
+                  )}
+                  {pickingImage === 'aadhar' ? <ImageProcessingLoader /> : null}
                 </View>
               ) : (
-                <TouchableOpacity style={styles.photoPlaceholder} onPress={handleAadharUpload}>
-                  <Ionicons name="image-outline" size={40} color={COLORS.text.tertiary} />
-                  <Text style={styles.photoPlaceholderText}>Upload Aadhar</Text>
-                </TouchableOpacity>
+                <View style={styles.photoPlaceholderWrap}>
+                  {pickingImage !== 'aadhar' ? (
+                    <TouchableOpacity style={styles.photoPlaceholder} onPress={handleAadharUpload}>
+                      <Ionicons name="image-outline" size={40} color={COLORS.text.tertiary} />
+                      <Text style={styles.photoPlaceholderText}>Upload Aadhar</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {pickingImage === 'aadhar' ? <ImageProcessingLoader /> : null}
+                </View>
               )}
             </View>
             {errors.aadharImage && (
@@ -366,6 +391,11 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 10,
     marginLeft: 2,
+  },
+  photoPlaceholderWrap: {
+    position: 'relative',
+    width: 150,
+    height: 150,
   },
   photoPlaceholder: {
     width: 150,

@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import ImagePreviewModal from '../../components/common/ImagePreviewModal';
+import ImageProcessingLoader from '../../components/common/ImageProcessingLoader';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
@@ -134,6 +135,7 @@ const LoanScreen = ({ navigation, route }) => {
   );
   const [paymentType, setPaymentType] = useState('cash');
   const [loanGivenPhoto, setLoanGivenPhoto] = useState(null);
+  const [pickingLoanGivenPhoto, setPickingLoanGivenPhoto] = useState(false);
 
   // Renewal states
   const [initialLoanAmount, setInitialLoanAmount] = useState(customerData.initialAmount || '');
@@ -236,6 +238,7 @@ const LoanScreen = ({ navigation, route }) => {
 
   // Loan given photo (approved flow)
   const handleLoanGivenPhotoCapture = async () => {
+    setPickingLoanGivenPhoto(true);
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
@@ -246,10 +249,13 @@ const LoanScreen = ({ navigation, route }) => {
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.capture') }));
+    } finally {
+      setPickingLoanGivenPhoto(false);
     }
   };
 
   const handleLoanGivenPhotoUpload = async () => {
+    setPickingLoanGivenPhoto(true);
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -260,6 +266,8 @@ const LoanScreen = ({ navigation, route }) => {
       if (asset) setLoanGivenPhoto(asset);
     } catch (error) {
       showError(t('common.error'), error?.message || t('customer.failedToPickImage', { source: t('common.pick') }));
+    } finally {
+      setPickingLoanGivenPhoto(false);
     }
   };
 
@@ -788,9 +796,11 @@ const LoanScreen = ({ navigation, route }) => {
                         <TouchableOpacity
                           activeOpacity={0.85}
                           onPress={() => {
+                            if (pickingLoanGivenPhoto) return;
                             setSelectedImage({ uri: loanGivenPhoto.uri || loanGivenPhoto.localUri, title: t('loan.loanGivenPhoto') });
                             setImageViewerVisible(true);
                           }}
+                          disabled={pickingLoanGivenPhoto}
                         >
                           <Image source={{ uri: loanGivenPhoto.uri || loanGivenPhoto.localUri }} style={styles.loanGivenImage} resizeMode="cover" />
                           <View style={styles.loanGivenPreviewHint}>
@@ -798,20 +808,28 @@ const LoanScreen = ({ navigation, route }) => {
                             <Text style={styles.loanGivenPreviewHintText}>Preview</Text>
                           </View>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.loanGivenRemoveButton} onPress={() => setLoanGivenPhoto(null)} activeOpacity={0.7}>
-                          <Ionicons name="close-circle" size={24} color={COLORS.white} />
-                        </TouchableOpacity>
+                        {!pickingLoanGivenPhoto && (
+                          <TouchableOpacity style={styles.loanGivenRemoveButton} onPress={() => setLoanGivenPhoto(null)} activeOpacity={0.7}>
+                            <Ionicons name="close-circle" size={24} color={COLORS.white} />
+                          </TouchableOpacity>
+                        )}
+                        {pickingLoanGivenPhoto ? <ImageProcessingLoader message={t('common.processingImage')} /> : null}
                       </View>
                     ) : (
-                      <View style={styles.loanGivenImageOptions}>
-                        <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoCapture} activeOpacity={0.7}>
-                          <Ionicons name="camera" size={30} color={COLORS.primary} />
-                          <Text style={styles.loanGivenImageOptionText}>{t('customer.takePhoto') || 'Take Photo'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoUpload} activeOpacity={0.7}>
-                          <Ionicons name="image-outline" size={30} color={COLORS.primary} />
-                          <Text style={styles.loanGivenImageOptionText}>{t('customer.chooseFromLibrary') || 'Choose from Library'}</Text>
-                        </TouchableOpacity>
+                      <View style={styles.loanGivenImageOptionsWrap}>
+                        {!pickingLoanGivenPhoto ? (
+                          <View style={styles.loanGivenImageOptions}>
+                            <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoCapture} activeOpacity={0.7}>
+                              <Ionicons name="camera" size={30} color={COLORS.primary} />
+                              <Text style={styles.loanGivenImageOptionText}>{t('customer.takePhoto') || 'Take Photo'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoUpload} activeOpacity={0.7}>
+                              <Ionicons name="image-outline" size={30} color={COLORS.primary} />
+                              <Text style={styles.loanGivenImageOptionText}>{t('customer.chooseFromLibrary') || 'Choose from Library'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                        {pickingLoanGivenPhoto ? <ImageProcessingLoader message={t('common.processingImage')} /> : null}
                       </View>
                     )}
                   </View>
@@ -1379,6 +1397,11 @@ const styles = StyleSheet.create({
     right: 5,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 12,
+  },
+  loanGivenImageOptionsWrap: {
+    position: 'relative',
+    minHeight: 120,
+    justifyContent: 'center',
   },
   loanGivenImageOptions: {
     flexDirection: 'row',

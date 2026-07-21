@@ -32,16 +32,16 @@ Backend team: to allow this app to call the API from the browser (web build), pl
 `;
 
 
- 
-// export const API_BASE_URL = __DEV__
-//   ? 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1'
-//   : 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1';
-
-  // VITE_API_BASE_URL=
 
 export const API_BASE_URL = __DEV__
-  ? 'http://65.0.100.65:6005/api/v1'
-  : 'http://65.0.100.65:6005/api/v1';
+  ? 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1'
+  : 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1';
+
+// VITE_API_BASE_URL=
+
+// export const API_BASE_URL = __DEV__
+//   ? 'http://65.0.100.65:6005/api/v1'
+//   : 'http://65.0.100.65:6005/api/v1';
 
 /** Host root for media paths (no /api/v1 suffix). */
 export const API_HOST_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -138,7 +138,7 @@ apiClient.interceptors.request.use(
       const token = await AsyncStorage.getItem('authToken');
       const publicEndpoints = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'];
       const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
-      
+
       if (token && !isPublicEndpoint) {
         config.headers.Authorization = `Bearer ${token}`;
       } else if (!token && !isPublicEndpoint) {
@@ -245,18 +245,18 @@ apiClient.interceptors.response.use(
     // Handle authentication errors globally (401 Unauthorized, 403 Forbidden)
     if (error.response?.status === 401 || error.response?.status === 403) {
       console.log(`🔐 Authentication error (${error.response?.status}) detected. Initiating logout...`);
-      
+
       // Handle unauthorized access - clear session and trigger logout
       await handleUnauthorized(error);
     }
-    
+
     // Apply centralized error handling
     const handledError = ErrorHandler.handleGlobalError(error, {
       url: error.config?.url,
       method: error.config?.method?.toUpperCase(),
       statusCode: error.response?.status,
     });
-    
+
     return Promise.reject(handledError);
   }
 );

@@ -20,24 +20,32 @@ const CustomDrawerContent = (props) => {
   const { navigation, state } = props;
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+  const navigateAndCloseDrawer = (action) => {
+    navigation.closeDrawer();
+    action();
+  };
+
   const menuItems = [
     {
       id: 'home',
       label: t('home.title'),
       icon: 'home-outline',
-      onPress: () => navigation.navigate('Home'),
+      onPress: () => navigateAndCloseDrawer(() => navigation.navigate('Home', { screen: 'HomeScreen' })),
     },
     {
       id: 'profile',
       label: t('profile.title'),
       icon: 'person-outline',
-      onPress: () => navigation.navigate('Profile'),
+      onPress: () => navigateAndCloseDrawer(() => navigation.navigate('Profile')),
     },
     {
       id: 'companyVaravu',
       label: t('companyVaravu.title'),
       icon: 'business-outline',
-      onPress: () => navigation.navigate('Home', { screen: 'CompanyVaravuAdd' }),
+      onPress: () =>
+        navigateAndCloseDrawer(() =>
+          navigation.navigate('Home', { screen: 'CompanyVaravuAdd' })
+        ),
     },
   ];
 

@@ -16,6 +16,7 @@ class NIPLoan {
     this.loanAmount = data.loan_amount || '0';
     this.approvedAmount = data.approved_amount || null;
     this.balanceAmount = data.balance_amount || null;
+    this.nipPaidTotal = data.nip_paid_total ?? null;
     this.intrestAmount = data.intrest_amount || null;
     this.processingFees = data.processing_fees || null;
     this.paymentType = data.payment_type || null;

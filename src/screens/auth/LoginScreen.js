@@ -303,7 +303,6 @@ const LoginScreen = ({ navigation }) => {
         await AsyncStorage.setItem('userRoleId', data.roleid?.toString() || '');
         await AsyncStorage.setItem('userDevice', data.device || '');
         await AsyncStorage.setItem('loanType', data.loan_type?.toString() || '');
-        await AsyncStorage.setItem('loanPeriod', data.loan_period?.toString() || '');
         
         // Store device ID for dashboard API calls
         await AsyncStorage.setItem('deviceId', deviceId);

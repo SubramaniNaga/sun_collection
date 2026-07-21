@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDeviceId } from '../../utils/deviceId';
 import { ATTENDANCE, applyAttendanceFromResponse, isAttendanceCheckedIn } from '../../config/appToggles';
+import { getDeviceId } from '../../utils/deviceId';
+import { getServerDateTimeISO } from '../../utils/dateFormatter';
 import { notifyLocationSendResult } from '../../utils/locationTrackingNotifications';
 import { clearSession } from '../../utils/sessionManager';
 import apiClient from '../apiClient';
@@ -156,9 +157,10 @@ export const apiServices = {
           await AsyncStorage.setItem('userRoleId', data.roleid?.toString() || '');
           await AsyncStorage.setItem('userDevice', data.device || '');
 
-          // Store loan_type and loan_period for CustomerWithLoanScreen
+          // Store loan_type for CustomerWithLoanScreen
+          // loan_period is intentionally NOT stored here — it is read from the
+          // dashboard response (/frontcash/dashboard/today) and stored from HomeScreen.
           await AsyncStorage.setItem('loanType', data.loan_type?.toString() || '');
-          await AsyncStorage.setItem('loanPeriod', data.loan_period?.toString() || '');
 
           console.log('🔑 AUTH LOGIN - All auth data stored successfully');
         }
@@ -372,13 +374,17 @@ export const apiServices = {
       }
     },
 
-    searchCustomer: async (search, lineId) => {
+    searchCustomer: async (search, lineId, filters = {}) => {
       try {
         if (!lineId) {
           const stored = await AsyncStorage.getItem('lineId');
           lineId = stored;
         }
         const params = { search: search.trim(), line_id: lineId };
+        const loanType = filters.loan_type != null ? String(filters.loan_type).trim().toLowerCase() : '';
+        const registerDay = filters.register_day != null ? String(filters.register_day).trim() : '';
+        if (loanType) params.loan_type = loanType;
+        if (registerDay) params.register_day = registerDay;
         console.log('👤 API: searchCustomer - GET', ENDPOINTS.CUSTOMER.SEARCH, '| params:', params);
         const response = await apiClient.get(ENDPOINTS.CUSTOMER.SEARCH, { params });
         return response.data;
@@ -441,9 +447,11 @@ export const apiServices = {
           customer_id = '',
           approval_status = '',
           loan_status = '',
+          register_day = '',
           page = 1,
           limit = 10,
         } = params;
+        const registerDay = register_day != null ? String(register_day).trim() : '';
         const requestParams = {
           branch_id: branchId || 1,
           line_id: lineIdsString,
@@ -452,6 +460,7 @@ export const apiServices = {
           loan_status: loan_status || '',
           page,
           limit,
+          ...(registerDay ? { register_day: registerDay } : {}),
         };
         console.log('💰 API: getLoanList - GET', ENDPOINTS.LOAN.LIST, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.LOAN.LIST, { params: requestParams });
@@ -1311,7 +1320,7 @@ export const apiServices = {
           latitude,
           longitude,
           location: location || '',
-          time: time || new Date().toISOString(),
+          time: time || getServerDateTimeISO(),
         };
         if (__DEV__) {
           console.log(

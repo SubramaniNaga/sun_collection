@@ -32,12 +32,21 @@ const FormPicker = ({
   onOpen,
   loading = false,
   loadingText = 'Loading...',
+  compact = false,
+  fitSheetToContent = false,
+  compactUseFullLabel = false,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const selectedItem = items.find((item) => item.value === value);
+  const selectedLabel = selectedItem
+    ? (compact && selectedItem.shortLabel && !compactUseFullLabel
+        ? selectedItem.shortLabel
+        : selectedItem.label)
+    : null;
   const resolvedModalTitle = modalTitle || (label ? `Select ${label}` : 'Select');
+  const useStaticSheetList = fitSheetToContent && !loading && items.length <= 15;
 
   const filteredItems = useMemo(() => {
     if (!searchable || !searchQuery.trim()) {
@@ -102,9 +111,14 @@ const FormPicker = ({
       onRequestClose={closeModal}
       statusBarTranslucent
     >
-      <SafeAreaView style={styles.sheetOverlay}>
+      <SafeAreaView style={styles.sheetOverlay} edges={['bottom']}>
         <View style={styles.sheetContainer}>
-          <View style={styles.sheetPanel}>
+          <View
+            style={[
+              styles.sheetPanel,
+              fitSheetToContent ? styles.sheetPanelFitContent : styles.sheetPanelScrollable,
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{resolvedModalTitle}</Text>
               <Pressable onPress={closeModal} hitSlop={8}>
@@ -112,9 +126,20 @@ const FormPicker = ({
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {loading ? renderLoadingState() : items.map((item) => renderItemRow(item))}
-            </ScrollView>
+            {useStaticSheetList ? (
+              <View style={styles.sheetOptionsList}>
+                {items.map((item) => renderItemRow(item))}
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.sheetScroll}
+                contentContainerStyle={styles.sheetScrollContent}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
+                {loading ? renderLoadingState() : items.map((item) => renderItemRow(item))}
+              </ScrollView>
+            )}
           </View>
         </View>
       </SafeAreaView>
@@ -203,6 +228,7 @@ const FormPicker = ({
         onPress={openModal}
         style={[
           styles.trigger,
+          compact && styles.triggerCompact,
           error && styles.triggerError,
           !editable && styles.triggerDisabled,
         ]}
@@ -210,14 +236,22 @@ const FormPicker = ({
         <Text
           style={[
             styles.triggerText,
+            compact && styles.triggerTextCompact,
+            compact && compactUseFullLabel && styles.triggerTextCompactFull,
             !selectedItem && styles.triggerPlaceholder,
           ]}
           numberOfLines={1}
+          adjustsFontSizeToFit={compactUseFullLabel}
+          minimumFontScale={0.75}
         >
-          {selectedItem ? selectedItem.label : placeholder}
+          {selectedItem ? selectedLabel : placeholder}
         </Text>
         {editable ? (
-          <Ionicons name="chevron-down" size={20} color={COLORS.text.tertiary} />
+          <Ionicons
+            name="chevron-down"
+            size={compact ? 16 : 20}
+            color={COLORS.text.tertiary}
+          />
         ) : null}
       </Pressable>
 
@@ -252,6 +286,12 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.padding * 0.8,
     backgroundColor: COLORS.white,
   },
+  triggerCompact: {
+    height: 45,
+    paddingHorizontal: SIZES.base,
+    paddingVertical: 0,
+    backgroundColor: '#f8f9fa',
+  },
   triggerError: {
     borderColor: 'red',
   },
@@ -262,6 +302,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: SIZES.body2,
     color: COLORS.black,
+  },
+  triggerTextCompact: {
+    fontSize: SIZES.body4,
+    fontWeight: '600',
+  },
+  triggerTextCompactFull: {
+    fontSize: SIZES.body5,
+    fontWeight: '600',
   },
   triggerPlaceholder: {
     color: COLORS.text.tertiary,
@@ -283,7 +331,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: SIZES.radius * 2,
     borderTopRightRadius: SIZES.radius * 2,
+  },
+  sheetPanelScrollable: {
     maxHeight: '50%',
+  },
+  sheetPanelFitContent: {
+    maxHeight: '90%',
+  },
+  sheetScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  sheetScrollContent: {
+    paddingBottom: SIZES.padding,
+  },
+  sheetOptionsList: {
+    paddingBottom: SIZES.padding,
   },
   modalHeader: {
     flexDirection: 'row',

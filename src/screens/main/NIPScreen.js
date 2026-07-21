@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 
+import { useFocusEffect } from '@react-navigation/native';
+
 import { StatusBar } from 'expo-status-bar';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -146,12 +148,42 @@ const NIPScreen = ({ navigation }) => {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  const isFirstFocusRef = useRef(true);
+
+  const [nipTabCounts, setNipTabCounts] = useState({ nip1: 0, nip2: 0 });
+
+  const countNipRowsForTab = useCallback((list, nipTypeForApi) => {
+    if (!Array.isArray(list)) return 0;
+    return list.filter(
+      (row) => String(row.nip_type ?? '').toLowerCase() === nipTypeForApi,
+    ).length;
+  }, []);
+
+  const fetchNipTabCounts = useCallback(async (search = debouncedSearchQuery) => {
+    try {
+      const trimmedSearch = search.trim();
+      const response = await apiServices.loan.getNIPList({
+        search: trimmedSearch,
+        page: 1,
+        limit: 500,
+      });
+
+      const list = Array.isArray(response?.data) ? response.data : [];
+      setNipTabCounts({
+        nip1: countNipRowsForTab(list, 'nip1'),
+        nip2: countNipRowsForTab(list, 'nip2'),
+      });
+    } catch {
+      // Keep existing counts if the count request fails.
+    }
+  }, [debouncedSearchQuery, countNipRowsForTab]);
+
   useEffect(() => {
     if (!headerSearchOpen) return undefined;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       headerSearchInputRef.current?.focus();
     }, 100);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [headerSearchOpen]);
 
   const closeHeaderSearch = useCallback(() => {
@@ -159,6 +191,13 @@ const NIPScreen = ({ navigation }) => {
     setSearchQuery('');
     setHeaderSearchOpen(false);
   }, []);
+
+  const handleNipTabChange = useCallback((tab) => {
+    if (tab === nipTypeTab) return;
+    setNipList([]);
+    setLoading(true);
+    setNipTypeTab(tab);
+  }, [nipTypeTab]);
 
   const fetchNIPLoans = useCallback(async (page = 1, append = false, options = {}) => {
 
@@ -249,7 +288,10 @@ const NIPScreen = ({ navigation }) => {
 
     try {
 
-      await fetchNIPLoans(1, false, { skipFullScreenLoader: true });
+      await Promise.all([
+        fetchNIPLoans(1, false, { skipFullScreenLoader: true }),
+        fetchNipTabCounts(debouncedSearchQuery),
+      ]);
 
     } finally {
 
@@ -257,17 +299,16 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-  }, [fetchNIPLoans]);
+  }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]);
 
-
-
-  useEffect(() => {
-
-    fetchNIPLoans(1, false);
-
-  }, [fetchNIPLoans]);
-
-
+  useFocusEffect(
+    useCallback(() => {
+      const skipLoader = !isFirstFocusRef.current;
+      isFirstFocusRef.current = false;
+      fetchNIPLoans(1, false, { skipFullScreenLoader: skipLoader });
+      fetchNipTabCounts(debouncedSearchQuery);
+    }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]),
+  );
 
   const loadMore = useCallback(() => {
 
@@ -591,6 +632,20 @@ const NIPScreen = ({ navigation }) => {
 
       <View style={styles.nipCardRow}>
 
+        <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+
+        <Text style={styles.nipCardLabel}>{t('nip.nipPaidTotal')}</Text>
+
+        <Text style={styles.nipCardValueAmount}>
+
+          {formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total)}
+
+        </Text>
+
+      </View>
+
+      <View style={styles.nipCardRow}>
+
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
 
         <Text style={styles.nipCardLabel}>{t('loan.loanPeriod')}</Text>
@@ -839,15 +894,20 @@ const NIPScreen = ({ navigation }) => {
 
             style={[styles.nipTab, nipTypeTab === 1 && styles.nipTabActive]}
 
-            onPress={() => setNipTypeTab(1)}
+            onPress={() => handleNipTabChange(1)}
 
             activeOpacity={0.7}
 
           >
 
-            <Text style={[styles.nipTabText, nipTypeTab === 1 && styles.nipTabTextActive]}>
+            <Text
+              style={[styles.nipTabText, nipTypeTab === 1 && styles.nipTabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
 
-              {t('nip.tabNIP1')}
+              {t('nip.tabNIP1')} ({nipTabCounts.nip1})
 
             </Text>
 
@@ -857,15 +917,20 @@ const NIPScreen = ({ navigation }) => {
 
             style={[styles.nipTab, nipTypeTab === 2 && styles.nipTabActive]}
 
-            onPress={() => setNipTypeTab(2)}
+            onPress={() => handleNipTabChange(2)}
 
             activeOpacity={0.7}
 
           >
 
-            <Text style={[styles.nipTabText, nipTypeTab === 2 && styles.nipTabTextActive]}>
+            <Text
+              style={[styles.nipTabText, nipTypeTab === 2 && styles.nipTabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
 
-              {t('nip.tabNIP2')}
+              {t('nip.tabNIP2')} ({nipTabCounts.nip2})
 
             </Text>
 

@@ -93,3 +93,51 @@ export function getCurrentDateString() {
   }
   return formatDateForAPI(new Date());
 }
+
+/**
+ * Full English weekday name from server calendar (e.g. Wednesday).
+ * @param {Date} [date] - defaults to getCalendarDate() (server_date when set)
+ * @returns {string}
+ */
+export function getRegisterDayNameFromDate(date) {
+  const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const d = date instanceof Date ? date : getCalendarDate();
+  if (Number.isNaN(d.getTime())) return 'Monday';
+  return names[d.getDay()];
+}
+
+/**
+ * Weekly loan register day from server calendar: Monday=1 … Sunday=7.
+ * @param {Date} [date] - defaults to getCalendarDate() (server_date when set)
+ * @returns {string}
+ */
+export function getRegisterDayValueFromDate(date) {
+  const d = date instanceof Date ? date : getCalendarDate();
+  if (Number.isNaN(d.getTime())) return '1';
+  const jsDay = d.getDay();
+  return jsDay === 0 ? '7' : String(jsDay);
+}
+
+/**
+ * ISO timestamp using server_date (from appversion) with current local time-of-day.
+ * Used for attendance mark/checkout so the calendar date matches the server.
+ * @returns {string}
+ */
+export function getServerDateTimeISO() {
+  const now = new Date();
+  const sd = CALENDAR_TZ.server_date;
+  if (sd && /^\d{4}-\d{2}-\d{2}$/.test(sd)) {
+    const [y, m, day] = sd.split('-').map(Number);
+    const combined = new Date(
+      y,
+      m - 1,
+      day,
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds(),
+      now.getMilliseconds(),
+    );
+    return combined.toISOString();
+  }
+  return now.toISOString();
+}

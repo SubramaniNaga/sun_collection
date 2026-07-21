@@ -17,20 +17,32 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
+import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import LoanCollectionsModal from '../../components/common/LoanCollectionsModal';
 import PaginationListFooter from '../../components/common/PaginationListFooter';
+import { applyCalendarTimezoneFromResponse } from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError } from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
-import { formatDisplayDate } from '../../utils/dateFormatter';
+import { formatDisplayDate, getRegisterDayNameFromDate } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const LIMIT = 10;
 const API_BASE_URL = 'http://65.0.100.65:6005';
+
+const REGISTER_DAY_VALUES = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
 
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
@@ -50,6 +62,8 @@ const formatAmountOrDash = (value) => {
 const LoanCustomerListScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
+  const [registerDayFilter, setRegisterDayFilter] = useState(() => getRegisterDayNameFromDate());
+  const userPickedDayRef = useRef(false);
   const debouncedSearchQuery = useDebouncedValue(searchQuery, DEBOUNCE_MS_DEFAULT);
   const [loanList, setLoanList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +82,25 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const listContentHeightRef = useRef(0);
   const listContainerHeightRef = useRef(0);
 
+  const registerDayOptions = useMemo(
+    () => [
+      { label: t('common.all'), value: '' },
+      ...REGISTER_DAY_VALUES.map((value) => ({
+        label: t(`customer.${value.toLowerCase()}`),
+        value,
+      })),
+    ],
+    [t],
+  );
+
+  const handleRegisterDayChange = useCallback((value) => {
+    if (value === registerDayFilter) return;
+    userPickedDayRef.current = true;
+    setLoanList([]);
+    setLoading(true);
+    setRegisterDayFilter(value);
+  }, [registerDayFilter]);
+
   const fetchLoans = useCallback(async (page = 1, append = false, skipPageLoader = false) => {
     try {
       if (page === 1 && !append && !skipPageLoader) {
@@ -82,6 +115,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
         approval_status: '',
         loan_status: '',
         customer_id: '',
+        ...(registerDayFilter ? { register_day: registerDayFilter } : {}),
       });
 
       const list = Array.isArray(response?.data) ? response.data : [];
@@ -107,7 +141,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
         loadMoreLockRef.current = false;
       }
     }
-  }, []);
+  }, [registerDayFilter, t]);
 
   const onRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -121,8 +155,28 @@ const LoanCustomerListScreen = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await apiServices.app.getVersion({ skipGlobalLoader: true });
+          if (!cancelled) applyCalendarTimezoneFromResponse(res);
+        } catch {
+          // Fall back to cached server_date or device date
+        }
+        if (!cancelled && !userPickedDayRef.current) {
+          setRegisterDayFilter(getRegisterDayNameFromDate());
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
       fetchLoans(1, false);
-    }, [fetchLoans])
+    }, [fetchLoans]),
   );
 
   const loadMore = useCallback(() => {
@@ -528,30 +582,46 @@ const LoanCustomerListScreen = ({ navigation }) => {
       />
 
       <View style={styles.searchSection}>
-        <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={language === 'en' ? 'Search by name, phone or ID' : t('loan.searchPlaceholder')}
-            placeholderTextColor={COLORS.text.secondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            clearButtonMode="while-editing"
-            returnKeyType="search"
-            numberOfLines={1}
-            multiline={false}
-            ellipsizeMode="tail"
-            adjustsFontSizeToFit={true}
-            minimumFontScale={0.8}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={() => setSearchQuery('')}
-            >
-              <Ionicons name="close-circle" size={16} color={COLORS.text.secondary} />
-            </TouchableOpacity>
-          )}
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrapper}>
+            <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={language === 'en' ? 'Search by name, phone or ID' : t('loan.searchPlaceholder')}
+              placeholderTextColor={COLORS.text.secondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+              numberOfLines={1}
+              multiline={false}
+              ellipsizeMode="tail"
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => setSearchQuery('')}
+              >
+                <Ionicons name="close-circle" size={16} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.dayFilterWrapper}>
+            <FormPicker
+              value={registerDayFilter}
+              onValueChange={handleRegisterDayChange}
+              items={registerDayOptions}
+              placeholder={t('common.all')}
+              modalTitle={t('customer.registerDay')}
+              compact
+              compactUseFullLabel
+              fitSheetToContent
+              style={styles.dayFilterPicker}
+            />
+          </View>
         </View>
       </View>
 
@@ -638,16 +708,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.base * 0.75,
+  },
   searchInputWrapper: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
     borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.base / 6, // Very minimal padding
-    paddingVertical: SIZES.base / 6, // Very minimal padding
+    paddingHorizontal: SIZES.base / 6,
+    paddingVertical: SIZES.base / 6,
     borderWidth: 1,
     borderColor: COLORS.border,
-    height: 45, // Reduced height
+    height: 45,
+  },
+  dayFilterWrapper: {
+    width: 118,
+    flexShrink: 0,
+  },
+  dayFilterPicker: {
+    marginBottom: 0,
   },
   searchInput: {
     flex: 1,

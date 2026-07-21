@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 import { showAlert, showError, showWarning } from '../../utils/alertService';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import ImagePreviewModal from './ImagePreviewModal';
+import ImageProcessingLoader from './ImageProcessingLoader';
 
 const CustomImagePicker = ({
   image,
@@ -16,6 +18,7 @@ const CustomImagePicker = ({
   required = false,
   style = {},
 }) => {
+  const { t } = useLanguage();
   const [previewVisible, setPreviewVisible] = useState(false);
   const [picking, setPicking] = useState(false);
 
@@ -64,22 +67,7 @@ const CustomImagePicker = ({
   };
 
   const renderPickerLoader = () => (
-    <View style={{
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(255,255,255,0.85)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 2,
-    }}>
-      <ActivityIndicator size="large" color={COLORS.primary} />
-      <Text style={{
-        fontSize: SIZES.body2,
-        color: COLORS.text.secondary,
-        marginTop: SIZES.base,
-      }}>
-        Processing image...
-      </Text>
-    </View>
+    <ImageProcessingLoader message={t('common.processingImage')} />
   );
 
   return (
