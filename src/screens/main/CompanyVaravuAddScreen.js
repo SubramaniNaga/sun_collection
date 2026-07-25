@@ -19,6 +19,7 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, getCalendarDate, getCalendarDateISO } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -137,6 +138,8 @@ const CompanyVaravuAddScreen = ({ navigation }) => {
   };
 
   const handleSubmit = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
+
     const branchNum = parseInt(branchId, 10);
     const lineNum = parseInt(formData.lineId, 10);
     const missingBranchOrLine =

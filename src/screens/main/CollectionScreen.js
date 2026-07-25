@@ -16,6 +16,7 @@ import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess, showWarning } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDateForAPI, formatDisplayDate, formatDisplayDateWithDay, getCalendarDate, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -566,6 +567,8 @@ const CollectionScreen = ({ navigation }) => {
   };
 
   const handleItemPress = (item) => {
+    if (!guardAttendanceGatedEntry(t)) return;
+
     const collection = item instanceof Collection ? item : new Collection(item);
 
     // if (!isSelectedDateToday) {
@@ -808,6 +811,8 @@ const CollectionScreen = ({ navigation }) => {
   };
 
   const handleSubmitPayment = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
+
     if (!validatePaymentForm()) {
       return;
     }
@@ -1471,7 +1476,10 @@ const CollectionScreen = ({ navigation }) => {
                 {/* Fixed Submit Button at Bottom */}
                 <View style={styles.submitButtonFixed}>
                   <TouchableOpacity
-                    style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+                    style={[
+                      styles.submitButton,
+                      isSubmitting && styles.submitButtonDisabled,
+                    ]}
                     onPress={handleSubmitPayment}
                     disabled={isSubmitting}
                   >

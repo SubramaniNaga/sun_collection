@@ -12,6 +12,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const UpfrontCashAddScreen = ({ navigation }) => {
@@ -68,6 +69,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
   };
 
   const handleSubmit = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     if (!validateForm()) {
       showError(t('common.error'), t('upfrontCash.fillAllRequiredFields'));
       return;
@@ -174,7 +176,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
           title={t('upfrontCash.submitUpfrontCashEntry')}
           onPress={handleSubmit}
           loading={isSubmitting}
-          disabled={isSubmitting}
+            disabled={isSubmitting}
           style={styles.submitButton}
           size="large"
         />

@@ -12,6 +12,7 @@ import ImageProcessingLoader from '../../components/common/ImageProcessingLoader
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -407,6 +408,8 @@ const LoanScreen = ({ navigation, route }) => {
 
   // Handle submission (approved: PUT loan given with lat/long; else renewal flow)
   const handleSubmit = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
+
     if (loan && isLoanApproved) {
       if (!paymentType.trim() || !loanGivenPhoto) {
         showError(t('common.error'), t('loan.paymentTypeAndPhotoRequired') || 'Payment type and loan given photo are required.');

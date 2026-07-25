@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ATTENDANCE, applyAttendanceFromResponse, isAttendanceCheckedIn } from '../../config/appToggles';
-import { getDeviceId } from '../../utils/deviceId';
 import { getServerDateTimeISO } from '../../utils/dateFormatter';
+import { getDeviceId } from '../../utils/deviceId';
 import { notifyLocationSendResult } from '../../utils/locationTrackingNotifications';
 import { clearSession } from '../../utils/sessionManager';
 import apiClient from '../apiClient';
@@ -211,7 +211,8 @@ export const apiServices = {
 
     logout: async () => {
       try {
-        // Clear all session data using centralized session manager
+        const { teardownLocationTrackingOnLogout } = require('../../utils/locationTracker');
+        await teardownLocationTrackingOnLogout();
         await clearSession();
         return { success: true };
       } catch (error) {
@@ -445,6 +446,7 @@ export const apiServices = {
         }
         const {
           customer_id = '',
+          search = '',
           approval_status = '',
           loan_status = '',
           register_day = '',
@@ -452,6 +454,7 @@ export const apiServices = {
           limit = 10,
         } = params;
         const registerDay = register_day != null ? String(register_day).trim() : '';
+        const searchTerm = search != null ? String(search).trim() : '';
         const requestParams = {
           branch_id: branchId || 1,
           line_id: lineIdsString,
@@ -461,6 +464,7 @@ export const apiServices = {
           page,
           limit,
           ...(registerDay ? { register_day: registerDay } : {}),
+          ...(searchTerm ? { search: searchTerm } : {}),
         };
         console.log('💰 API: getLoanList - GET', ENDPOINTS.LOAN.LIST, '| params:', JSON.stringify(requestParams, null, 2));
         const response = await apiClient.get(ENDPOINTS.LOAN.LIST, { params: requestParams });
@@ -1282,6 +1286,11 @@ export const apiServices = {
   location: {
     send: async ({ user_id, latitude, longitude, location, time } = {}) => {
       try {
+        const authToken = await AsyncStorage.getItem('authToken');
+        if (!authToken) {
+          return { success: false, skipped: true, reason: 'no_session' };
+        }
+
         // Headless / closed app: restore check-in flags from storage before gate.
         try {
           const pairs = await AsyncStorage.multiGet([

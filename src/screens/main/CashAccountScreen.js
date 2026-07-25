@@ -12,6 +12,7 @@ import Collection from '../../models/Collection';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -520,6 +521,7 @@ const CashAccountScreen = ({ navigation }) => {
   );
 
   const handleCloseAccount = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     if (submitting) return;
     if (accountClosingBlocked || !isCurrentDaySelectedForClose || isTableClosedInserted || isTodayClosedByDashboardStatus)
       return;

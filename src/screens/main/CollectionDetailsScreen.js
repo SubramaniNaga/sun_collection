@@ -6,7 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatDateTimeDisplay } from '../../utils/dateFormatter';
 import { formatCurrency } from '../../utils/amountFormatters';
@@ -20,6 +22,7 @@ const DetailRow = ({ label, value }) => (
 );
 
 const CollectionDetailsScreen = ({ route, navigation }) => {
+  const { t } = useLanguage();
   const item = route.params?.item ?? {};
   const [amountToPay, setAmountToPay] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +37,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
   const calculateTotal = () => parseFloat(amountToPay) || 0;
 
   const handleAddPayment = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     const total = calculateTotal();
     if (total <= 0) {
       showWarning('Invalid', 'Please enter an amount greater than 0.');
@@ -188,7 +192,11 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
             <Text style={styles.totalLabel}>Total Amount</Text>
             <Text style={styles.totalValue}>₹{calculateTotal().toFixed(2)}</Text>
           </View>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddPayment} disabled={submitting}>
+          <TouchableOpacity
+            style={[styles.addButton, submitting && styles.addButtonDisabled]}
+            onPress={handleAddPayment}
+            disabled={submitting}
+          >
             <Text style={styles.addButtonText}>{submitting ? 'Adding...' : 'Add Payment'}</Text>
           </TouchableOpacity>
         </View>
@@ -403,6 +411,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding * 1.5,
     paddingVertical: SIZES.padding,
     borderRadius: SIZES.radius,
+  },
+  addButtonDisabled: {
+    opacity: 0.5,
   },
   addButtonText: {
     color: COLORS.white,

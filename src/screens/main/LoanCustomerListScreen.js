@@ -81,6 +81,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const loadMoreLockRef = useRef(false);
   const listContentHeightRef = useRef(0);
   const listContainerHeightRef = useRef(0);
+  const fetchRequestIdRef = useRef(0);
 
   const registerDayOptions = useMemo(
     () => [
@@ -96,27 +97,51 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const handleRegisterDayChange = useCallback((value) => {
     if (value === registerDayFilter) return;
     userPickedDayRef.current = true;
+    fetchRequestIdRef.current += 1;
     setLoanList([]);
     setLoading(true);
+    setLoadingMore(false);
+    loadMoreLockRef.current = false;
+    setPagination({ currentPage: 1, hasNextPage: false, totalPages: 1 });
     setRegisterDayFilter(value);
   }, [registerDayFilter]);
 
+  // Search settled: clear list + show spinner only (never empty text / pagination skeleton while fetching)
+  useEffect(() => {
+    fetchRequestIdRef.current += 1;
+    setLoanList([]);
+    setLoading(true);
+    setLoadingMore(false);
+    loadMoreLockRef.current = false;
+    setPagination({ currentPage: 1, hasNextPage: false, totalPages: 1 });
+  }, [debouncedSearchQuery]);
+
   const fetchLoans = useCallback(async (page = 1, append = false, skipPageLoader = false) => {
+    const isPageOne = page === 1 && !append;
+    const requestId = isPageOne ? ++fetchRequestIdRef.current : fetchRequestIdRef.current;
+
     try {
-      if (page === 1 && !append && !skipPageLoader) {
+      if (isPageOne && !skipPageLoader) {
         setLoading(true);
         setError(null);
+        setLoadingMore(false);
         loadMoreLockRef.current = false;
       }
+
+      const trimmedSearch = debouncedSearchQuery.trim();
+      const isNumericSearch = trimmedSearch !== '' && /^\d+$/.test(trimmedSearch);
 
       const response = await apiServices.loan.getLoanList({
         page,
         limit: LIMIT,
         approval_status: '',
         loan_status: '',
-        customer_id: '',
+        customer_id: isNumericSearch ? trimmedSearch : '',
+        search: !isNumericSearch ? trimmedSearch : '',
         ...(registerDayFilter ? { register_day: registerDayFilter } : {}),
       });
+
+      if (requestId !== fetchRequestIdRef.current) return;
 
       const list = Array.isArray(response?.data) ? response.data : [];
       const pag = response?.pagination || {};
@@ -128,20 +153,22 @@ const LoanCustomerListScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
       });
     } catch (err) {
-      if (page === 1) {
+      if (requestId !== fetchRequestIdRef.current) return;
+      if (isPageOne) {
         showError(t('common.error'), getApiErrorMessage(err, t('loan.failedToLoad')));
         setError(null);
         setLoanList([]);
       }
     } finally {
-      if (page === 1 && !append && !skipPageLoader) {
+      if (requestId !== fetchRequestIdRef.current) return;
+      if (isPageOne) {
         setLoading(false);
       } else {
         setLoadingMore(false);
         loadMoreLockRef.current = false;
       }
     }
-  }, [registerDayFilter, t]);
+  }, [registerDayFilter, debouncedSearchQuery, t]);
 
   const onRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -209,19 +236,6 @@ const LoanCustomerListScreen = ({ navigation }) => {
       maybeLoadMoreIfShort();
     }
   }, [loading, loanList.length, pagination.hasNextPage, maybeLoadMoreIfShort]);
-
-  const filteredList = useMemo(() => {
-    const q = debouncedSearchQuery.trim();
-    if (!q) return loanList;
-    const lower = q.toLowerCase();
-    return loanList.filter(
-      (loan) =>
-        (loan?.customer_name ?? '').toLowerCase().includes(lower) ||
-        (loan?.customer_phone ?? '').includes(q) ||
-        (loan?.customer_no ?? '').toLowerCase().includes(lower) ||
-        String(loan?.id ?? '').includes(q)
-    );
-  }, [loanList, debouncedSearchQuery]);
 
   const handleCustomerSelect = (loan) => {
     navigation.navigate('LoanScreen', {
@@ -532,20 +546,23 @@ const LoanCustomerListScreen = ({ navigation }) => {
     );
   };
 
-  const renderFooter = () => (
-    <PaginationListFooter
-      loadingMore={loadingMore}
-      hasNextPage={pagination.hasNextPage}
-    />
-  );
+  const renderFooter = () => {
+    // Skeleton only while paginating — never during page-1 search/load
+    if (loading || loanList.length === 0) return null;
+    return (
+      <PaginationListFooter
+        loadingMore={loadingMore}
+        hasNextPage={pagination.hasNextPage}
+      />
+    );
+  };
 
   const renderEmpty = () => {
-    // Initial load only: show spinner (never skeleton). Pagination uses ListFooterComponent (skeleton only).
-    if (loading) {
+    // While API is in flight: spinner only (no "No loans found")
+    if (loading || refreshing) {
       return (
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>{t('loan.loadingLoans')}</Text>
         </View>
       );
     }
@@ -626,11 +643,11 @@ const LoanCustomerListScreen = ({ navigation }) => {
       </View>
 
       <FlatList
-        data={filteredList}
+        data={loanList}
         keyExtractor={(item) => String(item?.id ?? Math.random())}
         renderItem={renderLoanItem}
         contentContainerStyle={
-          filteredList.length === 0
+          loanList.length === 0
             ? styles.customerListContainerEmpty
             : styles.customerListContainer
         }
@@ -646,7 +663,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
         onEndReached={loadMore}
         onEndReachedThreshold={0.15}
         ListEmptyComponent={renderEmpty}
-        ListFooterComponent={loanList.length > 0 ? renderFooter : null}
+        ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

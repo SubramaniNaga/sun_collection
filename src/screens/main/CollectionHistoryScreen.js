@@ -25,6 +25,7 @@ import CollectionHistory from '../../models/CollectionHistory';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
 
@@ -326,6 +327,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
   }, [stats]);
 
   const openClosingModal = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     if (accountClosingBlocked) return;
     setShowClosingModal(true);
     setClosingDataLoading(true);
@@ -354,6 +356,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
   };
 
   const handleSubmitClosing = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     if (accountClosingBlocked || closingDataLoading) return;
     setClosingSubmitting(true);
     try {
@@ -492,7 +495,8 @@ const CollectionHistoryScreen = ({ navigation }) => {
                 <TouchableOpacity
                   style={[
                     styles.closingSubmitBtn,
-                    (closingSubmitting || closingDataLoading || accountClosingBlocked) && styles.closingSubmitBtnDisabled,
+                    (closingSubmitting || closingDataLoading || accountClosingBlocked) &&
+                      styles.closingSubmitBtnDisabled,
                   ]}
                   onPress={handleSubmitClosing}
                   disabled={closingSubmitting || closingDataLoading || accountClosingBlocked}

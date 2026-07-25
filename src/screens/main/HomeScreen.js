@@ -10,6 +10,7 @@ import {
   Animated,
   AppState,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -110,6 +111,7 @@ const HomeScreen = ({ navigation }) => {
 
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const dashboardAlertShownRef = useRef(false);
 
   const [collectionSummary, setCollectionSummary] = useState({ totalBalance: 0, count: 0 });
@@ -147,8 +149,9 @@ const HomeScreen = ({ navigation }) => {
   const showDashboardLoadErrorRef = useRef(showDashboardLoadError);
   showDashboardLoadErrorRef.current = showDashboardLoadError;
 
-  const loadHomeData = useCallback(async () => {
-    setLoadingDashboard(true);
+  const loadHomeData = useCallback(async (options = {}) => {
+    const skipPageLoader = Boolean(options.skipPageLoader);
+    if (!skipPageLoader) setLoadingDashboard(true);
 
     let dashboardFetchError = null;
     const dashPromise = apiServices.dashboard.getTodayStats({ skipGlobalLoader: true }).catch((err) => {
@@ -201,11 +204,21 @@ const HomeScreen = ({ navigation }) => {
         setNipSummary({ totalBalance: 0, count: 0 });
       }
     } finally {
-      setLoadingDashboard(false);
+      if (!skipPageLoader) setLoadingDashboard(false);
     }
   }, []);
 
   loadHomeDataRef.current = loadHomeData;
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadHomeData({ skipPageLoader: true });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadHomeData, refreshing]);
 
   const LOCATION_API_KEY = "adc5cbe3db4e4586be5b77d0e7b7f025";
 
@@ -603,6 +616,14 @@ const HomeScreen = ({ navigation }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
         >
           <View style={styles.dashboardSection}>
             <View style={styles.dashboardTitleRow}>

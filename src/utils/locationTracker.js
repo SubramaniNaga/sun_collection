@@ -2,9 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
-import { ATTENDANCE, isAttendanceCheckedIn } from '../config/appToggles';
+import { ATTENDANCE, isAttendanceCheckedIn, setLocalCheckInState } from '../config/appToggles';
 import { getServerDateTimeISO } from './dateFormatter';
 import { ensureLocationTrackingNotificationSetup } from './locationTrackingNotifications';
+import { hasActiveSession } from './sessionManager';
 
 export const LOCATION_TASK_NAME = 'ATTENDANCE_LOCATION_TASK';
 
@@ -153,6 +154,10 @@ function canSendNowForFlags(flags, nowMs = Date.now()) {
 
 async function sendLocationToApi(coords) {
   if (!coords || sendInFlight) return false;
+  if (!(await hasActiveSession())) {
+    await teardownLocationTrackingOnLogout();
+    return false;
+  }
   if (!shouldSendLocationApi()) return false;
 
   const now = Date.now();
@@ -238,6 +243,11 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     return;
   }
 
+  if (!(await hasActiveSession())) {
+    await teardownLocationTrackingOnLogout();
+    return;
+  }
+
   const flags = await readTrackingFlagsFromStorage();
 
   // Not allowed / checked out → stop FS (same as company disable).
@@ -298,6 +308,18 @@ export async function stopLocationTracking() {
     console.warn('[locationTracker] stop failed:', e?.message || e);
   } finally {
     startedIntervalMinutes = null;
+  }
+}
+
+/** Stop FS, clear timers, and persist checked-out flags when session ends. */
+export async function teardownLocationTrackingOnLogout() {
+  clearCaptureTimer();
+  sendInFlight = false;
+  setLocalCheckInState(false);
+  await persistLocationTrackingFlags();
+  await stopLocationTracking();
+  if (__DEV__) {
+    console.log('[locationTracker] tracking torn down on logout');
   }
 }
 
@@ -377,6 +399,11 @@ export async function syncLocationTracking() {
   }
 
   syncInFlight = (async () => {
+    if (!(await hasActiveSession())) {
+      await stopLocationTracking();
+      return;
+    }
+
     const minutes = captureTimeMinutes();
     const wantFs = shouldRunForegroundService();
     const already = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).catch(

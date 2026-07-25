@@ -63,9 +63,10 @@ const FormPicker = ({
 
   const openModal = () => {
     if (!editable) return;
+    // onOpen may return false to block opening (e.g. check-in required)
+    if (onOpen && onOpen() === false) return;
     setSearchQuery('');
     setModalVisible(true);
-    onOpen?.();
   };
 
   const handleSelect = (itemValue) => {

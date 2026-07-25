@@ -37,8 +37,6 @@ Backend team: to allow this app to call the API from the browser (web build), pl
 //   ? 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1'
 //   : 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1';
 
-// VITE_API_BASE_URL=
-
 export const API_BASE_URL = __DEV__
   ? 'http://65.0.100.65:6005/api/v1'
   : 'http://65.0.100.65:6005/api/v1';
@@ -108,6 +106,9 @@ const handleUnauthorized = async (error) => {
       ['logoutReasonMessage', apiMessage],
     ]);
 
+    const { teardownLocationTrackingOnLogout } = require('../utils/locationTracker');
+    await teardownLocationTrackingOnLogout();
+
     // Clear all session data
     await clearSession();
 
@@ -120,7 +121,12 @@ const handleUnauthorized = async (error) => {
     }
   } catch (error) {
     if (__DEV__) console.warn('❌ Error during unauthorized handling:', error);
-    // Fallback: clear session and logout even if alert fails
+    try {
+      const { teardownLocationTrackingOnLogout } = require('../utils/locationTracker');
+      await teardownLocationTrackingOnLogout();
+    } catch (teardownError) {
+      if (__DEV__) console.warn('❌ Error tearing down location tracking:', teardownError);
+    }
     await clearSession();
     if (logoutCallback && typeof logoutCallback === 'function') {
       await logoutCallback();

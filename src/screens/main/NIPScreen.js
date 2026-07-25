@@ -320,26 +320,6 @@ const NIPScreen = ({ navigation }) => {
 
   }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchNIPLoans]);
 
-
-
-  const filteredList = debouncedSearchQuery.trim()
-
-    ? nipList.filter(
-
-      (loan) =>
-
-        loan.customerName?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-
-        loan.customerPhone?.includes(debouncedSearchQuery) ||
-
-        loan.customerNo?.includes(debouncedSearchQuery)
-
-    )
-
-    : nipList;
-
-
-
   const handleCustomerSelect = (loan) => {
 
     navigation.navigate('NIPCollectionDetails', { loan });
@@ -632,20 +612,6 @@ const NIPScreen = ({ navigation }) => {
 
       <View style={styles.nipCardRow}>
 
-        <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('nip.nipPaidTotal')}</Text>
-
-        <Text style={styles.nipCardValueAmount}>
-
-          {formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total)}
-
-        </Text>
-
-      </View>
-
-      <View style={styles.nipCardRow}>
-
         <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
 
         <Text style={styles.nipCardLabel}>{t('loan.loanPeriod')}</Text>
@@ -681,6 +647,20 @@ const NIPScreen = ({ navigation }) => {
         <Text style={styles.nipCardLabel}>{t('loan.branch')}</Text>
 
         <Text style={styles.nipCardValue} numberOfLines={1}>{item?.branchName ?? '—'}</Text>
+
+      </View>
+
+      <View style={styles.nipCardRow}>
+
+        <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+
+        <Text style={styles.nipCardLabel}>{t('nip.nipPaidTotal')}</Text>
+
+        <Text style={styles.nipCardValuePaidTotal}>
+
+          {formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total)}
+
+        </Text>
 
       </View>
 
@@ -787,7 +767,7 @@ const NIPScreen = ({ navigation }) => {
 
     }
 
-    if (nipList.length > 0 && debouncedSearchQuery.trim() && filteredList.length === 0) {
+    if (debouncedSearchQuery.trim() && nipList.length === 0) {
 
       return (
 
@@ -944,7 +924,7 @@ const NIPScreen = ({ navigation }) => {
 
       <FlatList
 
-        data={filteredList}
+        data={nipList}
 
         keyExtractor={(item) => String(item?.id ?? Math.random())}
 
@@ -952,7 +932,7 @@ const NIPScreen = ({ navigation }) => {
 
         contentContainerStyle={
 
-          filteredList.length === 0
+          nipList.length === 0
 
             ? styles.nipListContainerEmpty
 
@@ -968,7 +948,7 @@ const NIPScreen = ({ navigation }) => {
 
         ListEmptyComponent={renderEmpty}
 
-        ListFooterComponent={filteredList.length > 0 ? renderFooter : null}
+        ListFooterComponent={nipList.length > 0 ? renderFooter : null}
 
         refreshControl={
 
@@ -1464,6 +1444,20 @@ function createNipScreenStyles(language) {
     fontWeight: '600',
 
     color: COLORS.error,
+
+    flex: 1,
+
+    textAlign: 'right',
+
+  },
+
+  nipCardValuePaidTotal: {
+
+    fontSize: font(SIZES.body2),
+
+    fontWeight: '600',
+
+    color: COLORS.primary,
 
     flex: 1,
 

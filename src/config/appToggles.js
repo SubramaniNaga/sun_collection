@@ -150,6 +150,7 @@ export function applyAttendanceFromResponse(res) {
 
     if (a.attendance_status != null && Number.isFinite(Number(a.attendance_status))) {
       ATTENDANCE.attendance_status = Number(a.attendance_status);
+      notifyAttendanceEntryChange();
     }
 
     if (a.within_time === 0 || a.within_time === 1) {
@@ -167,6 +168,25 @@ export function applyAttendanceFromResponse(res) {
 export function setLocalCheckInState(checkedIn) {
   ATTENDANCE.attendance_status = checkedIn ? 2 : 0;
   persistAttendanceFlags();
+  notifyAttendanceEntryChange();
+}
+
+const attendanceEntryListeners = new Set();
+
+function notifyAttendanceEntryChange() {
+  attendanceEntryListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (e) {
+      // ignore
+    }
+  });
+}
+
+/** Subscribe to check-in state changes (entry gating UI). */
+export function subscribeAttendanceEntry(listener) {
+  attendanceEntryListeners.add(listener);
+  return () => attendanceEntryListeners.delete(listener);
 }
 
 /** Server calendar — server_date from GET /appversion (and dashboard when present). */

@@ -13,10 +13,13 @@ import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import ImageProcessingLoader from '../../components/common/ImageProcessingLoader';
 import Input from '../../components/common/Input';
 import { COLORS, SIZES } from '../../constants/theme';
+import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const AddCustomerScreen = ({ navigation }) => {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   
   // Form states
@@ -104,6 +107,7 @@ const AddCustomerScreen = ({ navigation }) => {
 
   // Handle form submission
   const handleSubmit = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     if (!validateForm()) {
       return;
     }

@@ -22,6 +22,7 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError, showSuccess } from '../../utils/alertService';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
@@ -162,6 +163,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   };
 
   const handleSubmit = async () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     if (!validateForm()) return;
 
     try {

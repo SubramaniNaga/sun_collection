@@ -20,8 +20,30 @@ import CustomImagePicker from '../../components/common/ImagePicker';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
-import { getCalendarDateISO } from '../../utils/dateFormatter';
+import { formatDateForAPI, getCalendarDate, getCalendarDateISO } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
+
+const EXPENSE_DATE_WINDOW_DAYS = 6; // today + previous 6 days = 1 week
+
+const getExpenseDateBounds = () => {
+  const today = getCalendarDate();
+  const minimumDate = new Date(today);
+  minimumDate.setDate(minimumDate.getDate() - EXPENSE_DATE_WINDOW_DAYS);
+  minimumDate.setHours(0, 0, 0, 0);
+  const maximumDate = new Date(today);
+  maximumDate.setHours(23, 59, 59, 999);
+  return { minimumDate, maximumDate };
+};
+
+const isExpenseDateInAllowedRange = (dateValue) => {
+  if (!dateValue) return false;
+  const selected = formatDateForAPI(dateValue);
+  if (!selected) return false;
+  const { minimumDate, maximumDate } = getExpenseDateBounds();
+  const minStr = formatDateForAPI(minimumDate);
+  const maxStr = formatDateForAPI(maximumDate);
+  return selected >= minStr && selected <= maxStr;
+};
 
 const initialFormState = {
   category: '',
@@ -55,6 +77,7 @@ const ExpenseAddScreen = ({ navigation }) => {
   const [branchUsersLoading, setBranchUsersLoading] = useState(false);
   const branchUsersFetchRef = useRef(null);
   const [submitting, setSubmitting] = useState(false);
+  const { minimumDate: expenseMinDate, maximumDate: expenseMaxDate } = getExpenseDateBounds();
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +132,11 @@ const ExpenseAddScreen = ({ navigation }) => {
     } else if (parseFloat(formData.amount) <= 0) {
       newErrors.amount = t('validation.invalidAmount');
     }
-    if (!formData.date) newErrors.date = t('expenses.dateRequired');
+    if (!formData.date) {
+      newErrors.date = t('expenses.dateRequired');
+    } else if (!isExpenseDateInAllowedRange(formData.date)) {
+      newErrors.date = t('expenses.dateWithinOneWeek');
+    }
     if (!selectedImage) newErrors.image = t('customer.imageRequired');
 
     setErrors(newErrors);
@@ -257,6 +284,8 @@ const ExpenseAddScreen = ({ navigation }) => {
             value={formData.date}
             onValueChange={(value) => handleInputChange('date', value)}
             error={errors.date}
+            minimumDate={expenseMinDate}
+            maximumDate={expenseMaxDate}
             required
           />
 
