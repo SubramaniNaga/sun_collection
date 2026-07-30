@@ -118,6 +118,10 @@ const translations = {
       attendanceCheckedOut: 'Checked out successfully',
       attendanceMarkedAbsent: 'Attendance marked as absent',
       attendanceFailed: 'Failed to mark attendance',
+      confirmCheckoutTitle: 'Close attendance?',
+      confirmCheckoutMessage: 'Do you want to close attendance (check out)?',
+      attendanceAlreadyClosed:
+        'Punch in and punch out already completed for today. Please contact admin.',
       entryBlockedTitle: 'Check-in required',
       entryBlockedMessage:
         'Check-in has not been done. Please ensure check-in and try again.',
@@ -847,6 +851,10 @@ const translations = {
       attendanceCheckedOut: 'வெளியேற்றம் பதிவு செய்யப்பட்டது',
       attendanceMarkedAbsent: 'வருகையில்லை என பதிவு செய்யப்பட்டது',
       attendanceFailed: 'வருகை பதிவு செய்ய முடியவில்லை',
+      confirmCheckoutTitle: 'வருகையை மூடவா?',
+      confirmCheckoutMessage: 'வருகையை மூட (வெளியேற) விரும்புகிறீர்களா?',
+      attendanceAlreadyClosed:
+        'இன்றைய பஞ்ச் இன் மற்றும் பஞ்ச் அவுட் முடிந்துவிட்டது. நிர்வாகியை தொடர்பு கொள்ளவும்.',
       entryBlockedTitle: 'வருகை பதிவு தேவை',
       entryBlockedMessage:
         'வருகை பதிவு செய்யப்படவில்லை. தயவுசெய்து வருகை பதிவு செய்து மீண்டும் முயற்சிக்கவும்.',

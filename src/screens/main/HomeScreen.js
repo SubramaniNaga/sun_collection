@@ -28,6 +28,7 @@ import {
   isAttendanceCheckedIn,
   isAttendanceClosed,
   setLocalCheckInState,
+  setLocalAttendanceClosed,
 } from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
@@ -272,9 +273,15 @@ const HomeScreen = ({ navigation }) => {
       attendanceRetryRef.current = null;
 
       const isCheckIn = payload.status === 'present';
-      setLocalCheckInState(isCheckIn);
-      setAttendanceClosed(false);
-      setAttendanceStatus(isCheckIn ? 'present' : 'absent');
+      if (isCheckIn) {
+        setLocalCheckInState(true);
+        setAttendanceClosed(false);
+        setAttendanceStatus('present');
+      } else {
+        setLocalAttendanceClosed();
+        setAttendanceClosed(true);
+        setAttendanceStatus('absent');
+      }
       Animated.spring(attendanceSlideAnim, {
         toValue: isCheckIn ? LANG_THUMB_TRAVEL : 0,
         useNativeDriver: true,
@@ -319,6 +326,36 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleMarkAttendance = async () => {
+    if (isAttendanceBusy) return;
+
+    // Already punched in & out for the day
+    if (attendanceClosed) {
+      showAlert({
+        type: 'warning',
+        title: t('home.attendance'),
+        message: t('home.attendanceAlreadyClosed'),
+      });
+      return;
+    }
+
+    // Check-out: ask confirmation first
+    if (attendanceStatus === 'present') {
+      showAlert({
+        type: 'warning',
+        title: t('home.confirmCheckoutTitle'),
+        message: t('home.confirmCheckoutMessage'),
+        buttons: [
+          { text: t('common.no'), style: 'cancel' },
+          { text: t('common.yes'), onPress: () => performAttendanceMark() },
+        ],
+      });
+      return;
+    }
+
+    await performAttendanceMark();
+  };
+
+  const performAttendanceMark = async () => {
     if (isAttendanceBusy || attendanceClosed) return;
 
     // Check-in: present + photo | Check-out: checkout, no photo
@@ -638,7 +675,7 @@ const HomeScreen = ({ navigation }) => {
                     attendanceClosed && styles.attendanceSwitchTrackDisabled,
                   ]}
                   onPress={handleMarkAttendance}
-                  disabled={isAttendanceBusy || attendanceClosed}
+                  disabled={isAttendanceBusy}
                   activeOpacity={1}
                   accessibilityLabel={t('home.attendance')}
                 >

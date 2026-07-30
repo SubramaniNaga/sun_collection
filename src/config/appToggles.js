@@ -171,6 +171,13 @@ export function setLocalCheckInState(checkedIn) {
   notifyAttendanceEntryChange();
 }
 
+/** After check-out for the day — blocks another punch-in until admin resets. */
+export function setLocalAttendanceClosed() {
+  ATTENDANCE.attendance_status = 3;
+  persistAttendanceFlags();
+  notifyAttendanceEntryChange();
+}
+
 const attendanceEntryListeners = new Set();
 
 function notifyAttendanceEntryChange() {

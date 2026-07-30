@@ -32,7 +32,7 @@ const AppAlert = ({ visible, type = ALERT_TYPES.INFO, title, message, buttons = 
       <Pressable style={styles.overlay} onPress={onClose} accessibilityLabel="Close alert">
         <Pressable style={styles.box} onPress={(e) => e.stopPropagation()}>
           <View style={[styles.iconWrap, { backgroundColor: iconConfig.color + '20' }]}>
-            <Ionicons name={iconConfig.name} size={40} color={iconConfig.color} />
+            <Ionicons name={iconConfig.name} size={32} color={iconConfig.color} />
           </View>
           {title ? <Text style={styles.title}>{title}</Text> : null}
           {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -42,7 +42,6 @@ const AppAlert = ({ visible, type = ALERT_TYPES.INFO, title, message, buttons = 
                 key={i}
                 style={[
                   styles.button,
-                  buttons.length > 1 && i < buttons.length - 1 && styles.buttonLeft,
                   btn.style === 'cancel' && styles.buttonCancel,
                 ]}
                 onPress={() => handlePress(btn)}
@@ -73,13 +72,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SIZES.padding * 2,
+    padding: SIZES.padding,
   },
   box: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius * 2,
-    padding: SIZES.padding * 2,
-    minWidth: 280,
+    borderRadius: SIZES.radius * 1.5,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.padding * 0.85,
+    minWidth: 260,
     maxWidth: '100%',
     alignItems: 'center',
     shadowColor: '#000',
@@ -89,35 +90,36 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SIZES.padding,
+    marginBottom: SIZES.base,
   },
   title: {
     fontSize: SIZES.font.large,
     fontWeight: '600',
     color: COLORS.text.secondary,
-    marginBottom: SIZES.base,
+    marginBottom: SIZES.base / 2,
     textAlign: 'center',
   },
   message: {
     fontSize: SIZES.body3,
     color: COLORS.text.tertiary,
     textAlign: 'center',
-    marginBottom: SIZES.padding * 1.5,
-    lineHeight: 22,
+    marginBottom: SIZES.padding,
+    lineHeight: 20,
   },
   buttonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+    gap: 10,
   },
   button: {
-    paddingVertical: SIZES.base * 1.25,
+    paddingVertical: SIZES.base,
     paddingHorizontal: SIZES.base,
     minWidth: 60,
     flex: 1,
@@ -125,13 +127,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: SIZES.radius,
     backgroundColor: COLORS.primary,
-    marginHorizontal: 2,
   },
   buttonCancel: {
     backgroundColor: COLORS.lightGray,
-  },
-  buttonLeft: {
-    marginRight: 0,
   },
   buttonText: {
     fontSize: SIZES.body3,
