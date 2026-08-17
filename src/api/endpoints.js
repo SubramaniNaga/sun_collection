@@ -37,6 +37,7 @@ export const ENDPOINTS = {
     GIVEN_UPDATE: (id) => `/loan/given/${id}`,
     TYPES: '/loan-type/active/list',
     DETAILS: (id) => `/loan/details/${id}`,
+    RENEWAL: '/loan/renewal',
   },
   EXPENSE_CATEGORY: {
     ACTIVE_LIST: '/expense-category/active/list',
@@ -57,6 +58,10 @@ export const ENDPOINTS = {
   },
   DASHBOARD: {
     TODAY: '/frontcash/dashboard/today',
+  },
+  CITY: {
+    ACTIVE_LIST: '/city/active/list',
+    CREATE: '/city',
   },
   COMPANY_VARAVU: {
     CREATE: '/company-varavu/create',

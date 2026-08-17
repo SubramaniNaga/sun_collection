@@ -826,10 +826,10 @@ const LoanScreen = ({ navigation, route }) => {
                               <Ionicons name="camera" size={30} color={COLORS.primary} />
                               <Text style={styles.loanGivenImageOptionText}>{t('customer.takePhoto') || 'Take Photo'}</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoUpload} activeOpacity={0.7}>
+                            {/* <TouchableOpacity style={styles.loanGivenImageOptionButton} onPress={handleLoanGivenPhotoUpload} activeOpacity={0.7}>
                               <Ionicons name="image-outline" size={30} color={COLORS.primary} />
                               <Text style={styles.loanGivenImageOptionText}>{t('customer.chooseFromLibrary') || 'Choose from Library'}</Text>
-                            </TouchableOpacity>
+                            </TouchableOpacity> */}
                           </View>
                         ) : null}
                         {pickingLoanGivenPhoto ? <ImageProcessingLoader message={t('common.processingImage')} /> : null}

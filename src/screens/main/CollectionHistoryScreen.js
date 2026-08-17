@@ -26,8 +26,8 @@ import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
-import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 const LIMIT = 10;
 
@@ -364,7 +364,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
       closeClosingModal();
       await fetchCollectionHistory(1, false);
       showSuccess(t('common.success'), t('collectionHistory.closingAccountSuccess'), [
-        { text: t('common.ok'), onPress: () => {} },
+        { text: t('common.ok'), onPress: () => { } },
       ]);
     } catch (err) {
       showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
@@ -373,25 +373,40 @@ const CollectionHistoryScreen = ({ navigation }) => {
     }
   };
 
-  const renderHistoryItem = ({ item }) => {
-    const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
-    return (
-      <View style={styles.historyItem}>
-        <View style={styles.itemHeader}>
-          <Text style={styles.receiptNumber}>{history.getReceiptNumber()}</Text>
-          <Text style={styles.itemAmount}>{history.getFormattedAmountPaid()}</Text>
-        </View>
+  const renderTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <Text style={[styles.tableHeaderText, styles.colNo]} numberOfLines={2}>
+        {t('collectionHistory.customerNo')}
+      </Text>
+      <Text style={[styles.tableHeaderText, styles.colName]} numberOfLines={2}>
+        {t('collectionHistory.customerName')}
+      </Text>
+      <Text style={[styles.tableHeaderText, styles.colAmount]} numberOfLines={2}>
+        {t('collectionHistory.amountPaid')}
+      </Text>
+      <Text style={[styles.tableHeaderText, styles.colDate]} numberOfLines={2}>
+        {t('collectionHistory.paymentDate')}
+      </Text>
+    </View>
+  );
 
-        <View style={styles.itemDetailsRow}>
-          <View style={styles.itemDetailsLeft}>
-            <Text style={styles.customerName}>{history.customerName || '—'}</Text>
-            <Text style={styles.customerInfo}>
-              {history.customerNo ? `${history.customerNo} · ` : ''}
-              {history.getPaymentTypeLabel()}
-            </Text>
-          </View>
-          <Text style={styles.itemDate}>{history.getFormattedPaymentDate()}</Text>
-        </View>
+  const renderHistoryItem = ({ item, index }) => {
+    const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
+    const isLast = index === filteredCollectionHistory.length - 1;
+    return (
+      <View style={[styles.tableRow, isLast && styles.tableRowLast]}>
+        <Text style={[styles.tableCell, styles.colNo]} numberOfLines={2}>
+          {history.customerNo != null && history.customerNo !== '' ? String(history.customerNo) : '—'}
+        </Text>
+        <Text style={[styles.tableCellName, styles.colName]} numberOfLines={2}>
+          {history.customerName || '—'}
+        </Text>
+        <Text style={[styles.tableCell, styles.tableCellAmount, styles.colAmount]} numberOfLines={2}>
+          {history.getFormattedAmountPaid()}
+        </Text>
+        <Text style={[styles.tableCell, styles.colDate]} numberOfLines={2}>
+          {history.getFormattedPaymentDate() || '—'}
+        </Text>
       </View>
     );
   };
@@ -496,7 +511,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
                   style={[
                     styles.closingSubmitBtn,
                     (closingSubmitting || closingDataLoading || accountClosingBlocked) &&
-                      styles.closingSubmitBtnDisabled,
+                    styles.closingSubmitBtnDisabled,
                   ]}
                   onPress={handleSubmitClosing}
                   disabled={closingSubmitting || closingDataLoading || accountClosingBlocked}
@@ -515,204 +530,203 @@ const CollectionHistoryScreen = ({ navigation }) => {
       </Modal>
 
       <View style={styles.mainBody}>
-      <FlatList
-        style={styles.mainBodyList}
-        data={filteredCollectionHistory}
-        keyExtractor={(item) => String(item?.id ?? Math.random())}
-        renderItem={renderHistoryItem}
-        contentContainerStyle={[
-          styles.content,
-          {
-            // Extra bottom inset was LIST_EXTRA_BOTTOM when fixed “Account closing” bar was shown (block below is commented out).
-            paddingBottom: SIZES.padding * 2,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.3}
-        ListHeaderComponent={
-          <>
-            {/* Date Filter Section */}
-            <View style={styles.filterSection}>
-              <View style={styles.dateRow}>
-                <View style={styles.datePickerContainer}>
-                  <DatePicker
-                    label={t('collection.startDate')}
-                    value={startDate}
-                    onValueChange={handleStartDateChange}
-                    error={errors.startDate}
-                    maximumDate={new Date()}
-                  />
-                </View>
-
-                <View style={styles.datePickerContainer}>
-                  <DatePicker
-                    label={t('collection.endDate')}
-                    value={endDate}
-                    onValueChange={handleEndDateChange}
-                    error={errors.endDate}
-                    minimumDate={startDate ? new Date(startDate) : undefined}
-                    maximumDate={new Date()}
-                  />
-                </View>
-              </View>
-
-              {errors.dateRange && (
-                <Text style={styles.errorText}>{errors.dateRange}</Text>
-              )}
-            </View>
-
-            {/* Summary Card (Cash Receipts / Total Amount + Cash Summary when Cash selected) */}
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>
-                    {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
-                  </Text>
-                  <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
-                </View>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(filteredStats.total_amount)}</Text>
-                </View>
-              </View>
-              {selectedPaymentType === 'cash' && (
-                <>
-                  <View style={styles.summaryDivider} />
-                  {/* <Text style={styles.cashStatsTitleInCard}>{t('common.cash')} {t('collectionHistory.summary')}</Text> */}
-                  <View style={styles.cashStatsHorizontalRow}>
-                    <View style={styles.cashStatsColumn}>
-                      {/* <View style={styles.cashStatsIconWrap}>
-                        <Ionicons name="wallet-outline" size={22} color={COLORS.primary} />
-                      </View> */}
-                      <View style={styles.cashStatsLabelWrap}>
-                        <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.collectedAmount')}</Text>
-                      </View>
-                      <Text style={styles.cashStatValue}>{formatCurrency(stats.collected_amount)}</Text>
-                    </View>
-                    <View style={styles.cashStatsColumnDivider} />
-                    <View style={styles.cashStatsColumn}>
-                      {/* <View style={styles.cashStatsIconWrap}>
-                        <Ionicons name="card-outline" size={22} color={COLORS.text.secondary} />
-                      </View> */}
-                      <View style={styles.cashStatsLabelWrap}>
-                        <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.expensesSpent')}</Text>
-                      </View>
-                      <Text style={styles.cashStatValue}>{formatCurrency(stats.expenses_spent)}</Text>
-                    </View>
-                    <View style={styles.cashStatsColumnDivider} />
-                    <View style={styles.cashStatsColumn}>
-                      {/* <View style={styles.cashStatsIconWrap}>
-                        <Ionicons name="business-outline" size={22} color={COLORS.primary} />
-                      </View> */}
-                      <View style={styles.cashStatsLabelWrap}>
-                        <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.loanGivenAmount')}</Text>
-                      </View>
-                      <Text style={styles.cashStatValue}>{formatCurrency(stats.loan_given_amount)}</Text>
-                    </View>
+        <FlatList
+          style={styles.mainBodyList}
+          data={filteredCollectionHistory}
+          keyExtractor={(item) => String(item?.id ?? Math.random())}
+          renderItem={renderHistoryItem}
+          contentContainerStyle={[
+            styles.content,
+            {
+              // Extra bottom inset was LIST_EXTRA_BOTTOM when fixed “Account closing” bar was shown (block below is commented out).
+              paddingBottom: SIZES.padding * 2,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListHeaderComponent={
+            <>
+              {/* Date Filter Section */}
+              <View style={styles.filterSection}>
+                <View style={styles.dateRow}>
+                  <View style={styles.datePickerContainer}>
+                    <DatePicker
+                      label={t('collection.startDate')}
+                      value={startDate}
+                      onValueChange={handleStartDateChange}
+                      error={errors.startDate}
+                      maximumDate={new Date()}
+                    />
                   </View>
-                </> 
-              )}
-              {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
+
+                  <View style={styles.datePickerContainer}>
+                    <DatePicker
+                      label={t('collection.endDate')}
+                      value={endDate}
+                      onValueChange={handleEndDateChange}
+                      error={errors.endDate}
+                      minimumDate={startDate ? new Date(startDate) : undefined}
+                      maximumDate={new Date()}
+                    />
+                  </View>
+                </View>
+
+                {errors.dateRange && (
+                  <Text style={styles.errorText}>{errors.dateRange}</Text>
+                )}
+              </View>
+
+              {/* Payment Type Tabs */}
+              <View style={styles.tabsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    selectedPaymentType === null && styles.tabActive,
+                  ]}
+                  onPress={() => handlePaymentTypeChange(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      selectedPaymentType === null && styles.tabTextActive,
+                    ]}
+                  >
+                    {t('common.all')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    selectedPaymentType === 'cash' && styles.tabActive,
+                  ]}
+                  onPress={() => handlePaymentTypeChange('cash')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="cash-outline"
+                    size={18}
+                    color={selectedPaymentType === 'cash' ? COLORS.white : COLORS.text.secondary}
+                    style={styles.tabIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.tabText,
+                      selectedPaymentType === 'cash' && styles.tabTextActive,
+                    ]}
+                  >
+                    {t('common.cash')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    selectedPaymentType === 'online' && styles.tabActive,
+                  ]}
+                  onPress={() => handlePaymentTypeChange('online')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="card-outline"
+                    size={18}
+                    color={selectedPaymentType === 'online' ? COLORS.white : COLORS.text.secondary}
+                    style={styles.tabIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.tabText,
+                      selectedPaymentType === 'online' && styles.tabTextActive,
+                    ]}
+                  >
+                    {t('common.online')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Summary Card (Cash Receipts / Total Amount + Cash Summary when Cash selected) */}
+              <View style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
                   <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>{t('collectionHistory.cash')}</Text>
-                    <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
+                    <Text style={styles.summaryLabel}>
+                      {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
+                    </Text>
+                    <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
                   </View>
                   <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>{t('collectionHistory.nonCash')}</Text>
-                    <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
+                    <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
+                    <Text style={styles.summaryValue}>{formatCurrency(filteredStats.total_amount)}</Text>
                   </View>
                 </View>
-              )}
-            </View>
+                {selectedPaymentType === 'cash' && (
+                  <>
+                    <View style={styles.summaryDivider} />
+                    {/* <Text style={styles.cashStatsTitleInCard}>{t('common.cash')} {t('collectionHistory.summary')}</Text> */}
+                    <View style={styles.cashStatsHorizontalRow}>
+                      <View style={styles.cashStatsColumn}>
+                        {/* <View style={styles.cashStatsIconWrap}>
+                        <Ionicons name="wallet-outline" size={22} color={COLORS.primary} />
+                      </View> */}
+                        <View style={styles.cashStatsLabelWrap}>
+                          <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.collectedAmount')}</Text>
+                        </View>
+                        <Text style={styles.cashStatValue}>{formatCurrency(stats.collected_amount)}</Text>
+                      </View>
+                      <View style={styles.cashStatsColumnDivider} />
+                      <View style={styles.cashStatsColumn}>
+                        {/* <View style={styles.cashStatsIconWrap}>
+                        <Ionicons name="card-outline" size={22} color={COLORS.text.secondary} />
+                      </View> */}
+                        <View style={styles.cashStatsLabelWrap}>
+                          <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.expensesSpent')}</Text>
+                        </View>
+                        <Text style={styles.cashStatValue}>{formatCurrency(stats.expenses_spent)}</Text>
+                      </View>
+                      <View style={styles.cashStatsColumnDivider} />
+                      <View style={styles.cashStatsColumn}>
+                        {/* <View style={styles.cashStatsIconWrap}>
+                        <Ionicons name="business-outline" size={22} color={COLORS.primary} />
+                      </View> */}
+                        <View style={styles.cashStatsLabelWrap}>
+                          <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.loanGivenAmount')}</Text>
+                        </View>
+                        <Text style={styles.cashStatValue}>{formatCurrency(stats.loan_given_amount)}</Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+                {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
+                  <View style={styles.summaryRow}>
+                    <View style={styles.summaryItem}>
+                      <Text style={styles.summaryLabel}>{t('collectionHistory.cash')}</Text>
+                      <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
+                    </View>
+                    <View style={styles.summaryItem}>
+                      <Text style={styles.summaryLabel}>{t('collectionHistory.nonCash')}</Text>
+                      <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
 
-            {/* Payment Type Tabs */}
-            <View style={styles.tabsContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.tab,
-                  selectedPaymentType === null && styles.tabActive,
-                ]}
-                onPress={() => handlePaymentTypeChange(null)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    selectedPaymentType === null && styles.tabTextActive,
-                  ]}
-                >
-                  {t('common.all')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.tab,
-                  selectedPaymentType === 'cash' && styles.tabActive,
-                ]}
-                onPress={() => handlePaymentTypeChange('cash')}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="cash-outline"
-                  size={18}
-                  color={selectedPaymentType === 'cash' ? COLORS.white : COLORS.text.secondary}
-                  style={styles.tabIcon}
-                />
-                <Text
-                  style={[
-                    styles.tabText,
-                    selectedPaymentType === 'cash' && styles.tabTextActive,
-                  ]}
-                >
-                  {t('common.cash')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.tab,
-                  selectedPaymentType === 'online' && styles.tabActive,
-                ]}
-                onPress={() => handlePaymentTypeChange('online')}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="card-outline"
-                  size={18}
-                  color={selectedPaymentType === 'online' ? COLORS.white : COLORS.text.secondary}
-                  style={styles.tabIcon}
-                />
-                <Text
-                  style={[
-                    styles.tabText,
-                    selectedPaymentType === 'online' && styles.tabTextActive,
-                  ]}
-                >
-                  {t('common.online')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.tableWrap}>
+                {renderTableHeader()}
+              </View>
+            </>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListEmptyComponent={renderEmpty}
+          ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}
+        />
 
-            {/* Collection History List Header */}
-            <View style={styles.listSection}>
-              <Text style={styles.sectionTitle}>{t('collectionHistory.title')}</Text>
-            </View>
-          </>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
-          />
-        }
-        ListEmptyComponent={renderEmpty}
-        ListFooterComponent={filteredCollectionHistory.length > 0 ? renderFooter : null}
-      />
-
-      {/*
+        {/*
       Green “Account closing” button (temporarily hidden — restore LIST_EXTRA_BOTTOM in FlatList paddingBottom when re-enabled).
       {shouldShowAccountClosingButton ? (
         <View style={styles.accountClosingBar}>
@@ -926,60 +940,69 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     textAlign: 'center',
   },
-  listSection: {
+  tableWrap: {
     backgroundColor: COLORS.white,
-    padding: SIZES.padding,
-    paddingBottom: SIZES.base,
-    borderRadius: SIZES.radius,
+    borderTopLeftRadius: SIZES.radius,
+    borderTopRightRadius: SIZES.radius,
     borderWidth: 1,
+    borderBottomWidth: 0,
     borderColor: COLORS.border,
-    marginBottom: SIZES.margin / 3,
+    overflow: 'hidden',
   },
-  historyItem: {
-    padding: SIZES.padding,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingVertical: SIZES.padding / 1.5,
-    marginBottom: SIZES.base / 2,
-  },
-  itemHeader: {
+  tableHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.base / 4,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SIZES.base,
+    paddingHorizontal: SIZES.base / 2,
   },
-  itemDetailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemDetailsLeft: {
-    flex: 1,
-    marginRight: SIZES.base,
-  },
-  customerInfo: {
+  tableHeaderText: {
     fontSize: SIZES.body4,
-    color: COLORS.text.tertiary,
-    marginTop: SIZES.base / 4,
+    fontWeight: '700',
+    color: COLORS.white,
+    textAlign: 'center',
   },
-  receiptNumber: {
-    fontSize: SIZES.body3, // Reduced from SIZES.body2
-    fontWeight: '600',
-    color: COLORS.text.primary,
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    paddingVertical: SIZES.base + 2,
+    paddingHorizontal: SIZES.base / 2,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
   },
-  itemAmount: {
-    fontSize: SIZES.body2,
-    fontWeight: '600',
-    color: COLORS.primary,
+  tableRowLast: {
+    borderBottomLeftRadius: SIZES.radius,
+    borderBottomRightRadius: SIZES.radius,
   },
-  customerName: {
-    fontSize: SIZES.body2,
+  tableCell: {
+    fontSize: SIZES.body4,
     color: COLORS.text.secondary,
-    marginBottom: SIZES.base / 8,
+    textAlign: 'center',
   },
-  itemDate: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.tertiary,
+  tableCellName: {
+    fontSize: SIZES.body4,
+    color: COLORS.text.secondary,
+    textAlign: 'start',
+  },
+  tableCellAmount: {
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+  },
+  colNo: {
+    width: '15%',
+  },
+  colName: {
+    width: '35%',
+  },
+  colAmount: {
+    width: '25%',
+  },
+  colDate: {
+    width: '25%',
   },
   noDataContainer: {
     padding: SIZES.padding * 1.5,

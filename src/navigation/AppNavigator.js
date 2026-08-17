@@ -21,6 +21,7 @@ import ExpenseAddScreen from '../screens/main/ExpenseAddScreen';
 import ExpensesScreen from '../screens/main/ExpensesScreen';
 import CashAccountScreen from '../screens/main/CashAccountScreen';
 import HomeScreen from '../screens/main/HomeScreen';
+import IntermediateIncomeScreen from '../screens/main/IntermediateIncomeScreen';
 import LoanCustomerListScreen from '../screens/main/LoanCustomerListScreen';
 import LoanScreen from '../screens/main/LoanScreen';
 import NIPCollectionDetailsScreen from '../screens/main/NIPCollectionDetailsScreen';
@@ -116,6 +117,13 @@ const HomeStack = () => (
       name="Collection" 
       component={CollectionScreen} 
       options={{ 
+        headerShown: false,
+      }}
+    />
+    <Stack.Screen
+      name="IntermediateIncome"
+      component={IntermediateIncomeScreen}
+      options={{
         headerShown: false,
       }}
     />

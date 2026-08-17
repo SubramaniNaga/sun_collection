@@ -409,7 +409,14 @@ export const apiServices = {
 
     updateCustomer: async (customerId, formData) => {
       try {
-        console.log('👤 API: updateCustomer - PUT', ENDPOINTS.CUSTOMER.UPDATE(customerId), '| customerId:', customerId);
+        console.log(
+          '👤 API: updateCustomer - PUT',
+          ENDPOINTS.CUSTOMER.UPDATE(customerId),
+          '| customerId:',
+          customerId,
+          '| FormData keys:',
+          [...formData.entries()].map(([k]) => k),
+        );
         const response = await apiClient.put(ENDPOINTS.CUSTOMER.UPDATE(customerId), formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -549,6 +556,18 @@ export const apiServices = {
       }
     },
 
+    renewLoan: async (payload) => {
+      try {
+        console.log('💰 API: renewLoan - POST', ENDPOINTS.LOAN.RENEWAL, '| payload:', JSON.stringify(payload, null, 2));
+        const response = await apiClient.post(ENDPOINTS.LOAN.RENEWAL, payload);
+        console.log('💰 API: renewLoan - Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Renew loan error:', error);
+        throw error;
+      }
+    },
+
     updateLoanGiven: async (loanId, formData) => {
       try {
         const path = ENDPOINTS.LOAN.GIVEN_UPDATE(loanId);
@@ -639,6 +658,47 @@ export const apiServices = {
         return list;
       } catch (error) {
         if (__DEV__) console.warn('Get active expense categories error:', error);
+        throw error;
+      }
+    },
+  },
+
+  city: {
+    getActiveList: async () => {
+      try {
+        const { branchId } = await getLineAndBranchIds();
+        const params = { branch_id: branchId || 1 };
+        console.log('🏙️ API: getActiveCities - GET', ENDPOINTS.CITY.ACTIVE_LIST, '| params:', params);
+        const response = await apiClient.get(ENDPOINTS.CITY.ACTIVE_LIST, {
+          params,
+          skipGlobalLoader: true,
+        });
+        const raw = response.data?.data ?? response.data;
+        const list = Array.isArray(raw) ? raw : [];
+        return list.map((item) => ({
+          id: item.id,
+          city_name: item.city_name,
+        }));
+      } catch (error) {
+        if (__DEV__) console.warn('Get active cities error:', error);
+        throw error;
+      }
+    },
+    create: async (cityName) => {
+      try {
+        const { branchId } = await getLineAndBranchIds();
+        const payload = {
+          city_name: String(cityName || '').trim(),
+          branch_id: Number(branchId) || 1,
+          active: 1,
+        };
+        console.log('🏙️ API: createCity - POST', ENDPOINTS.CITY.CREATE, '| payload:', payload);
+        const response = await apiClient.post(ENDPOINTS.CITY.CREATE, payload, {
+          skipGlobalLoader: true,
+        });
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Create city error:', error);
         throw error;
       }
     },
@@ -935,7 +995,16 @@ export const apiServices = {
         if (!branchId) {
           throw new Error('Branch ID not found. Please log in again.');
         }
-        const { customer_phone = '', customer_name = '', collection_date = '', search = '' } = params;
+        const {
+          customer_phone = '',
+          customer_name = '',
+          collection_date = '',
+          search = '',
+          registered_day = '',
+          customer_id = '',
+          page,
+          limit,
+        } = params;
         const searchTrimmed = typeof search === 'string' ? search.trim() : '';
         const requestParams = {
           branch_id: branchId,
@@ -944,6 +1013,10 @@ export const apiServices = {
           ...(customer_name && { customer_name }),
           ...(collection_date && { collection_date }),
           ...(searchTrimmed && { search: searchTrimmed }),
+          ...(registered_day && { registered_day }),
+          ...(customer_id && { customer_id }),
+          ...(page != null && { page }),
+          ...(limit != null && { limit }),
         };
         console.log('📋 API: getCollectionList - GET', ENDPOINTS.COLLECTION.LIST, '| params:', requestParams);
         const response = await apiClient.get(ENDPOINTS.COLLECTION.LIST, {
@@ -1067,6 +1140,10 @@ export const apiServices = {
         });
 
         const data = await response.json().catch(() => ({}));
+
+        console.log('📋 API: updateCollectionAmount - FULL response:');
+        console.log('📋 HTTP status:', response.status, '| ok:', response.ok);
+        console.log(JSON.stringify(data, null, 2));
 
         if (!response.ok) {
           const err = new Error(data?.message || `HTTP ${response.status}`);

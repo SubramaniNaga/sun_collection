@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import apiServices from '../../api/services/apiServices';
@@ -74,6 +74,15 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [cityId, setCityId] = useState('');
+  const [cityOptions, setCityOptions] = useState([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [cityPickerVisible, setCityPickerVisible] = useState(false);
+  const [showAddCityModal, setShowAddCityModal] = useState(false);
+  const [newCityName, setNewCityName] = useState('');
+  const [addingCity, setAddingCity] = useState(false);
+  const [addCityError, setAddCityError] = useState('');
+  const addCityInputRef = useRef(null);
   const [loanAmount, setLoanAmount] = useState('');
   /** Aathayam — sent as `processing_fees` */
   const [aathayamAmount, setAathayamAmount] = useState('');
@@ -115,6 +124,83 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     [],
   );
   const loanDayOptions = registerDayOptions;
+
+  const loadCities = useCallback(async () => {
+    setCitiesLoading(true);
+    try {
+      const list = await apiServices.city.getActiveList();
+      const options = (Array.isArray(list) ? list : []).map((item) => ({
+        label: String(item.city_name ?? '').trim(),
+        value: String(item.id),
+      })).filter((item) => item.label);
+      setCityOptions(options);
+      return options;
+    } catch (err) {
+      setCityOptions([]);
+      showError(t('common.error'), getApiErrorMessage(err, t('customer.loadingCities')));
+      return [];
+    } finally {
+      setCitiesLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (customerType !== 'New') return undefined;
+    loadCities();
+    return undefined;
+  }, [customerType, loadCities]);
+
+  useEffect(() => {
+    if (!showAddCityModal) return undefined;
+    const timer = setTimeout(() => addCityInputRef.current?.focus(), 400);
+    return () => clearTimeout(timer);
+  }, [showAddCityModal]);
+
+  const handleOpenAddCity = () => {
+    setNewCityName('');
+    setAddCityError('');
+    setShowAddCityModal(true);
+  };
+
+  const handleCloseAddCity = () => {
+    if (addingCity) return;
+    setShowAddCityModal(false);
+    setNewCityName('');
+    setAddCityError('');
+    setTimeout(() => setCityPickerVisible(true), 350);
+  };
+
+  const handleAddCity = async () => {
+    const name = String(newCityName || '').trim();
+    if (!name) {
+      setAddCityError(t('customer.cityNameRequired'));
+      return;
+    }
+    setAddingCity(true);
+    setAddCityError('');
+    try {
+      const res = await apiServices.city.create(name);
+      const created = res?.data ?? res;
+      const createdId = created?.id != null ? String(created.id) : '';
+      const options = await loadCities();
+      if (createdId) {
+        setCityId(createdId);
+      } else if (options.length) {
+        const match = options.find(
+          (opt) => opt.label.toLowerCase() === name.toLowerCase(),
+        );
+        if (match) setCityId(match.value);
+      }
+      if (errors.cityId) setErrors((prev) => ({ ...prev, cityId: null }));
+      setShowAddCityModal(false);
+      setNewCityName('');
+      setTimeout(() => setCityPickerVisible(true), 350);
+    } catch (err) {
+      setAddCityError(getApiErrorMessage(err, t('errors.somethingWentWrong')));
+    } finally {
+      setAddingCity(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -389,6 +475,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     }
     if (!customerName.trim()) newErrors.customerName = t('customer.nameRequired');
     if (!customerAddress.trim()) newErrors.customerAddress = t('customer.addressRequired');
+    if (!cityId) newErrors.cityId = t('customer.cityRequired');
     if (!loanAmount.trim() || parseFloat(loanAmount) <= 0) {
       newErrors.loanAmount = t('customer.loanAmountRequired');
     }
@@ -661,6 +748,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       formData.append('customer_name', String(customerName));
       formData.append('customer_phone', String(customerPhone));
       formData.append('customer_address', String(customerAddress));
+      formData.append('city_id', String(cityId || ''));
       formData.append('loan_amount', String(Number(loanAmount) || 0));
       formData.append('loan_period', String(Number(loanPeriod) || 12));
       formData.append('loantype_id', String(Number(loanTypeId) || 1));
@@ -706,6 +794,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           customer_name: String(isExisting ? (selectedExistingCustomer?.customer_name ?? '') : customerName),
           customer_phone: String(isExisting ? (selectedExistingCustomer?.customer_phone ?? existingSearch ?? '') : customerPhone),
           customer_address: String(isExisting ? (selectedExistingCustomer?.customer_address ?? '') : customerAddress),
+          city_id: cityId || null,
           loan_amount: String(Number(loanAmount) || 0),
           loan_period: String(Number(loanPeriod) || 12),
           loantype_id: String(Number(loanTypeId) || 1),
@@ -803,7 +892,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                   <Ionicons name="camera" size={30} color={COLORS.primary} />
                   <Text style={styles.imageOptionText}>{t('customer.takePhoto')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                {/* <TouchableOpacity
                   style={styles.imageOptionButton}
                   onPress={() => {
                     dismissKeyboard();
@@ -812,7 +901,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 >
                   <Ionicons name="image-outline" size={30} color={COLORS.primary} />
                   <Text style={styles.imageOptionText}>{t('customer.chooseFromLibrary')}</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
             ) : null}
             {isPicking ? <ImageProcessingLoader message={t('common.processingImage')} /> : null}
@@ -960,6 +1049,27 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={2}
                 error={errors.customerAddress}
+                required
+              />
+
+              <FormPicker
+                label={t('customer.city')}
+                value={cityId}
+                onValueChange={(value) => {
+                  setCityId(value);
+                  if (errors.cityId) setErrors((prev) => ({ ...prev, cityId: null }));
+                }}
+                items={cityOptions}
+                placeholder={citiesLoading ? t('customer.loadingCities') : t('customer.selectCity')}
+                searchPlaceholder={t('customer.searchCity')}
+                noResultsText={t('customer.noCitiesFound')}
+                error={errors.cityId}
+                searchable
+                loading={citiesLoading}
+                visible={cityPickerVisible}
+                onVisibleChange={setCityPickerVisible}
+                onOpen={ensureCheckedInForInteraction}
+                onAddPress={handleOpenAddCity}
                 required
               />
 
@@ -1210,6 +1320,59 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         title={previewImage?.title ?? ''}
         onClose={() => setPreviewImage(null)}
       />
+
+      <Modal
+        visible={showAddCityModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleCloseAddCity}
+      >
+        <KeyboardAvoidingView
+          style={styles.addCityOverlay}
+          behavior="padding"
+        >
+          <Pressable style={styles.addCityBackdrop} onPress={handleCloseAddCity} />
+          <View style={styles.addCityCard}>
+            <Text style={styles.addCityTitle}>{t('customer.addCity')}</Text>
+            <TextInput
+              ref={addCityInputRef}
+              style={styles.addCityInput}
+              value={newCityName}
+              onChangeText={(text) => {
+                setNewCityName(text);
+                if (addCityError) setAddCityError('');
+              }}
+              placeholder={t('customer.enterCityName')}
+              placeholderTextColor={COLORS.text.tertiary}
+              showSoftInputOnFocus
+              blurOnSubmit={false}
+              onSubmitEditing={handleAddCity}
+            />
+            {addCityError ? <Text style={styles.addCityError}>{addCityError}</Text> : null}
+            <View style={styles.addCityActions}>
+              <TouchableOpacity
+                style={styles.addCityCancelBtn}
+                onPress={handleCloseAddCity}
+                disabled={addingCity}
+              >
+                <Text style={styles.addCityCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.addCitySaveBtn, addingCity && styles.addCitySaveBtnDisabled]}
+                onPress={handleAddCity}
+                disabled={addingCity}
+              >
+                {addingCity ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.addCitySaveText}>{t('common.save')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1471,6 +1634,78 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     minHeight: 52,
+  },
+  addCityOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  addCityBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  addCityCard: {
+    width: '88%',
+    maxWidth: 400,
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius * 1.5,
+    padding: SIZES.padding,
+    zIndex: 1,
+  },
+  addCityTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    marginBottom: SIZES.padding,
+  },
+  addCityInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 10,
+    fontSize: SIZES.body2,
+    color: COLORS.black,
+    marginBottom: SIZES.padding,
+  },
+  addCityError: {
+    color: COLORS.error,
+    fontSize: SIZES.body4,
+    marginTop: -SIZES.base,
+    marginBottom: SIZES.padding,
+  },
+  addCityActions: {
+    flexDirection: 'row',
+    gap: SIZES.base,
+  },
+  addCityCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+  },
+  addCityCancelText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  addCitySaveBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.primary,
+  },
+  addCitySaveBtnDisabled: {
+    opacity: 0.7,
+  },
+  addCitySaveText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.white,
   },
 });
 

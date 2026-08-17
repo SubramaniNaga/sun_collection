@@ -12,8 +12,8 @@ import Collection from '../../models/Collection';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
-import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatCurrency } from '../../utils/amountFormatters';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -374,15 +374,23 @@ const CashAccountScreen = ({ navigation }) => {
       ? Number(todayDashboard.collections?.totalAmount ?? 0) || 0
       : Number(stats?.collected_amount ?? openingSummary?.total_collection ?? 0) || 0;
 
+  const previousBalance = Number(
+    openingSummary?.opening_balance ?? openingSummary?.previous_balance ?? 0
+  ) || 0;
+
+  /** Received total: previous balance + collection + magimai. */
+  const totalReceived = useMemo(
+    () => previousBalance + processingFeeTotal + collectionCompleted,
+    [previousBalance, processingFeeTotal, collectionCompleted]
+  );
+
+  /** Spent total: loan given + expenses. */
+  const totalSpent = useMemo(() => loanGiven + expenses, [loanGiven, expenses]);
+
   /**
-   * Net cash position for the period:
-   * (up-front + collection + processing fee) − (expenses + loan given).
+   * Net closing (Close Account payload): received total − spent total.
    */
-  const totalBalance = useMemo(() => {
-    const inflows = upfrontCash + processingFeeTotal + collectionCompleted;
-    const outflows = loanGiven + expenses;
-    return inflows - outflows;
-  }, [upfrontCash, processingFeeTotal, collectionCompleted, loanGiven, expenses]);
+  const totalBalance = useMemo(() => totalReceived - totalSpent, [totalReceived, totalSpent]);
 
   /**
    * **In account** / **In hand** (footer): same formula as the table, but each line item is split
@@ -467,18 +475,6 @@ const CashAccountScreen = ({ navigation }) => {
         <Text
           style={[
             styles.tableCellAmountText,
-            spentVal == null && styles.tableCellDash,
-            isTableClosedInserted && styles.tableTextClosedBlack,
-          ]}
-          numberOfLines={1}
-        >
-          {spentVal != null ? spentVal : dash}
-        </Text>
-      </View>
-      <View style={[styles.tableGridCell, styles.tableGridColAmount, styles.tableGridCellAmount, styles.tableGridCellLast]}>
-        <Text
-          style={[
-            styles.tableCellAmountText,
             receivedVal == null && styles.tableCellDash,
             isTableClosedInserted && styles.tableTextClosedBlack,
           ]}
@@ -487,34 +483,16 @@ const CashAccountScreen = ({ navigation }) => {
           {receivedVal != null ? receivedVal : dash}
         </Text>
       </View>
-    </View>
-  );
-
-  /** Same column widths as the grid so values line up under Received; no vertical borders. */
-  const renderSummaryFooterLine = (label, value, emphasized = false) => (
-    <View style={styles.tableSummaryFooterRow}>
-      <View style={[styles.tableGridColParticulars, styles.tableSummaryFooterPad]}>
+      <View style={[styles.tableGridCell, styles.tableGridColAmount, styles.tableGridCellAmount, styles.tableGridCellLast]}>
         <Text
           style={[
-            styles.tableSummaryFooterLabel,
-            emphasized && styles.tableSummaryLabelEmph,
-            isTableClosedInserted && styles.tableTextClosedBlack,
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-      <View style={[styles.tableGridColAmount, styles.tableSummaryFooterPad]} />
-      <View style={[styles.tableGridColAmount, styles.tableSummaryFooterPad, styles.tableGridCellAmount]}>
-        <Text
-          style={[
-            styles.tableSummaryFooterValue,
-            emphasized && !isTableClosedInserted && styles.tableSummaryValueEmph,
+            styles.tableCellAmountText,
+            spentVal == null && styles.tableCellDash,
             isTableClosedInserted && styles.tableTextClosedBlack,
           ]}
           numberOfLines={1}
         >
-          {value}
+          {spentVal != null ? spentVal : dash}
         </Text>
       </View>
     </View>
@@ -710,7 +688,7 @@ const CashAccountScreen = ({ navigation }) => {
                 ]}
               >
                 <Text style={[styles.tableHeadCellTextAmount, isTableClosedInserted && styles.tableTextClosedBlack]}>
-                  {t('cashAccount.spent')}
+                  {t('cashAccount.received')}
                 </Text>
               </View>
               <View
@@ -723,12 +701,12 @@ const CashAccountScreen = ({ navigation }) => {
                 ]}
               >
                 <Text style={[styles.tableHeadCellTextAmount, isTableClosedInserted && styles.tableTextClosedBlack]}>
-                  {t('cashAccount.received')}
+                  {t('cashAccount.spent')}
                 </Text>
               </View>
             </View>
 
-            {renderTableRow3(
+            {/* {renderTableRow3(
               'upfrontByCash',
               t('cashAccount.upfrontByCash'),
               null,
@@ -739,33 +717,72 @@ const CashAccountScreen = ({ navigation }) => {
               t('cashAccount.upfrontByOnline'),
               null,
               formatCurrency(String(upfrontByOnline))
+            )} */}
+            {renderTableRow3(
+              'previousBalance',
+              t('cashAccount.previousBalance'),
+              null,
+              formatCurrency(String(previousBalance))
             )}
             {renderTableRow3('collection', t('cashAccount.collection'), null, formatCurrency(String(collectionCompleted)))}
             {renderTableRow3(
-              'processingFee',
-              t('cashAccount.processingFee'),
+              'magimai',
+              t('cashAccount.magimai'),
               null,
               formatCurrency(String(processingFeeTotal))
             )}
-            {renderTableRow3('expenses', t('cashAccount.expenses'), formatCurrency(String(expenses)), null)}
             {renderTableRow3(
               'loanGiven',
               t('cashAccount.loanGiven'),
               formatCurrency(String(loanGiven)),
+              null
+            )}
+            {renderTableRow3(
+              'expenses',
+              t('cashAccount.expenses'),
+              formatCurrency(String(expenses)),
               null,
               styles.tableGridRowLastBeforeFooter
             )}
 
             <View style={styles.tableSummaryFooter}>
-              {renderSummaryFooterLine(
-                `${t('cashAccount.endOfDayInAccount')} :`,
-                formatCurrency(String(channelEodBalances.onlineNet))
-              )}
-              {renderSummaryFooterLine(
-                `${t('cashAccount.endOfDayInHand')} :`,
-                formatCurrency(String(channelEodBalances.cashNet)),
-                true
-              )}
+              <View style={[styles.tableGridCell, styles.tableGridColParticulars, styles.closingCalcLabelCell]}>
+                <Text
+                  style={[
+                    styles.tableClosingBalanceText,
+                    isTableClosedInserted && styles.tableTextClosedBlack,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {t('cashAccount.closingBalance')}
+                </Text>
+              </View>
+              <View style={styles.closingCalcStack}>
+                <Text
+                  style={[styles.closingCalcAmount, isTableClosedInserted && styles.tableTextClosedBlack]}
+                  numberOfLines={1}
+                >
+                  {formatCurrency(String(totalReceived))}
+                </Text>
+                <Text
+                  style={[styles.closingCalcAmount, isTableClosedInserted && styles.tableTextClosedBlack]}
+                  numberOfLines={1}
+                >
+                  {formatCurrency(String(totalSpent))}
+                </Text>
+                <View style={styles.closingCalcDoubleLine} />
+                <Text
+                  style={[
+                    styles.closingCalcAmount,
+                    styles.closingCalcResult,
+                    isTableClosedInserted && styles.tableTextClosedBlack,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {formatCurrency(String(totalBalance))}
+                </Text>
+                <View style={styles.closingCalcUnderline} />
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -914,10 +931,52 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tableSummaryFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth * 2,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.background,
-    paddingBottom: SIZES.base,
+    paddingVertical: 10,
+  },
+  closingCalcLabelCell: {
+    borderRightWidth: 0,
+    alignSelf: 'stretch',
+  },
+  closingCalcStack: {
+    flex: 2,
+    alignItems: 'flex-end',
+    paddingRight: 12,
+    paddingLeft: 8,
+  },
+  closingCalcAmount: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.black,
+    textAlign: 'right',
+    minWidth: 120,
+  },
+  closingCalcResult: {
+    fontWeight: '800',
+    paddingTop: 4,
+  },
+  closingCalcDoubleLine: {
+    width: 120,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.black,
+    height: 4,
+  },
+  closingCalcUnderline: {
+    width: 120,
+    marginTop: 2,
+    borderBottomWidth: 1,
+    borderColor: COLORS.black,
+  },
+  tableClosingBalanceText: {
+    fontSize: SIZES.body3,
+    fontWeight: '700',
+    color: COLORS.black,
   },
   tableSummaryFooterRow: {
     flexDirection: 'row',

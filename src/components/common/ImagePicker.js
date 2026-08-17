@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { showAlert, showError, showWarning } from '../../utils/alertService';
@@ -151,7 +151,7 @@ const CustomImagePicker = ({
                 </Text>
               </Pressable>
               
-              <Pressable
+              {/* <Pressable
                 onPress={() => pickImage('gallery')}
                 disabled={picking}
                 style={{
@@ -175,7 +175,7 @@ const CustomImagePicker = ({
                 }}>
                   Gallery
                 </Text>
-              </Pressable>
+              </Pressable> */}
 
               <Pressable
                 onPress={removeImage}
@@ -248,7 +248,7 @@ const CustomImagePicker = ({
                   </Text>
                 </Pressable>
 
-                <Pressable
+                {/* <Pressable
                   onPress={() => pickImage('gallery')}
                   disabled={picking}
                   style={{
@@ -269,7 +269,7 @@ const CustomImagePicker = ({
                   }}>
                     Gallery
                   </Text>
-                </Pressable>
+                </Pressable> */}
               </View>
             </>
           ) : null}

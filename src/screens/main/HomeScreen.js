@@ -27,8 +27,8 @@ import {
   applyAttendanceFromResponse,
   isAttendanceCheckedIn,
   isAttendanceClosed,
-  setLocalCheckInState,
   setLocalAttendanceClosed,
+  setLocalCheckInState,
 } from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
@@ -37,7 +37,7 @@ import NIPLoan from '../../models/NIPLoan';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
-import { getCurrentDateString, getServerDateTimeISO } from '../../utils/dateFormatter';
+import { getServerDateTimeISO } from '../../utils/dateFormatter';
 import ErrorHandler from '../../utils/errorHandler';
 import { compressImageAssetIfNeeded } from '../../utils/imageCompression';
 import { syncLocationTracking } from '../../utils/locationTracker';
@@ -182,7 +182,7 @@ const HomeScreen = ({ navigation }) => {
           // Store loan_period from dashboard so CustomerWithLoanScreen can use it
           const dashLoanPeriod = raw.loan_period ?? res?.data?.loan_period ?? res?.loan_period;
           if (dashLoanPeriod != null && dashLoanPeriod !== '') {
-            AsyncStorage.setItem('loanPeriod', String(dashLoanPeriod)).catch(() => {});
+            AsyncStorage.setItem('loanPeriod', String(dashLoanPeriod)).catch(() => { });
           }
         } else {
           setDashboardData(null);
@@ -573,8 +573,8 @@ const HomeScreen = ({ navigation }) => {
         <View style={[styles.amountCardHeader, hideDetails && styles.amountCardHeaderCentered]}>
           <Ionicons
             name={iconName}
-            size={hideDetails ? 32 : 24}
-            color={isOutlined ? COLORS.primary : COLORS.white}
+            size={hideDetails ? 32 : 22}
+            color={COLORS.primary}
           />
           <Text
             style={[
@@ -726,8 +726,19 @@ const HomeScreen = ({ navigation }) => {
                     subText: `${collectionSummary.count} ${t('home.dueToday')}`,
                     onPress: () => navigation.navigate('Collection'),
                     hideDetails: true,
+                    outlined: true,
                   })}
-
+                  {renderAmountCard({
+                    cardKey: 'intermediate-income',
+                    backgroundColor: '#1d7ee2',
+                    iconName: 'sync-outline',
+                    title: t('home.intermediateIncome'),
+                    // amountText: formatRupee(collectionSummary.totalBalance),
+                    // subText: `${collectionSummary.count} ${t('home.dueToday')}`,
+                    onPress: () => navigation.navigate('IntermediateIncome'),
+                    outlined: true,
+                    hideDetails: true,
+                  })}
                   {renderAmountCard({
                     cardKey: 'loan-mgmt',
                     iconName: 'document-text-outline',
@@ -740,7 +751,7 @@ const HomeScreen = ({ navigation }) => {
                     outlined: true,
                   })}
 
-                  {renderAmountCard({
+                  {/* {renderAmountCard({
                     cardKey: 'upfront-cash',
                     backgroundColor: '#34C759',
                     iconName: 'wallet-outline',
@@ -749,8 +760,8 @@ const HomeScreen = ({ navigation }) => {
                       ? dashboardData.getFormattedFrontcashAmount()
                       : formatRupee(0),
                     subText: `${dashboardData?.frontcash?.count ?? 0} ${t('home.transactions')}`,
-                    onPress: () => navigation.navigate('UpfrontCash'),
-                  })}
+                    onPress: () => navigation.navigate('UpfrontCash'), outlined: true,
+                  })} */}
 
                   {renderAmountCard({
                     cardKey: 'expenses',
@@ -762,6 +773,7 @@ const HomeScreen = ({ navigation }) => {
                       : formatRupee(0),
                     subText: `${dashboardData?.expenses?.count ?? 0} ${t('home.expensesCount')}`,
                     onPress: () => navigation.navigate('Expenses'),
+                    outlined: true,
                   })}
 
                   {renderAmountCard({
@@ -774,6 +786,7 @@ const HomeScreen = ({ navigation }) => {
                       : formatRupee(0),
                     subText: `${dashboardData?.collections?.count ?? 0} ${t('home.collectionsCount')}`,
                     onPress: () => navigation.navigate('CollectionHistory'),
+                    outlined: true,
                   })}
 
                   {renderAmountCard({
@@ -784,6 +797,7 @@ const HomeScreen = ({ navigation }) => {
                     amountText: formatRupee(nipSummary.totalBalance),
                     subText: `${nipSummary.count} ${t('home.loans')}`,
                     onPress: () => navigation.navigate('NIP'),
+                    outlined: true,
                   })}
                 </View>
 
@@ -792,7 +806,7 @@ const HomeScreen = ({ navigation }) => {
                   onPress={() => navigation.navigate('CashAccount')}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="calculator-outline" size={22} color={COLORS.white} />
+                  <Ionicons name="calculator-outline" size={22} color={COLORS.primary} />
                   <Text style={styles.cashAccountCardText}>{t('cashAccount.closeAccount')}</Text>
                 </TouchableOpacity>
               </>
@@ -853,24 +867,21 @@ const styles = StyleSheet.create({
   },
   cashAccountCard: {
     marginTop: SIZES.base,
-    backgroundColor: '#0F766E',
+    backgroundColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderWidth: 1,
     borderRadius: SIZES.radius * 1.5,
     paddingVertical: SIZES.padding,
     paddingHorizontal: SIZES.padding,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 4,
   },
   cashAccountCardText: {
     marginLeft: SIZES.base,
     fontSize: SIZES.body3,
     fontWeight: '700',
-    color: COLORS.white,
+    color: COLORS.primary,
     letterSpacing: -0.2,
   },
   amountCard: {
@@ -879,18 +890,12 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius * 1.5,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 4,
+    backgroundColor: COLORS.white,
   },
   amountCardOutlined: {
     backgroundColor: COLORS.white,
-    borderWidth: 2,
-    borderColor: '#1d7ee2',
-    shadowOpacity: 0.08,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
   },
   amountCardHeader: {
     flexDirection: 'row',
@@ -907,15 +912,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   amountCardHeaderTextLarge: {
-    fontSize: SIZES.h3,
+    fontSize: SIZES.body,
     fontWeight: '700',
     textAlign: 'center',
+    color: COLORS.primary,
   },
   amountCardHeaderText: {
     flex: 1,
     fontSize: SIZES.body4,
     fontWeight: '600',
-    color: COLORS.white,
+    color: COLORS.primary,
     marginLeft: SIZES.base,
   },
   amountCardHeaderTextOutlined: {
@@ -924,7 +930,7 @@ const styles = StyleSheet.create({
   amountCardValue: {
     fontSize: SIZES.h2,
     fontWeight: '700',
-    color: COLORS.white,
+    color: COLORS.primary,
     marginBottom: SIZES.base / 2,
   },
   amountCardValueOutlined: {
@@ -932,8 +938,8 @@ const styles = StyleSheet.create({
   },
   amountCardSub: {
     fontSize: SIZES.body4,
-    color: COLORS.white,
-    opacity: 0.92,
+    color: COLORS.text.secondary,
+    fontWeight: '400',
   },
   amountCardSubOutlined: {
     color: COLORS.text.secondary,

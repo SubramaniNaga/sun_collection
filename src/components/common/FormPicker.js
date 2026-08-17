@@ -1,24 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 
 const FormPicker = ({
   label,
   value,
   onValueChange,
-  items,
+  items = [],
   placeholder,
   error,
   editable = true,
@@ -30,14 +34,42 @@ const FormPicker = ({
   searchPlaceholder = 'Search...',
   noResultsText = 'No results found',
   onOpen,
+  onAddPress,
+  visible: visibleProp,
+  onVisibleChange,
   loading = false,
   loadingText = 'Loading...',
   compact = false,
   fitSheetToContent = false,
   compactUseFullLabel = false,
 }) => {
-  const [modalVisible, setModalVisible] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const keyboard = useAnimatedKeyboard({
+    isStatusBarTranslucentAndroid: true,
+    isNavigationBarTranslucentAndroid: true,
+  });
+  const overlayKeyboardStyle = useAnimatedStyle(() => ({
+    paddingBottom: keyboard.height.value,
+  }));
+  const sheetKeyboardStyle = useAnimatedStyle(() => {
+    const kb = keyboard.height.value;
+    const available = windowHeight - kb;
+    const height = kb > 0
+      ? Math.max(available - 12, 280)
+      : Math.min(windowHeight * 0.7, available);
+    return { height, maxHeight: height };
+  });
+  const isControlled = visibleProp !== undefined;
+  const [internalVisible, setInternalVisible] = useState(false);
+  const modalVisible = isControlled ? visibleProp : internalVisible;
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef(null);
+
+  const setModalVisible = (next) => {
+    if (!isControlled) setInternalVisible(next);
+    onVisibleChange?.(next);
+  };
 
   const selectedItem = items.find((item) => item.value === value);
   const selectedLabel = selectedItem
@@ -46,7 +78,7 @@ const FormPicker = ({
         : selectedItem.label)
     : null;
   const resolvedModalTitle = modalTitle || (label ? `Select ${label}` : 'Select');
-  const useStaticSheetList = fitSheetToContent && !loading && items.length <= 15;
+  const useStaticSheetList = fitSheetToContent && !searchable && !loading && items.length <= 15;
 
   const filteredItems = useMemo(() => {
     if (!searchable || !searchQuery.trim()) {
@@ -57,8 +89,18 @@ const FormPicker = ({
   }, [items, searchQuery, searchable]);
 
   const closeModal = () => {
+    searchInputRef.current?.blur();
+    Keyboard.dismiss();
     setModalVisible(false);
     setSearchQuery('');
+  };
+
+  const openAddForm = () => {
+    if (!onAddPress) return;
+    searchInputRef.current?.blur();
+    Keyboard.dismiss();
+    setModalVisible(false);
+    setTimeout(() => onAddPress(), 350);
   };
 
   const openModal = () => {
@@ -107,43 +149,97 @@ const FormPicker = ({
   const renderSheetModal = () => (
     <Modal
       animationType="slide"
-      transparent
+      transparent={Platform.OS === 'ios' || !searchable}
       visible={modalVisible}
       onRequestClose={closeModal}
       statusBarTranslucent
+      navigationBarTranslucent
     >
-      <SafeAreaView style={styles.sheetOverlay} edges={['bottom']}>
-        <View style={styles.sheetContainer}>
-          <View
-            style={[
-              styles.sheetPanel,
-              fitSheetToContent ? styles.sheetPanelFitContent : styles.sheetPanelScrollable,
-            ]}
-          >
+      <Animated.View style={[styles.sheetOverlay, overlayKeyboardStyle]}>
+        <Pressable style={styles.sheetBackdrop} onPress={closeModal} />
+        <Animated.View
+          style={[
+            styles.sheetPanel,
+            fitSheetToContent ? styles.sheetPanelFitContent : sheetKeyboardStyle,
+            fitSheetToContent && { paddingBottom: Math.max(insets.bottom, 12) },
+          ]}
+        >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{resolvedModalTitle}</Text>
+              {(onAddPress) ? (
+                <Pressable
+                  onPress={openAddForm}
+                  hitSlop={8}
+                  style={styles.headerAddBtn}
+                >
+                  <Ionicons name="add" size={26} color={COLORS.primary} />
+                </Pressable>
+              ) : null}
               <Pressable onPress={closeModal} hitSlop={8}>
                 <Ionicons name="close" size={24} color={COLORS.text.secondary} />
               </Pressable>
             </View>
 
-            {useStaticSheetList ? (
-              <View style={styles.sheetOptionsList}>
-                {items.map((item) => renderItemRow(item))}
+            {searchable ? (
+              <View style={styles.sheetSearchContainer}>
+                <Ionicons
+                  name="search-outline"
+                  size={18}
+                  color={COLORS.text.secondary}
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor={COLORS.text.tertiary}
+                  style={styles.searchInput}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  showSoftInputOnFocus
+                />
+                {searchQuery.length > 0 ? (
+                  <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                    <Ionicons name="close-circle" size={18} color={COLORS.text.secondary} />
+                  </Pressable>
+                ) : null}
               </View>
-            ) : (
+            ) : null}
+
+            {useStaticSheetList ? (
               <ScrollView
-                style={styles.sheetScroll}
+                style={fitSheetToContent ? styles.sheetListFit : styles.sheetList}
                 contentContainerStyle={styles.sheetScrollContent}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="none"
+                bounces={false}
               >
-                {loading ? renderLoadingState() : items.map((item) => renderItemRow(item))}
+                {items.map((item) => renderItemRow(item))}
               </ScrollView>
+            ) : (
+              <FlatList
+                data={loading ? [] : (searchable ? filteredItems : items)}
+                keyExtractor={(item, index) => String(item.value ?? index)}
+                renderItem={({ item }) => renderItemRow(item)}
+                style={fitSheetToContent ? styles.sheetListFit : styles.sheetList}
+                contentContainerStyle={styles.sheetScrollContent}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="none"
+                nestedScrollEnabled
+                ListEmptyComponent={
+                  loading ? renderLoadingState() : (
+                    searchable ? (
+                      <View style={styles.emptyStateCompact}>
+                        <Text style={styles.emptyStateText}>{noResultsText}</Text>
+                      </View>
+                    ) : null
+                  )
+                }
+              />
             )}
-          </View>
-        </View>
-      </SafeAreaView>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 
@@ -322,32 +418,51 @@ const styles = StyleSheet.create({
   },
   sheetOverlay: {
     flex: 1,
+    width: '100%',
+    height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  sheetContainer: {
-    flex: 1,
     justifyContent: 'flex-end',
   },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
   sheetPanel: {
+    width: '100%',
     backgroundColor: COLORS.white,
     borderTopLeftRadius: SIZES.radius * 2,
     borderTopRightRadius: SIZES.radius * 2,
+    overflow: 'hidden',
   },
   sheetPanelScrollable: {
-    maxHeight: '50%',
+    maxHeight: '70%',
   },
   sheetPanelFitContent: {
+    flexGrow: 0,
+    flexShrink: 0,
     maxHeight: '90%',
   },
   sheetScroll: {
+    flexGrow: 1,
+    minHeight: 140,
+  },
+  sheetList: {
+    flex: 1,
+    minHeight: 180,
+  },
+  sheetListFit: {
     flexGrow: 0,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   sheetScrollContent: {
     paddingBottom: SIZES.padding,
+    flexGrow: 0,
   },
   sheetOptionsList: {
     paddingBottom: SIZES.padding,
+  },
+  emptyStateCompact: {
+    paddingVertical: SIZES.padding,
+    alignItems: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -356,6 +471,22 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  headerAddBtn: {
+    marginRight: SIZES.base,
+  },
+  sheetSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: SIZES.padding,
+    marginTop: SIZES.base,
+    marginBottom: SIZES.base,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding * 0.75,
+    paddingVertical: SIZES.base / 2,
+    backgroundColor: COLORS.white,
   },
   modalTitle: {
     flex: 1,

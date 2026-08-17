@@ -16,8 +16,8 @@ import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess, showWarning } from '../../utils/alertService';
-import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatCurrency } from '../../utils/amountFormatters';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, formatDisplayDate, formatDisplayDateWithDay, getCalendarDate, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -156,7 +156,7 @@ const CollectionScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [paidError, setPaidError] = useState(null);
   const [activeTab, setActiveTab] = useState('pending');
-  const [loanTypeTab, setLoanTypeTab] = useState('daily'); // daily | weekly tab UI
+  const [loanTypeTab, setLoanTypeTab] = useState('weekly'); // daily | weekly tab UI
   const [tabSwitchLoading, setTabSwitchLoading] = useState(false);
   const deferredTab = useDeferredValue(activeTab);
   const activeTabRef = useRef(activeTab);
@@ -694,7 +694,7 @@ const CollectionScreen = ({ navigation }) => {
 
       let afterTurnOnNeedRetry = false;
 
-      for (;;) {
+      for (; ;) {
         const servicesEnabled = await Location.hasServicesEnabledAsync();
         if (servicesEnabled && !afterTurnOnNeedRetry) {
           break;
@@ -1029,7 +1029,7 @@ const CollectionScreen = ({ navigation }) => {
     const collection = item instanceof Collection ? item : new Collection(item);
     const customerName = String(collection.customerName ?? '').trim();
     const isLongCustomerName = customerName.length > 12;
-    const displayId = collection.customerNo?? collection.customerId  ?? '—';
+    const displayId = collection.customerNo ?? collection.customerId ?? '—';
 
     return (
       <TouchableOpacity
@@ -1279,20 +1279,6 @@ const CollectionScreen = ({ navigation }) => {
 
         <View style={styles.loanTypeFooter}>
           <Pressable
-            style={[styles.loanTypeTab, loanTypeTab === 'daily' && styles.loanTypeTabActive]}
-            onPress={() => handleLoanTypeTabPress('daily')}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-          >
-            <Text style={[styles.loanTypeTabText, loanTypeTab === 'daily' && styles.loanTypeTabTextActive]}>
-              {t('collection.dailyTab')}
-            </Text>
-            <View style={[styles.loanTypeBadge, loanTypeTab === 'daily' && styles.loanTypeBadgeActive]}>
-              <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'daily' && styles.loanTypeBadgeTextActive]}>
-                {dailyLoanTypeCount}
-              </Text>
-            </View>
-          </Pressable>
-          <Pressable
             style={[styles.loanTypeTab, loanTypeTab === 'weekly' && styles.loanTypeTabActive]}
             onPress={() => handleLoanTypeTabPress('weekly')}
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
@@ -1306,6 +1292,21 @@ const CollectionScreen = ({ navigation }) => {
               </Text>
             </View>
           </Pressable>
+          <Pressable
+            style={[styles.loanTypeTab, loanTypeTab === 'daily' && styles.loanTypeTabActive]}
+            onPress={() => handleLoanTypeTabPress('daily')}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+          >
+            <Text style={[styles.loanTypeTabText, loanTypeTab === 'daily' && styles.loanTypeTabTextActive]}>
+              {t('collection.dailyTab')}
+            </Text>
+            <View style={[styles.loanTypeBadge, loanTypeTab === 'daily' && styles.loanTypeBadgeActive]}>
+              <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'daily' && styles.loanTypeBadgeTextActive]}>
+                {dailyLoanTypeCount}
+              </Text>
+            </View>
+          </Pressable>
+
         </View>
       </View>
 
