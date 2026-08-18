@@ -7,7 +7,9 @@ import {
   FlatList,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -98,6 +100,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const [remarks, setRemarks] = useState('');
   const collectedAmountRef = useRef(null);
   const remarksRef = useRef(null);
+  const paymentScrollRef = useRef(null);
   const loanAmountRef = useRef(null);
   const loanPeriodRef = useRef(null);
   const aathayamRef = useRef(null);
@@ -769,6 +772,10 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       >
         <View style={styles.centeredModalOverlay}>
           <Pressable style={styles.centeredModalBackdrop} onPress={handleClosePaymentModal} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.centeredModalKb}
+          >
           <View style={styles.centeredModalContainer}>
             <View style={styles.centeredModalHeader}>
               <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
@@ -779,10 +786,15 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             {selectedCollection ? (
               <View style={styles.centeredModalBody}>
                 <KeyboardAwareScrollView
+                  innerRef={(ref) => {
+                    paymentScrollRef.current = ref;
+                  }}
                   style={styles.centeredModalScrollView}
                   contentContainerStyle={styles.centeredModalContent}
                   keyboardShouldPersistTaps="handled"
                   enableOnAndroid
+                  extraScrollHeight={80}
+                  extraHeight={80}
                 >
                   <View style={styles.customerInfo}>
                     <Text style={styles.customerInfoName}>
@@ -845,9 +857,16 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       onChangeText={setRemarks}
                       multiline
                       numberOfLines={3}
-                      returnKeyType="done"
+                      returnKeyType="next"
                       blurOnSubmit
-                      onSubmitEditing={Keyboard.dismiss}
+                      submitBehavior="blurAndSubmit"
+                      onSubmitEditing={() => {
+                        remarksRef.current?.blur();
+                        Keyboard.dismiss();
+                        setTimeout(() => {
+                          paymentScrollRef.current?.scrollToEnd?.({ animated: true });
+                        }, 50);
+                      }}
                     />
                   </View>
                 </KeyboardAwareScrollView>
@@ -865,6 +884,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
               </View>
             ) : null}
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -904,6 +924,8 @@ const styles = StyleSheet.create({
     width: 126,
     flexShrink: 0,
     justifyContent: 'center',
+    zIndex: 2,
+    elevation: 2,
   },
   dayFilterPicker: {
     marginBottom: 0,
@@ -1043,10 +1065,13 @@ const styles = StyleSheet.create({
   centeredModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  centeredModalContainer: {
+  centeredModalKb: {
     width: '90%',
     maxWidth: 400,
     height: '75%',
+  },
+  centeredModalContainer: {
+    flex: 1,
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius * 2,
     overflow: 'hidden',

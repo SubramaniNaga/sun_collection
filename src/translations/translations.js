@@ -152,7 +152,7 @@ const translations = {
       magimai: 'Magimai',
       previousBalance: 'Previous balance',
       closingBalance: 'Closing balance',
-      processingFee: 'Processing Fee',
+      processingFee: 'Magimai',
       loanGiven: 'Loan Given',
       expenses: 'Expenses',
       expenseDetails: 'Expense details',
