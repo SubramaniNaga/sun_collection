@@ -43,8 +43,10 @@ const FormPicker = ({
   fitSheetToContent = false,
   compactUseFullLabel = false,
 }) => {
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const triggerRef = useRef(null);
+  const [anchor, setAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const keyboard = useAnimatedKeyboard({
     isStatusBarTranslucentAndroid: true,
     isNavigationBarTranslucentAndroid: true,
@@ -108,7 +110,18 @@ const FormPicker = ({
     // onOpen may return false to block opening (e.g. check-in required)
     if (onOpen && onOpen() === false) return;
     setSearchQuery('');
-    setModalVisible(true);
+    Keyboard.dismiss();
+    const show = () => {
+      if (compact && triggerRef.current?.measureInWindow) {
+        triggerRef.current.measureInWindow((x, y, width, height) => {
+          setAnchor({ x, y, width, height });
+          setModalVisible(true);
+        });
+        return;
+      }
+      setModalVisible(true);
+    };
+    requestAnimationFrame(show);
   };
 
   const handleSelect = (itemValue) => {
@@ -146,6 +159,77 @@ const FormPicker = ({
     </Pressable>
   );
 
+  const renderDropdownModal = () => {
+    const menuWidth = Math.min(Math.max(anchor.width, 168), windowWidth - 16);
+    let left = anchor.x + anchor.width - menuWidth;
+    if (left < 8) left = 8;
+    if (left + menuWidth > windowWidth - 8) left = windowWidth - 8 - menuWidth;
+
+    const rowHeight = 40;
+    const menuHeight = Math.min(items.length * rowHeight + 8, windowHeight * 0.45);
+    const spaceBelow = windowHeight - (anchor.y + anchor.height) - Math.max(insets.bottom, 8);
+    const openUp = spaceBelow < menuHeight && anchor.y > menuHeight + 8;
+    const top = openUp
+      ? Math.max(insets.top + 8, anchor.y - menuHeight - 4)
+      : anchor.y + anchor.height + 4;
+
+    return (
+      <Modal
+        transparent
+        animationType="fade"
+        visible={modalVisible}
+        onRequestClose={closeModal}
+        statusBarTranslucent
+      >
+        <View style={styles.dropdownRoot} pointerEvents="box-none">
+          <Pressable style={styles.dropdownDismiss} onPress={closeModal} />
+          <View
+            pointerEvents="auto"
+            style={[
+              styles.dropdownMenu,
+              {
+                top,
+                left,
+                width: menuWidth,
+                maxHeight: menuHeight,
+              },
+            ]}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+              nestedScrollEnabled
+            >
+              {items.map((item) => (
+                <Pressable
+                  key={item.value}
+                  onPress={() => handleSelect(item.value)}
+                  style={[
+                    styles.dropdownOption,
+                    value === item.value && styles.optionRowSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dropdownOptionText,
+                      value === item.value && styles.optionTextSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
+                  </Text>
+                  {value === item.value ? (
+                    <Ionicons name="checkmark" size={16} color={COLORS.primary} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const renderSheetModal = () => (
     <Modal
       animationType="slide"
@@ -155,9 +239,10 @@ const FormPicker = ({
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <Animated.View style={[styles.sheetOverlay, overlayKeyboardStyle]}>
+      <Animated.View style={[styles.sheetOverlay, overlayKeyboardStyle]} pointerEvents="box-none">
         <Pressable style={styles.sheetBackdrop} onPress={closeModal} />
         <Animated.View
+          pointerEvents="auto"
           style={[
             styles.sheetPanel,
             fitSheetToContent ? styles.sheetPanelFitContent : sheetKeyboardStyle,
@@ -325,40 +410,46 @@ const FormPicker = ({
         </Text>
       ) : null}
 
-      <Pressable
-        onPress={openModal}
-        style={[
-          styles.trigger,
-          compact && styles.triggerCompact,
-          error && styles.triggerError,
-          !editable && styles.triggerDisabled,
-        ]}
-      >
-        <Text
+      <View ref={triggerRef} collapsable={false}>
+        <Pressable
+          onPress={openModal}
           style={[
-            styles.triggerText,
-            compact && styles.triggerTextCompact,
-            compact && compactUseFullLabel && styles.triggerTextCompactFull,
-            !selectedItem && styles.triggerPlaceholder,
+            styles.trigger,
+            compact && styles.triggerCompact,
+            error && styles.triggerError,
+            !editable && styles.triggerDisabled,
           ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit={compactUseFullLabel}
-          minimumFontScale={0.9}
         >
-          {selectedItem ? selectedLabel : placeholder}
-        </Text>
-        {editable ? (
-          <Ionicons
-            name="chevron-down"
-            size={compact ? 16 : 20}
-            color={COLORS.text.tertiary}
-          />
-        ) : null}
-      </Pressable>
+          <Text
+            style={[
+              styles.triggerText,
+              compact && styles.triggerTextCompact,
+              compact && compactUseFullLabel && styles.triggerTextCompactFull,
+              !selectedItem && styles.triggerPlaceholder,
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit={compactUseFullLabel}
+            minimumFontScale={0.9}
+          >
+            {selectedItem ? selectedLabel : placeholder}
+          </Text>
+          {editable ? (
+            <Ionicons
+              name={compact && modalVisible ? 'chevron-up' : 'chevron-down'}
+              size={compact ? 16 : 20}
+              color={COLORS.text.tertiary}
+            />
+          ) : null}
+        </Pressable>
+      </View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {fullScreenModal ? renderFullScreenModal() : renderSheetModal()}
+      {fullScreenModal
+        ? renderFullScreenModal()
+        : compact
+          ? renderDropdownModal()
+          : renderSheetModal()}
     </View>
   );
 };
@@ -366,6 +457,40 @@ const FormPicker = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: SIZES.margin,
+  },
+  dropdownRoot: {
+    flex: 1,
+  },
+  dropdownDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    zIndex: 20,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 40,
+  },
+  dropdownOptionText: {
+    flex: 1,
+    fontSize: SIZES.body3,
+    color: COLORS.black,
+    marginRight: 8,
   },
   label: {
     fontSize: SIZES.body2,
@@ -429,7 +554,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
   },
   sheetPanel: {
     width: '100%',
@@ -437,6 +562,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: SIZES.radius * 2,
     borderTopRightRadius: SIZES.radius * 2,
     overflow: 'hidden',
+    zIndex: 2,
+    elevation: 12,
   },
   sheetPanelScrollable: {
     maxHeight: '70%',
