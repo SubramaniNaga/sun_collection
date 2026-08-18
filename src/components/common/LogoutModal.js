@@ -27,16 +27,11 @@ const LogoutModal = ({ visible, onClose, onConfirm, userName }) => {
           
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>
-              {t('settings.logoutConfirmationMessage') || 'Are you sure you want to logout?'}
+            {userName ? `${userName}, ${t('settings.logoutConfirmationMessage')}` : t('settings.logoutConfirmationMessage') || 'Are you sure you want to logout?'}
             </Text>
-            {userName && (
-              <Text style={styles.userNameText}>
-                {userName}
-              </Text>
-            )}
-            <Text style={styles.modalSubMessage}>
+            {/* <Text style={styles.modalSubMessage}>
               {t('settings.logoutSubMessage') || 'You will need to login again to access your account.'}
-            </Text>
+            </Text> */}
           </View>
 
           <View style={styles.modalActions}>
@@ -86,35 +81,40 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   modalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     paddingTop: SIZES.padding * 2,
-    paddingBottom: SIZES.padding,
+  
     paddingHorizontal: SIZES.padding * 1.5,
     backgroundColor: COLORS.lightGray,
   },
   modalIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    
+    borderRadius: 24,
     backgroundColor: COLORS.error + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SIZES.margin,
   },
   modalTitle: {
+    
     fontSize: SIZES.h3,
-    fontWeight: '700',
     color: COLORS.text.primary,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: SIZES.margin,
+    marginLeft: SIZES.base,
   },
   modalContent: {
     padding: SIZES.padding * 2,
     alignItems: 'center',
   },
   modalMessage: {
-    fontSize: SIZES.body1,
+    fontSize: SIZES.body2,
     fontWeight: '600',
     color: COLORS.text.primary,
-    textAlign: 'center',
+    textAlign: 'start',
     marginBottom: SIZES.base,
   },
   userNameText: {

@@ -1109,6 +1109,39 @@ export const apiServices = {
       }
     },
 
+    getDelayedCollections: async (params = {}) => {
+      try {
+        const { branchId, lineIdsString } = await getLineAndBranchIds();
+        if (!branchId) {
+          throw new Error('Branch ID not found. Please log in again.');
+        }
+        const {
+          page = 1,
+          limit = 20,
+          delay_unit = 'weeks',
+          search = '',
+        } = params;
+        const searchTrimmed = typeof search === 'string' ? search.trim() : '';
+        const requestParams = {
+          branch_id: branchId,
+          line_id: lineIdsString,
+          delay_unit,
+          page,
+          limit,
+          ...(searchTrimmed && { search: searchTrimmed }),
+        };
+        console.log('📋 API: getDelayedCollections - GET', ENDPOINTS.COLLECTION.DELAY_LIST, '| params:', requestParams);
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.DELAY_LIST, { params: requestParams });
+        const collections = response.data?.data?.collections ?? response.data?.data ?? [];
+        const list = Array.isArray(collections) ? collections : [];
+        console.log('📋 API: getDelayedCollections - count:', list.length, '| pagination:', JSON.stringify(response.data?.pagination ?? {}));
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Get delayed collections error:', error);
+        throw error;
+      }
+    },
+
     // updateAmount: async (collectionId, payload) => {
     //   try {
     //     const url = ENDPOINTS.COLLECTION.UPDATE_AMOUNT(collectionId);

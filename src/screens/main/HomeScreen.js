@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   AppState,
+  Easing,
   Platform,
   RefreshControl,
   ScrollView,
@@ -89,6 +90,11 @@ const HomeScreen = ({ navigation }) => {
   const attendanceSlideAnim = useRef(
     new Animated.Value(isAttendanceCheckedIn() ? LANG_THUMB_TRAVEL : 0)
   ).current; // A left, P right
+  const delayPulseAnim = useRef(new Animated.Value(1)).current;
+  const delayShimmerAnim = useRef(new Animated.Value(0)).current;
+  const delayRing1Anim = useRef(new Animated.Value(0)).current;
+  const delayRing2Anim = useRef(new Animated.Value(0)).current;
+  const delayGlowAnim = useRef(new Animated.Value(0)).current;
   const attendanceRetryRef = useRef(null); // last attempt payload for retry (no re-capture)
 
   const syncAttendanceUiFromConfig = useCallback(() => {
@@ -465,6 +471,82 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
+  useEffect(() => {
+    const native = { useNativeDriver: true };
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(delayPulseAnim, {
+          toValue: 1.045,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+        Animated.timing(delayPulseAnim, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+      ]),
+    );
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(delayGlowAnim, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+        Animated.timing(delayGlowAnim, {
+          toValue: 0,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+      ]),
+    );
+    const shimmerLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(delayShimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          ...native,
+        }),
+        Animated.delay(900),
+        Animated.timing(delayShimmerAnim, { toValue: 0, duration: 0, ...native }),
+      ]),
+    );
+    const makeRingLoop = (anim, startDelay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(startDelay),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 1700,
+            easing: Easing.out(Easing.cubic),
+            ...native,
+          }),
+          Animated.timing(anim, { toValue: 0, duration: 0, ...native }),
+        ]),
+      );
+    const ring1Loop = makeRingLoop(delayRing1Anim, 0);
+    const ring2Loop = makeRingLoop(delayRing2Anim, 850);
+
+    pulseLoop.start();
+    glowLoop.start();
+    shimmerLoop.start();
+    ring1Loop.start();
+    ring2Loop.start();
+    return () => {
+      pulseLoop.stop();
+      glowLoop.stop();
+      shimmerLoop.stop();
+      ring1Loop.stop();
+      ring2Loop.stop();
+    };
+  }, [delayPulseAnim, delayShimmerAnim, delayRing1Anim, delayRing2Anim, delayGlowAnim]);
+
   // Refresh block + attendance when app returns to foreground (silent — no global loader).
   // Re-sync FS when allow_location / capture_time / check-in gate change.
   useEffect(() => {
@@ -557,8 +639,11 @@ const HomeScreen = ({ navigation }) => {
     onPress,
     outlined,
     hideDetails,
+    filledDanger,
   }) => {
     const isOutlined = Boolean(outlined);
+    const isDanger = Boolean(filledDanger);
+    const iconColor = isDanger ? COLORS.white : COLORS.primary;
     return (
       <TouchableOpacity
         key={cardKey}
@@ -574,13 +659,14 @@ const HomeScreen = ({ navigation }) => {
           <Ionicons
             name={iconName}
             size={hideDetails ? 32 : 22}
-            color={COLORS.primary}
+            color={iconColor}
           />
           <Text
             style={[
               styles.amountCardHeaderText,
               isOutlined && styles.amountCardHeaderTextOutlined,
               hideDetails && styles.amountCardHeaderTextLarge,
+              isDanger && styles.amountCardHeaderTextDanger,
             ]}
             numberOfLines={2}
           >
@@ -709,6 +795,104 @@ const HomeScreen = ({ navigation }) => {
                 </TouchableOpacity>
               )}
             </View>
+            <View style={styles.delayedCollectionWrap}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.delayedCollectionGlow,
+                  {
+                    opacity: delayGlowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.25, 0.75],
+                    }),
+                    transform: [
+                      {
+                        scale: delayGlowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1.02, 1.12],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.delayedCollectionRing,
+                  {
+                    opacity: delayRing1Anim.interpolate({
+                      inputRange: [0, 0.2, 1],
+                      outputRange: [0.85, 0.45, 0],
+                    }),
+                    transform: [
+                      {
+                        scale: delayRing1Anim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.22],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.delayedCollectionRing,
+                  {
+                    opacity: delayRing2Anim.interpolate({
+                      inputRange: [0, 0.2, 1],
+                      outputRange: [0.7, 0.35, 0],
+                    }),
+                    transform: [
+                      {
+                        scale: delayRing2Anim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.22],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <Animated.View style={{ transform: [{ scale: delayPulseAnim }] }}>
+                <TouchableOpacity
+                  style={styles.delayedCollectionButton}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('DelayCollection', { delayUnit: 'weeks' })}
+                >
+                  <Text style={styles.delayedCollectionButtonText}>Delayed Collection</Text>
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.delayedCollectionShimmer,
+                      {
+                        transform: [
+                          {
+                            translateX: delayShimmerAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [-80, 360],
+                            }),
+                          },
+                          { rotate: '20deg' },
+                        ],
+                      },
+                    ]}
+                  />
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+            {/* {renderAmountCard({
+                    cardKey: 'delayed-collection',
+                    backgroundColor: COLORS.error,
+                    iconName: 'time-outline',
+                    title: t('home.delayedCollection'),
+                    onPress: () =>
+                      navigation.navigate('DelayCollection', { delayUnit: 'weeks' }),
+                    hideDetails: true,
+                    filledDanger: true,
+                  })} */}
             {loadingDashboard ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
@@ -799,6 +983,7 @@ const HomeScreen = ({ navigation }) => {
                     onPress: () => navigation.navigate('NIP'),
                     outlined: true,
                   })}
+                  
                 </View>
 
                 <TouchableOpacity
@@ -916,6 +1101,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     color: COLORS.primary,
+  },
+  amountCardHeaderTextDanger: {
+    color: COLORS.white,
   },
   amountCardHeaderText: {
     flex: 1,
@@ -1054,6 +1242,48 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
     letterSpacing: 0.2,
+  },
+  delayedCollectionWrap: {
+    marginBottom: SIZES.margin,
+  },
+  delayedCollectionGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: SIZES.radius * 1.5,
+    backgroundColor: '#FF6B66',
+  },
+  delayedCollectionRing: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: SIZES.radius * 1.5,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  delayedCollectionButton: {
+    backgroundColor: COLORS.error,
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius * 1.5,
+    overflow: 'hidden',
+  },
+  delayedCollectionShimmer: {
+    position: 'absolute',
+    top: -40,
+    bottom: -40,
+    width: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+  },
+  delayedCollectionButtonText: {
+    color: COLORS.white,
+    fontSize: SIZES.body1,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.2,
   },
 });
 

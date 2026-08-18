@@ -16,6 +16,7 @@ import AddCustomerScreen from '../screens/main/AddCustomerScreen';
 import CollectionDetailsScreen from '../screens/main/CollectionDetailsScreen';
 import CollectionHistoryScreen from '../screens/main/CollectionHistoryScreen';
 import CollectionScreen from '../screens/main/CollectionScreen';
+import DelayCollectionScreen from '../screens/main/DelayCollectionScreen';
 import CustomerWithLoanScreen from '../screens/main/CustomerWithLoanScreen';
 import ExpenseAddScreen from '../screens/main/ExpenseAddScreen';
 import ExpensesScreen from '../screens/main/ExpensesScreen';
@@ -117,6 +118,13 @@ const HomeStack = () => (
       name="Collection" 
       component={CollectionScreen} 
       options={{ 
+        headerShown: false,
+      }}
+    />
+    <Stack.Screen
+      name="DelayCollection"
+      component={DelayCollectionScreen}
+      options={{
         headerShown: false,
       }}
     />
