@@ -356,23 +356,23 @@ const CashAccountScreen = ({ navigation }) => {
     todayDashboard != null
       ? Number(todayDashboard.frontcashByType?.cash ?? 0) || 0
       : Number(
-          openingSummary?.total_frontcash_by_type?.cash ??
-            openingSummary?.total_frontcash ??
-            0
-        ) || 0;
+        openingSummary?.total_frontcash_by_type?.cash ??
+        openingSummary?.total_frontcash ??
+        0
+      ) || 0;
   const upfrontByOnline =
     todayDashboard != null
       ? Number(
-          (todayDashboard.frontcashByType?.upi ?? 0) +
-            (todayDashboard.frontcashByType?.bank ?? 0) +
-            (todayDashboard.frontcashByType?.other ?? 0)
-        ) || 0
+        (todayDashboard.frontcashByType?.upi ?? 0) +
+        (todayDashboard.frontcashByType?.bank ?? 0) +
+        (todayDashboard.frontcashByType?.other ?? 0)
+      ) || 0
       : Number(
-          openingSummary?.total_frontcash_online ??
-            openingSummary?.total_frontcash_by_type?.online ??
-            openingSummary?.total_frontcash_by_type?.upi ??
-            0
-        ) || 0;
+        openingSummary?.total_frontcash_online ??
+        openingSummary?.total_frontcash_by_type?.online ??
+        openingSummary?.total_frontcash_by_type?.upi ??
+        0
+      ) || 0;
   const upfrontCash =
     todayDashboard != null
       ? Number(todayDashboard.frontcash?.totalAmount ?? 0) || upfrontByCash + upfrontByOnline
@@ -819,7 +819,9 @@ const CashAccountScreen = ({ navigation }) => {
                 >
                   {formatCurrency(String(totalSpent))}
                 </Text>
-                <View style={styles.closingCalcDoubleLine} />
+
+                <View style={styles.closingCalcUnderline} />
+
                 <Text
                   style={[
                     styles.closingCalcAmount,
@@ -1084,6 +1086,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.black,
   },
   tableClosingBalanceText: {
+    marginTop: 40,
     fontSize: SIZES.body3,
     fontWeight: '700',
     color: COLORS.black,
