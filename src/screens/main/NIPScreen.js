@@ -834,6 +834,7 @@ const NIPScreen = ({ navigation }) => {
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   returnKeyType="search"
+                  onSubmitEditing={Keyboard.dismiss}
                   multiline={false}
                   numberOfLines={1}
                   scrollEnabled

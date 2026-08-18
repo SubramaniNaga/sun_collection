@@ -96,6 +96,15 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [collectedAmount, setCollectedAmount] = useState('');
   const [remarks, setRemarks] = useState('');
+  const collectedAmountRef = useRef(null);
+  const remarksRef = useRef(null);
+  const loanAmountRef = useRef(null);
+  const loanPeriodRef = useRef(null);
+  const aathayamRef = useRef(null);
+  const magimaiRef = useRef(null);
+  const [loanTypePickerOpen, setLoanTypePickerOpen] = useState(false);
+  const [renewalDayPickerOpen, setRenewalDayPickerOpen] = useState(false);
+  const navOpenedRef = useRef(null);
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
@@ -520,13 +529,27 @@ const IntermediateIncomeScreen = ({ navigation }) => {
           <FormPicker
             label={t('customer.loanType')}
             value={loanTypeId}
-            onValueChange={setLoanTypeId}
+            onValueChange={(value) => {
+              setLoanTypeId(value);
+              if (navOpenedRef.current === 'loanType') {
+                navOpenedRef.current = null;
+                setTimeout(() => loanAmountRef.current?.focus(), 300);
+              }
+            }}
             items={loanTypeOptions}
             placeholder={t('customer.selectLoanType')}
             error={renewalErrors.loanTypeId}
             required
+            visible={loanTypePickerOpen}
+            onVisibleChange={(open) => {
+              setLoanTypePickerOpen(open);
+              if (!open && navOpenedRef.current === 'loanType' && !loanTypeId) {
+                navOpenedRef.current = null;
+              }
+            }}
           />
           <Input
+            ref={loanAmountRef}
             label={t('customer.loanAmount')}
             value={loanAmount}
             onChangeText={setLoanAmount}
@@ -534,8 +557,13 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             keyboardType="numeric"
             error={renewalErrors.loanAmount}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => loanPeriodRef.current?.focus()}
           />
           <Input
+            ref={loanPeriodRef}
             label={t('customer.loanPeriod')}
             value={loanPeriod}
             onChangeText={setLoanPeriod}
@@ -543,8 +571,13 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             keyboardType="numeric"
             error={renewalErrors.loanPeriod}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => aathayamRef.current?.focus()}
           />
           <Input
+            ref={aathayamRef}
             label={t('customer.aathayam')}
             value={aathayamAmount}
             onChangeText={setAathayamAmount}
@@ -552,8 +585,13 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             keyboardType="decimal-pad"
             error={renewalErrors.aathayamAmount}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => magimaiRef.current?.focus()}
           />
           <Input
+            ref={magimaiRef}
             label={t('customer.magimai')}
             value={magimaiAmount}
             onChangeText={setMagimaiAmount}
@@ -561,17 +599,43 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             keyboardType="decimal-pad"
             error={renewalErrors.magimaiAmount}
             required
+            returnKeyType={isWeeklyLoanType ? 'next' : 'done'}
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => {
+              if (isWeeklyLoanType) {
+                if (renewalDay) {
+                  Keyboard.dismiss();
+                  return;
+                }
+                Keyboard.dismiss();
+                navOpenedRef.current = 'renewalDay';
+                setRenewalDayPickerOpen(true);
+                return;
+              }
+              Keyboard.dismiss();
+            }}
           />
           {isWeeklyLoanType ? (
             <FormPicker
               label={t('customer.registerDay')}
               value={renewalDay}
-              onValueChange={setRenewalDay}
+              onValueChange={(value) => {
+                setRenewalDay(value);
+                navOpenedRef.current = null;
+              }}
               items={registerDayOptions}
               placeholder={t('customer.registerDay')}
               error={renewalErrors.renewalDay}
               fitSheetToContent
               required
+              visible={renewalDayPickerOpen}
+              onVisibleChange={(open) => {
+                setRenewalDayPickerOpen(open);
+                if (!open && navOpenedRef.current === 'renewalDay' && !renewalDay) {
+                  navOpenedRef.current = null;
+                }
+              }}
             />
           ) : null}
         </KeyboardAwareScrollView>
@@ -748,11 +812,16 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                   <View style={styles.inputFieldContainer}>
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
                     <TextInput
+                      ref={collectedAmountRef}
                       style={[styles.inputField, paymentErrors.collectedAmount && styles.inputFieldError]}
                       placeholder={t('collection.enterAmount')}
                       placeholderTextColor={COLORS.text.tertiary}
                       value={collectedAmount}
                       keyboardType="numeric"
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => remarksRef.current?.focus()}
                       onChangeText={(text) => {
                         const digitsOnly = text.replace(/[^0-9]/g, '');
                         setCollectedAmount(digitsOnly);
@@ -768,6 +837,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                   <View style={styles.inputFieldContainer}>
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
                     <TextInput
+                      ref={remarksRef}
                       style={[styles.inputField, styles.textArea]}
                       placeholder={t('collection.enterRemarks')}
                       placeholderTextColor={COLORS.text.tertiary}
@@ -775,6 +845,9 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       onChangeText={setRemarks}
                       multiline
                       numberOfLines={3}
+                      returnKeyType="done"
+                      blurOnSubmit
+                      onSubmitEditing={Keyboard.dismiss}
                     />
                   </View>
                 </KeyboardAwareScrollView>
@@ -828,7 +901,7 @@ const styles = StyleSheet.create({
     height: 44,
   },
   dayFilterWrapper: {
-    width: 110,
+    width: 126,
     flexShrink: 0,
     justifyContent: 'center',
   },

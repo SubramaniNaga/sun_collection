@@ -32,6 +32,13 @@
       </intent-filter>
     </activity>
 
+    <meta-data
+      android:name="com.google.firebase.messaging.default_notification_channel_id"
+      android:value="default" />
+    <meta-data
+      android:name="com.google.firebase.messaging.default_notification_color"
+      android:resource="@color/notification_icon_color" />
+
     <!-- Keep Expo location foreground service alive when task is removed from Recents -->
     <service
       android:name="expo.modules.location.services.LocationTaskService"

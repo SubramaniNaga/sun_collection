@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { Image, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
@@ -9,7 +9,7 @@ import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import ImagePreviewModal from './ImagePreviewModal';
 import ImageProcessingLoader from './ImageProcessingLoader';
 
-const CustomImagePicker = ({
+const CustomImagePicker = forwardRef(({
   image,
   onImageChange,
   error,
@@ -17,13 +17,13 @@ const CustomImagePicker = ({
   label = 'Receipt Image',
   required = false,
   style = {},
-}) => {
+}, ref) => {
   const { t } = useLanguage();
   const [previewVisible, setPreviewVisible] = useState(false);
   const [picking, setPicking] = useState(false);
 
   const pickImage = async (source) => {
-    if (!editable || picking) return;
+    if (!editable || picking) return false;
 
     setPicking(true);
     try {
@@ -31,26 +31,39 @@ const CustomImagePicker = ({
         const cameraPermission = await ExpoImagePicker.requestCameraPermissionsAsync();
         if (!cameraPermission.granted) {
           showWarning('Permission Required', 'Camera permission is required to take photos.');
-          return;
+          return false;
         }
         const asset = await pickFromCamera();
-        if (asset) onImageChange(asset);
+        if (asset) {
+          onImageChange(asset);
+          return true;
+        }
+        return false;
       } else {
         const mediaPermission = await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
         if (!mediaPermission.granted) {
           showWarning('Permission Required', 'Gallery permission is required to select photos.');
-          return;
+          return false;
         }
         const asset = await pickFromLibrary();
-        if (asset) onImageChange(asset);
+        if (asset) {
+          onImageChange(asset);
+          return true;
+        }
+        return false;
       }
     } catch (error) {
       if (__DEV__) console.warn('Image picker error:', error?.message ?? error);
       showError('Error', error?.message || 'Failed to pick image. Please try again.');
+      return false;
     } finally {
       setPicking(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    openCamera: () => pickImage('camera'),
+  }));
 
   const removeImage = () => {
     if (editable && !picking) {
@@ -295,6 +308,8 @@ const CustomImagePicker = ({
       />
     </View>
   );
-};
+});
+
+CustomImagePicker.displayName = 'CustomImagePicker';
 
 export default CustomImagePicker;

@@ -1064,7 +1064,7 @@ const styles = StyleSheet.create({
   },
   cashAccountCardText: {
     marginLeft: SIZES.base,
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body1,
     fontWeight: '700',
     color: COLORS.primary,
     letterSpacing: -0.2,
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   amountCardHeaderTextLarge: {
-    fontSize: SIZES.body,
+    fontSize: SIZES.body1,
     fontWeight: '700',
     textAlign: 'center',
     color: COLORS.primary,
@@ -1107,7 +1107,7 @@ const styles = StyleSheet.create({
   },
   amountCardHeaderText: {
     flex: 1,
-    fontSize: SIZES.body4,
+    fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.primary,
     marginLeft: SIZES.base,

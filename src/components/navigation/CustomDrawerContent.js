@@ -47,6 +47,15 @@ const CustomDrawerContent = (props) => {
           navigation.navigate('Home', { screen: 'CompanyVaravuAdd' })
         ),
     },
+    {
+      id: 'cities',
+      label: t('cities.title'),
+      icon: 'location-outline',
+      onPress: () =>
+        navigateAndCloseDrawer(() =>
+          navigation.navigate('Home', { screen: 'Cities' })
+        ),
+    },
   ];
 
   const handleLogout = () => {

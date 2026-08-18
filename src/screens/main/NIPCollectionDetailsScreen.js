@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -67,6 +68,8 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
     notes: '',
     payment_type: 'cash', // Default to cash
   });
+  const amountPaidRef = useRef(null);
+  const notesRef = useRef(null);
 
   useEffect(() => {
     // Loan from NIPScreen includes loanTypeName / loan_type_name from API when NIPLoan model maps it
@@ -326,12 +329,17 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       <View style={styles.formRow}>
         {renderRequiredLabel(t('nip.amountPaid'))}
         <TextInput
+          ref={amountPaidRef}
           style={styles.textInput}
           placeholder={t('nip.enterAmountPaid')}
           placeholderTextColor={COLORS.text.tertiary}
           value={formData.amount_paid}
           onChangeText={(value) => handleInputChange('amount_paid', value)}
           keyboardType="numeric"
+          returnKeyType="next"
+          blurOnSubmit={false}
+          submitBehavior="submit"
+          onSubmitEditing={() => notesRef.current?.focus()}
         />
       </View>
 
@@ -379,6 +387,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       <View style={styles.formRow}>
         {renderRequiredLabel(t('nip.notes'))}
         <TextInput
+          ref={notesRef}
           style={[styles.textInput, styles.notesInput]}
           placeholder={t('nip.enterNotes')}
           placeholderTextColor={COLORS.text.tertiary}
@@ -387,6 +396,9 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
           multiline
           numberOfLines={3}
           textAlignVertical="top"
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={Keyboard.dismiss}
         />
       </View>
 

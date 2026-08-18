@@ -1,7 +1,8 @@
+import { forwardRef } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 
-const Input = ({
+const Input = forwardRef(({
   label,
   value,
   onChangeText,
@@ -23,7 +24,7 @@ const Input = ({
   containerStyle,
   required = false,
   ...props
-}) => {
+}, ref) => {
   const getInputStyle = () => {
     const baseStyle = [styles.input];
     
@@ -67,6 +68,7 @@ const Input = ({
         )}
         
         <TextInput
+          ref={ref}
           style={[getInputStyle(), inputStyle]}
           value={value}
           onChangeText={onChangeText}
@@ -94,7 +96,9 @@ const Input = ({
       )}
     </View>
   );
-};
+});
+
+Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   container: {

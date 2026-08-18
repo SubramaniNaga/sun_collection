@@ -193,6 +193,20 @@ const CashAccountScreen = ({ navigation }) => {
   const [collectionPaymentSplit, setCollectionPaymentSplit] = useState({ cash: 0, online: 0 });
   /** YYYY-MM-DD → true when close account succeeded with `data.inserted` (persisted). */
   const [closedInsertedDates, setClosedInsertedDates] = useState({});
+  const [expenseDetailsExpanded, setExpenseDetailsExpanded] = useState(false);
+
+  /**
+   * Placeholder expense breakdown rows shown when the info icon is tapped.
+   * Replace this with API data when the expense-details endpoint is ready.
+   */
+  const expenseDetailRows = useMemo(
+    () => [
+      { id: 'placeholder-1', label: 'Item 1', amount: 0 },
+      { id: 'placeholder-2', label: 'Item 2', amount: 0 },
+      { id: 'placeholder-3', label: 'Item 3', amount: 0 },
+    ],
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -461,15 +475,21 @@ const CashAccountScreen = ({ navigation }) => {
 
   const dash = '—';
 
-  const renderTableRow3 = (key, label, spentVal, receivedVal, rowStyle) => (
-    <View key={key} style={[styles.tableGridRow, rowStyle]}>
+  const renderTableRow3 = (key, label, spentVal, receivedVal, rowStyle, options = {}) => (
+    <View key={key} style={[styles.tableGridRow, options.detailRow && styles.tableGridDetailRow, rowStyle]}>
       <View style={[styles.tableGridCell, styles.tableGridColParticulars]}>
-        <Text
-          style={[styles.tableCellParticularsText, isTableClosedInserted && styles.tableTextClosedBlack]}
-          numberOfLines={2}
-        >
-          {label}
-        </Text>
+        {options.labelNode ?? (
+          <Text
+            style={[
+              styles.tableCellParticularsText,
+              options.detailRow && styles.tableCellParticularsDetailText,
+              isTableClosedInserted && styles.tableTextClosedBlack,
+            ]}
+            numberOfLines={2}
+          >
+            {label}
+          </Text>
+        )}
       </View>
       <View style={[styles.tableGridCell, styles.tableGridColAmount, styles.tableGridCellAmount]}>
         <Text
@@ -742,8 +762,59 @@ const CashAccountScreen = ({ navigation }) => {
               t('cashAccount.expenses'),
               formatCurrency(String(expenses)),
               null,
-              styles.tableGridRowLastBeforeFooter
+              !expenseDetailsExpanded ? styles.tableGridRowLastBeforeFooter : undefined,
+              {
+                labelNode: (
+                  <View style={styles.particularsWithInfo}>
+                    <Text
+                      style={[
+                        styles.tableCellParticularsText,
+                        isTableClosedInserted && styles.tableTextClosedBlack,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {t('cashAccount.expenses')}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setExpenseDetailsExpanded((open) => !open)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('cashAccount.expenseDetails')}
+                      accessibilityState={{ expanded: expenseDetailsExpanded }}
+                    >
+                      <Ionicons
+                        name={expenseDetailsExpanded ? 'information-circle' : 'information-circle-outline'}
+                        size={SIZES.body3}
+                        color={COLORS.primary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ),
+              }
             )}
+            {expenseDetailsExpanded
+              ? (expenseDetailRows.length > 0
+                  ? expenseDetailRows.map((row, index) =>
+                      renderTableRow3(
+                        `expense-detail-${row.id}`,
+                        row.label,
+                        formatCurrency(String(row.amount ?? 0)),
+                        null,
+                        index === expenseDetailRows.length - 1
+                          ? styles.tableGridRowLastBeforeFooter
+                          : undefined,
+                        { detailRow: true }
+                      )
+                    )
+                  : renderTableRow3(
+                      'expense-detail-empty',
+                      t('cashAccount.noExpenseDetails'),
+                      null,
+                      null,
+                      styles.tableGridRowLastBeforeFooter,
+                      { detailRow: true }
+                    ))
+              : null}
 
             <View style={styles.tableSummaryFooter}>
               <View style={[styles.tableGridCell, styles.tableGridColParticulars, styles.closingCalcLabelCell]}>
@@ -922,6 +993,19 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body3,
     fontWeight: '600',
     color: COLORS.black,
+  },
+  particularsWithInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tableGridDetailRow: {
+    backgroundColor: '#F8F9FA',
+  },
+  tableCellParticularsDetailText: {
+    fontWeight: '500',
+    paddingLeft: 12,
+    color: COLORS.text.secondary,
   },
   tableCellAmountText: {
     fontSize: SIZES.body3,

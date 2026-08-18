@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
@@ -26,6 +26,8 @@ const UpfrontCashAddScreen = ({ navigation }) => {
     type: 'cash',
     message: '',
   });
+  const amountRef = useRef(null);
+  const descriptionRef = useRef(null);
   const [userIdDisplay, setUserIdDisplay] = useState('');
 
   useEffect(() => {
@@ -113,6 +115,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
             <Card style={styles.sectionCard}>
               {/* <Text style={styles.sectionTitle}>{t('upfrontCash.upfrontCashDetails')}</Text> */}
               <FormInput
+                ref={amountRef}
                 label={t('upfrontCash.amount')}
                 value={formData.amount}
                 onChangeText={(v) => handleInputChange('amount', v)}
@@ -120,6 +123,10 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 keyboardType="numeric"
                 error={errors.amount}
                 required
+                returnKeyType="next"
+                blurOnSubmit={false}
+                submitBehavior="submit"
+                onSubmitEditing={() => descriptionRef.current?.focus()}
               />
               <View style={styles.typeField}>
                 <Text style={styles.typeLabel}>{t('upfrontCash.transactionType')}</Text>
@@ -158,6 +165,7 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 ) : null}
               </View>
               <FormInput
+                ref={descriptionRef}
                 label={t('upfrontCash.description')}
                 value={formData.message}
                 onChangeText={(v) => handleInputChange('message', v)}
@@ -165,6 +173,9 @@ const UpfrontCashAddScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={4}
                 error={errors.message}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
               />
             </Card>
             <View style={styles.bottomPadding} />

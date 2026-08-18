@@ -155,6 +155,8 @@ const translations = {
       processingFee: 'Processing Fee',
       loanGiven: 'Loan Given',
       expenses: 'Expenses',
+      expenseDetails: 'Expense details',
+      noExpenseDetails: 'No expense details',
       balance: 'Balance',
       onlineShort: 'Online',
       cashShort: 'Cash',
@@ -164,6 +166,10 @@ const translations = {
       cashAccount: 'Cash Account',
       closeAccountConfirm: 'Are you sure you want to close the account for the selected date?',
       closeAccountSuccess: 'Account closed successfully.',
+    },
+
+    cities: {
+      title: 'Cities',
     },
 
     // Profile
@@ -270,7 +276,7 @@ const translations = {
     },
 
     intermediateIncome: {
-      title: 'Intermediate Income',
+      title: 'Edai Varavu',
       searchPlaceholder: 'Search customer no, name or ID',
       loanRenewalNeeded: 'Loan renewal needed?',
       loanRenewalMessage: 'Do you want to renew the loan for this customer?',
@@ -917,6 +923,8 @@ const translations = {
       processingFee: 'செயலாக்க கட்டணம்',
       loanGiven: 'கடன் வழங்கல்',
       expenses: 'செலவுகள்',
+      expenseDetails: 'செலவு விவரங்கள்',
+      noExpenseDetails: 'செலவு விவரங்கள் இல்லை',
       balance: 'மீதம்',
       onlineShort: 'ஆன்லைன்',
       cashShort: 'பணம்',
@@ -926,6 +934,10 @@ const translations = {
       cashAccount: 'பண கணக்கு',
       closeAccountConfirm: 'தேர்ந்தெடுக்கப்பட்ட தேதிக்கான கணக்கை மூட விரும்புகிறீர்களா?',
       closeAccountSuccess: 'கணக்கு வெற்றிகரமாக மூடப்பட்டது.',
+    },
+
+    cities: {
+      title: 'நகரங்கள்',
     },
 
     // Profile

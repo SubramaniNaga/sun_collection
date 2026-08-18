@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import ENDPOINTS from '../../api/endpoints';
@@ -23,6 +23,9 @@ const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
+  const phoneRef = useRef(null);
+  const passwordRef = useRef(null);
+  const phoneAutoAdvancedRef = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [deviceConflictData, setDeviceConflictData] = useState(null);
@@ -73,12 +76,11 @@ const LoginScreen = ({ navigation }) => {
         console.log('🔔 Generating FCM token on LoginScreen mount...');
         const token = await registerForPushNotificationsAsync();
         if (token) {
-          console.log('🔔 FCM token generated successfully:', token);
+          console.log('🔔 FCM TOKEN (LoginScreen):', token);
           setFcmToken(token);
-          // Store token for later use
           await AsyncStorage.setItem('fcmToken', token);
         } else {
-          console.log('🔔 FCM token generation failed or not supported');
+          console.log('🔔 FCM TOKEN (LoginScreen): NOT AVAILABLE');
         }
       } catch (error) {
         console.warn('🔔 Error generating FCM token:', error);
@@ -107,6 +109,13 @@ const LoginScreen = ({ navigation }) => {
       // Clear phone error when user starts typing
       if (errors.phone) {
         setErrors({ ...errors, phone: null });
+      }
+      if (numericValue.length === 10 && !phoneAutoAdvancedRef.current) {
+        phoneAutoAdvancedRef.current = true;
+        passwordRef.current?.focus();
+      }
+      if (numericValue.length < 10) {
+        phoneAutoAdvancedRef.current = false;
       }
     }
   };
@@ -179,11 +188,11 @@ const LoginScreen = ({ navigation }) => {
       device_id: deviceId
     };
 
-    // Add FCM token if available (optional)
     if (firebaseToken) {
       requestPayload.firebase_token = firebaseToken;
     }
 
+    console.log('🔔 LOGIN API - Firebase token:', firebaseToken || 'NOT AVAILABLE');
     console.log('🔑 Calling login API with payload:', JSON.stringify(requestPayload, null, 2));
     
     const response = await apiClient.post(ENDPOINTS.AUTH.LOGIN, requestPayload);
@@ -198,11 +207,20 @@ const LoginScreen = ({ navigation }) => {
    */
   const performLogin = async () => {
     try {
-      // Get device ID for API call
       const deviceId = await getDeviceId();
-      
-      // Call login API directly with FCM token
-      const response = await callLoginAPI(phone, password, deviceId, fcmToken);
+
+      let firebaseToken = fcmToken || (await AsyncStorage.getItem('fcmToken'));
+      if (!firebaseToken) {
+        firebaseToken = await registerForPushNotificationsAsync();
+        if (firebaseToken) {
+          setFcmToken(firebaseToken);
+          await AsyncStorage.setItem('fcmToken', firebaseToken);
+        }
+      }
+
+      console.log('🔔 LOGIN - Firebase token to send:', firebaseToken || 'NOT AVAILABLE');
+
+      const response = await callLoginAPI(phone, password, deviceId, firebaseToken);
       
       // Check for device conflict in response (code 600)
       if (response.data?.code === 600) {
@@ -310,8 +328,12 @@ const LoginScreen = ({ navigation }) => {
         console.log('� Login successful and data stored');
       }
       
-      // Update auth context
-      await login({ phone, password, device_id: deviceId });
+      await login({
+        phone,
+        password,
+        device_id: deviceId,
+        firebase_token: firebaseToken,
+      });
       
       // Reset states
       setIsLoading(false);
@@ -476,6 +498,7 @@ const LoginScreen = ({ navigation }) => {
             <Text style={styles.subtitle}>{t('auth.signInToContinue')}</Text>
 
             <Input
+              ref={phoneRef}
               label={t('auth.phoneNumber')}
               value={phone}
               onChangeText={handlePhoneChange}
@@ -484,15 +507,22 @@ const LoginScreen = ({ navigation }) => {
               autoCapitalize="none"
               maxLength={10}
               error={errors.phone}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
 
             <Input
+              ref={passwordRef}
               label={t('auth.password')}
               value={password}
               onChangeText={setPassword}
               placeholder={t('auth.enterPassword')}
               secureTextEntry={!showPassword}
               error={errors.password}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
               rightIcon={
                 <TouchableOpacity
                   onPress={togglePasswordVisibility}

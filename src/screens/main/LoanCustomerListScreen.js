@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
   Linking,
   Modal,
   RefreshControl,
@@ -610,6 +611,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
               onChangeText={setSearchQuery}
               clearButtonMode="while-editing"
               returnKeyType="search"
+              onSubmitEditing={Keyboard.dismiss}
               numberOfLines={1}
               multiline={false}
               ellipsizeMode="tail"
@@ -743,7 +745,7 @@ const styles = StyleSheet.create({
     height: 45,
   },
   dayFilterWrapper: {
-    width: 118,
+    width: 128,
     flexShrink: 0,
   },
   dayFilterPicker: {
