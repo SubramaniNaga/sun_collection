@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
@@ -27,6 +27,7 @@ const LoginScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [deviceConflictData, setDeviceConflictData] = useState(null);
   const [fcmToken, setFcmToken] = useState(null);
+  const passwordInputRef = useRef(null);
 
   const { login, loading } = useAuthContext();
   const { t } = useLanguage();
@@ -108,7 +109,88 @@ const LoginScreen = ({ navigation }) => {
       if (errors.phone) {
         setErrors({ ...errors, phone: null });
       }
+
+      if (numericValue.length === 10) {
+        passwordInputRef.current?.focus();
+      }
     }
+  };
+
+  const handlePasswordChange = (text) => {
+    setPassword(text);
+    if (errors.password) {
+      setErrors({ ...errors, password: null });
+    }
+  };
+
+  const focusPasswordField = () => {
+    if (phone.length === 10) {
+      passwordInputRef.current?.focus();
+    }
+  };
+
+  const showLoginFailedAlert = (message, title = t('auth.loginFailedTitle')) => {
+    showError(title, message, [{ text: t('common.ok') }]);
+  };
+
+  const showDeviceConflictAlert = (conflictMessage, onConfirm, onCancel) => {
+    showWarning(
+      t('auth.deviceConflictTitle'),
+      conflictMessage,
+      [
+        {
+          text: t('common.no'),
+          style: 'cancel',
+          onPress: onCancel,
+        },
+        {
+          text: t('common.yes'),
+          onPress: onConfirm,
+        },
+      ]
+    );
+  };
+
+  const getLoginErrorDetails = (error) => {
+    if (!error) {
+      return { title: t('auth.loginFailedTitle'), message: t('auth.loginError') };
+    }
+
+    const apiMessage = error.response?.data?.message;
+    const normalizedMessage = apiMessage?.toLowerCase() || '';
+
+    if (
+      normalizedMessage.includes('device id mismatch') ||
+      normalizedMessage.includes('device mismatch') ||
+      normalizedMessage.includes('device id')
+    ) {
+      return {
+        title: t('auth.deviceMismatchTitle'),
+        message: apiMessage,
+      };
+    }
+
+    if (typeof error.message === 'string' && error.message && !error.message.startsWith('API Error:')) {
+      return { title: t('auth.loginFailedTitle'), message: error.message };
+    }
+
+    if (apiMessage) {
+      return { title: t('auth.loginFailedTitle'), message: apiMessage };
+    }
+
+    if (typeof error.message === 'string') {
+      try {
+        const parsed = JSON.parse(error.message.replace(/^API Error:\s*/, ''));
+        if (parsed?.message) {
+          return { title: t('auth.loginFailedTitle'), message: parsed.message };
+        }
+      } catch (_) {}
+    }
+
+    return {
+      title: t('auth.loginFailedTitle'),
+      message: error.message || t('auth.loginError'),
+    };
   };
 
   /**
@@ -132,11 +214,11 @@ const LoginScreen = ({ navigation }) => {
         
         // Show the admin approval message
         showInfo(
-          'Device Update',
+          t('auth.deviceUpdateTitle'),
           response.message,
           [
             {
-              text: 'OK',
+              text: t('common.ok'),
               onPress: () => {
                 console.log('🔄 User acknowledged admin approval message');
                 setIsLoading(false);
@@ -157,8 +239,8 @@ const LoginScreen = ({ navigation }) => {
     } catch (error) {
       
       // Show error and reset loading state
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to change device';
-      showError('Error', errorMessage);
+      const errorMessage = error.response?.data?.message || error.message || t('auth.changeDeviceFailed');
+      showLoginFailedAlert(errorMessage, t('auth.deviceUpdateTitle'));
       setIsLoading(false);
       setDeviceConflictData(null);
     }
@@ -210,7 +292,7 @@ const LoginScreen = ({ navigation }) => {
         
         // Extract token from response if available
         const conflictToken = response.data?.token || null;
-        const conflictMessage = response.data?.message || 'You are logged in on another device. Do you want to continue on this mobile?';
+        const conflictMessage = response.data?.message || t('auth.deviceConflictDefaultMessage');
         
         // Store conflict data for later use
         setDeviceConflictData({
@@ -224,29 +306,17 @@ const LoginScreen = ({ navigation }) => {
         setIsLoading(false);
         
         // Show device conflict alert
-        showWarning(
-          'Device Conflict',
+        showDeviceConflictAlert(
           conflictMessage,
-          [
-            {
-              text: 'No',
-              style: 'cancel',
-              onPress: () => {
-                console.log('🔄 User cancelled device change');
-                setDeviceConflictData(null);
-              }
-            },
-            {
-              text: 'Yes',
-              onPress: async () => {
-                console.log('🔄 User confirmed device change');
-                setIsLoading(true); // Resume loading
-                
-                // Call change-device API with token if available
-                await handleChangeDevice(phone, deviceId, conflictToken);
-              }
-            }
-          ]
+          async () => {
+            console.log('🔄 User confirmed device change');
+            setIsLoading(true);
+            await handleChangeDevice(phone, deviceId, conflictToken);
+          },
+          () => {
+            console.log('🔄 User cancelled device change');
+            setDeviceConflictData(null);
+          }
         );
         
         // Return here to prevent further processing
@@ -325,7 +395,7 @@ const LoginScreen = ({ navigation }) => {
         
         // Extract token from error response if available
         const conflictToken = error.response?.data?.token || null;
-        const conflictMessage = error.response?.data?.message || 'You are logged in on another device. Do you want to continue on this mobile?';
+        const conflictMessage = error.response?.data?.message || t('auth.deviceConflictDefaultMessage');
         
         // Store conflict data for later use
         setDeviceConflictData({
@@ -339,41 +409,25 @@ const LoginScreen = ({ navigation }) => {
         setIsLoading(false);
         
         // Show device conflict alert
-        showWarning(
-          'Device Conflict',
+        showDeviceConflictAlert(
           conflictMessage,
-          [
-            {
-              text: 'No',
-              style: 'cancel',
-              onPress: () => {
-                console.log('🔄 User cancelled device change');
-                setDeviceConflictData(null);
-              }
-            },
-            {
-              text: 'Yes',
-              onPress: async () => {
-                console.log('🔄 User confirmed device change');
-                setIsLoading(true); // Resume loading
-                
-                // Get current device ID
-                const currentDeviceId = await getDeviceId();
-                
-                // Call change-device API with token if available
-                await handleChangeDevice(phone, currentDeviceId, conflictToken);
-              }
-            }
-          ]
+          async () => {
+            console.log('🔄 User confirmed device change');
+            setIsLoading(true);
+            const currentDeviceId = await getDeviceId();
+            await handleChangeDevice(phone, currentDeviceId, conflictToken);
+          },
+          () => {
+            console.log('🔄 User cancelled device change');
+            setDeviceConflictData(null);
+          }
         );
         
         // Return here to prevent error from being re-thrown
         return;
       } else {
-        // Handle other login errors
-        const message = getLoginErrorMessage(error);
-        setErrors({ general: message });
-        showError('Error', message);
+        const { title, message } = getLoginErrorDetails(error);
+        showLoginFailedAlert(message, title);
         setIsLoading(false);
       }
     }
@@ -424,34 +478,6 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  const getLoginErrorMessage = (error) => {
-    if (!error) return t('auth.loginError');
-    
-    // Check for device ID mismatch error
-    if (error.response?.data?.message?.toLowerCase().includes('device id mismatch') ||
-        error.response?.data?.message?.toLowerCase().includes('device mismatch') ||
-        error.response?.data?.message?.toLowerCase().includes('device id')) {
-      const errorMessage = error.response.data.message;
-      // Show popup for device mismatch errors
-      showError('Device ID Mismatch', errorMessage);
-      return errorMessage;
-    }
-    
-    if (typeof error.message === 'string' && error.message && !error.message.startsWith('API Error:')) {
-      return error.message;
-    }
-    if (error.response?.data?.message) {
-      return error.response.data.message;
-    }
-    if (typeof error.message === 'string') {
-      try {
-        const parsed = JSON.parse(error.message.replace(/^API Error:\s*/, ''));
-        if (parsed?.message) return parsed.message;
-      } catch (_) {}
-    }
-    return error.message || t('auth.loginError');
-  };
-
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
@@ -483,15 +509,21 @@ const LoginScreen = ({ navigation }) => {
               keyboardType="phone-pad"
               autoCapitalize="none"
               maxLength={10}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={focusPasswordField}
               error={errors.phone}
             />
 
             <Input
+              ref={passwordInputRef}
               label={t('auth.password')}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={handlePasswordChange}
               placeholder={t('auth.enterPassword')}
               secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
               error={errors.password}
               rightIcon={
                 <TouchableOpacity
@@ -506,10 +538,6 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
               }
             />
-
-            {errors.general && (
-              <Text style={styles.errorText}>{errors.general}</Text>
-            )}
 
             <Button
               title={t('auth.signIn')}
@@ -572,12 +600,6 @@ const styles = StyleSheet.create({
   },
   signupButton: {
     marginTop: SIZES.padding,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: SIZES.body4,
-    textAlign: 'center',
-    marginTop: SIZES.base,
   },
   eyeIconInside: {
     width: 24,
