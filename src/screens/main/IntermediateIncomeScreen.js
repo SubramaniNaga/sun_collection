@@ -7,12 +7,12 @@ import {
   FlatList,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,7 +20,7 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import FormPicker from '../../components/common/FormPicker';
@@ -77,8 +77,19 @@ const getLoanStatusFromPaymentResponse = (response) => {
 
 const isLoanStatusEligibleForRenewal = (status) => Number(status) === 6;
 
+const ANDROID_NAV_BAR_HEIGHT = 56;
+const KEYBOARD_FALLBACK_HEIGHT = 280;
+
+const getBottomInset = (insets) => (
+  Platform.OS === 'android'
+    ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
+    : Math.max(insets.bottom, SIZES.base)
+);
+
 const IntermediateIncomeScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
+  const insets = useSafeAreaInsets();
+  const bottomInset = getBottomInset(insets);
   const [searchQuery, setSearchQuery] = useState('');
   const [registerDayFilter, setRegisterDayFilter] = useState(() => getRegisterDayNameFromDate());
   const debouncedSearchQuery = useDebouncedValue(searchQuery, DEBOUNCE_MS_DEFAULT);
@@ -102,6 +113,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const collectedAmountRef = useRef(null);
   const remarksRef = useRef(null);
   const paymentScrollRef = useRef(null);
+  const amountFieldYRef = useRef(0);
+  const remarksFieldYRef = useRef(0);
   const loanAmountRef = useRef(null);
   const loanPeriodRef = useRef(null);
   const aathayamRef = useRef(null);
@@ -111,6 +124,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const navOpenedRef = useRef(null);
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentKeyboardHeight, setPaymentKeyboardHeight] = useState(0);
+  const lastKeyboardHeightRef = useRef(KEYBOARD_FALLBACK_HEIGHT);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [photoModalUri, setPhotoModalUri] = useState(null);
 
@@ -290,12 +305,55 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   };
 
   const handleClosePaymentModal = () => {
+    Keyboard.dismiss();
+    setPaymentKeyboardHeight(0);
     setShowPaymentModal(false);
     setSelectedCollection(null);
     setPaymentMode('Cash');
     setCollectedAmount('');
     setRemarks('');
     setPaymentErrors({});
+  };
+
+  useEffect(() => {
+    if (!showPaymentModal) {
+      setPaymentKeyboardHeight(0);
+      return undefined;
+    }
+
+    const applyKeyboardHeight = (event) => {
+      const height = event?.endCoordinates?.height ?? 0;
+      if (height <= 0) return;
+      lastKeyboardHeightRef.current = height;
+      setPaymentKeyboardHeight(height);
+    };
+
+    const showSubs = [
+      Keyboard.addListener('keyboardDidShow', applyKeyboardHeight),
+      Keyboard.addListener('keyboardWillShow', applyKeyboardHeight),
+    ];
+    const hideSubs = [
+      Keyboard.addListener('keyboardDidHide', () => setPaymentKeyboardHeight(0)),
+      Keyboard.addListener('keyboardWillHide', () => setPaymentKeyboardHeight(0)),
+    ];
+
+    return () => {
+      showSubs.forEach((sub) => sub.remove());
+      hideSubs.forEach((sub) => sub.remove());
+    };
+  }, [showPaymentModal]);
+
+  const scrollPaymentToField = (y) => {
+    paymentScrollRef.current?.scrollTo({
+      y: Math.max(0, y - 12),
+      animated: true,
+    });
+  };
+
+  const ensurePaymentScrollRoom = () => {
+    setPaymentKeyboardHeight((current) => (
+      current > 0 ? current : lastKeyboardHeightRef.current || KEYBOARD_FALLBACK_HEIGHT
+    ));
   };
 
   const validatePaymentForm = () => {
@@ -806,16 +864,12 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       <Modal
         visible={showPaymentModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={handleClosePaymentModal}
       >
-        <View style={styles.centeredModalOverlay}>
-          <Pressable style={styles.centeredModalBackdrop} onPress={handleClosePaymentModal} />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.centeredModalKb}
-          >
-          <View style={styles.centeredModalContainer}>
+        <View style={[styles.paymentDrawerOverlay, { paddingBottom: bottomInset }]}>
+          <Pressable style={styles.paymentDrawerDismiss} onPress={handleClosePaymentModal} />
+          <View style={styles.paymentDrawerSheet}>
             <View style={styles.centeredModalHeader}>
               <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
               <TouchableOpacity onPress={handleClosePaymentModal} style={styles.closeButton}>
@@ -824,16 +878,22 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             </View>
             {selectedCollection ? (
               <View style={styles.centeredModalBody}>
-                <KeyboardAwareScrollView
-                  innerRef={(ref) => {
-                    paymentScrollRef.current = ref;
-                  }}
+                <ScrollView
+                  ref={paymentScrollRef}
                   style={styles.centeredModalScrollView}
-                  contentContainerStyle={styles.centeredModalContent}
+                  contentContainerStyle={[
+                    styles.centeredModalContent,
+                    {
+                      paddingBottom: SIZES.padding + (
+                        paymentKeyboardHeight > 0
+                          ? paymentKeyboardHeight
+                          : 24
+                      ),
+                    },
+                  ]}
                   keyboardShouldPersistTaps="handled"
-                  enableOnAndroid
-                  extraScrollHeight={80}
-                  extraHeight={80}
+                  keyboardDismissMode="none"
+                  showsVerticalScrollIndicator={false}
                 >
                   <View style={styles.customerInfo}>
                     <Text style={styles.customerInfoName}>
@@ -860,7 +920,12 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       </TouchableOpacity>
                     </View>
                   </View>
-                  <View style={styles.inputFieldContainer}>
+                  <View
+                    style={styles.inputFieldContainer}
+                    onLayout={(event) => {
+                      amountFieldYRef.current = event.nativeEvent.layout.y;
+                    }}
+                  >
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
                     <TextInput
                       ref={collectedAmountRef}
@@ -872,6 +937,10 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       returnKeyType="next"
                       blurOnSubmit={false}
                       submitBehavior="submit"
+                      onFocus={() => {
+                        ensurePaymentScrollRoom();
+                        scrollPaymentToField(amountFieldYRef.current);
+                      }}
                       onSubmitEditing={() => remarksRef.current?.focus()}
                       onChangeText={(text) => {
                         const digitsOnly = text.replace(/[^0-9]/g, '');
@@ -885,7 +954,12 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       <Text style={styles.errorTextSmall}>{paymentErrors.collectedAmount}</Text>
                     ) : null}
                   </View>
-                  <View style={styles.inputFieldContainer}>
+                  <View
+                    style={styles.inputFieldContainer}
+                    onLayout={(event) => {
+                      remarksFieldYRef.current = event.nativeEvent.layout.y;
+                    }}
+                  >
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
                     <TextInput
                       ref={remarksRef}
@@ -896,34 +970,34 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       onChangeText={setRemarks}
                       multiline
                       numberOfLines={3}
+                      textAlignVertical="top"
                       returnKeyType="next"
                       blurOnSubmit
-                      submitBehavior="blurAndSubmit"
+                      onFocus={() => {
+                        ensurePaymentScrollRoom();
+                        scrollPaymentToField(remarksFieldYRef.current);
+                      }}
                       onSubmitEditing={() => {
                         remarksRef.current?.blur();
-                        Keyboard.dismiss();
-                        setTimeout(() => {
-                          paymentScrollRef.current?.scrollToEnd?.({ animated: true });
-                        }, 50);
+                        paymentScrollRef.current?.scrollToEnd?.({ animated: true });
                       }}
                     />
                   </View>
-                </KeyboardAwareScrollView>
-                <View style={styles.submitButtonFixed}>
-                  <TouchableOpacity
-                    style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-                    onPress={handleSubmitPayment}
-                    disabled={isSubmitting}
-                  >
-                    <Text style={styles.submitButtonText}>
-                      {isSubmitting ? t('common.loading') : t('common.submit')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.submitButtonInScroll}>
+                    <TouchableOpacity
+                      style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+                      onPress={handleSubmitPayment}
+                      disabled={isSubmitting}
+                    >
+                      <Text style={styles.submitButtonText}>
+                        {isSubmitting ? t('common.loading') : t('common.submit')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
               </View>
             ) : null}
           </View>
-          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1121,24 +1195,20 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '80%',
   },
-  centeredModalOverlay: {
+  paymentDrawerOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
-  centeredModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  centeredModalKb: {
-    width: '90%',
-    maxWidth: 400,
-    height: '75%',
-  },
-  centeredModalContainer: {
+  paymentDrawerDismiss: {
     flex: 1,
+  },
+  paymentDrawerSheet: {
+    width: '100%',
+    maxHeight: '100%',
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius * 2,
+    borderTopLeftRadius: SIZES.radius * 2,
+    borderTopRightRadius: SIZES.radius * 2,
     overflow: 'hidden',
   },
   centeredModalHeader: {
@@ -1161,20 +1231,20 @@ const styles = StyleSheet.create({
     color: COLORS.black,
   },
   centeredModalBody: {
-    flex: 1,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   centeredModalScrollView: {
-    flex: 1,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   centeredModalContent: {
     paddingHorizontal: SIZES.padding,
-    paddingBottom: SIZES.base,
+    paddingTop: SIZES.padding,
   },
-  submitButtonFixed: {
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+  submitButtonInScroll: {
+    marginTop: SIZES.padding,
+    marginBottom: SIZES.padding,
   },
   customerInfo: {
     backgroundColor: COLORS.lightGray,
@@ -1258,7 +1328,8 @@ const styles = StyleSheet.create({
   submitButton: {
     backgroundColor: COLORS.primary,
     borderRadius: SIZES.radius,
-    height: 48,
+    minHeight: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
