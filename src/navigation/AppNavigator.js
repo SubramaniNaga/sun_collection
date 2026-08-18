@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { navigationRef, tryFlushNotificationNavigation } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
@@ -30,6 +31,7 @@ import NIPScreen from '../screens/main/NIPScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import CompanyVaravuAddScreen from '../screens/main/CompanyVaravuAddScreen';
+import CitiesScreen from '../screens/main/CitiesScreen';
 import UpfrontCashAddScreen from '../screens/main/UpfrontCashAddScreen';
 import UpfrontCashScreen from '../screens/main/UpfrontCashScreen';
 import { useAuthContext } from '../store/AuthContext';
@@ -205,6 +207,13 @@ const HomeStack = () => (
         headerShown: false,
       }}
     />
+    <Stack.Screen
+      name="Cities"
+      component={CitiesScreen}
+      options={{
+        headerShown: false,
+      }}
+    />
     <Stack.Screen 
       name="CollectionHistory" 
       component={CollectionHistoryScreen} 
@@ -302,12 +311,21 @@ const AppNavigator = () => {
     };
   }, [isAuthenticated, loading]);
 
+  useEffect(() => {
+    if (!loading && bootReady && isAuthenticated) {
+      tryFlushNotificationNavigation();
+    }
+  }, [loading, bootReady, isAuthenticated]);
+
   if (loading || !bootReady) {
     return null;
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={tryFlushNotificationNavigation}
+    >
       {isAuthenticated ? <MainDrawer /> : <AuthStack />}
     </NavigationContainer>
   );

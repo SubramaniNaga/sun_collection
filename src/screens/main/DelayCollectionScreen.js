@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   Linking,
+  Keyboard,
   Modal,
   Pressable,
   RefreshControl,
@@ -296,6 +297,8 @@ const DelayCollectionScreen = ({ navigation, route }) => {
                 placeholderTextColor={COLORS.text.tertiary}
                 value={searchText}
                 onChangeText={setSearchText}
+                returnKeyType="search"
+                onSubmitEditing={Keyboard.dismiss}
               />
             </View>
             <Pressable style={styles.unitDropdown} onPress={() => setShowUnitDropdown(true)}>

@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, InteractionManager, Linking, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, InteractionManager, Keyboard, Linking, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
@@ -199,6 +199,8 @@ const CollectionScreen = ({ navigation }) => {
   const [paymentMode, setPaymentMode] = useState('Cash'); // 'Cash' or 'Online'
   const [collectedAmount, setCollectedAmount] = useState('');
   const [remarks, setRemarks] = useState('');
+  const collectedAmountRef = useRef(null);
+  const remarksRef = useRef(null);
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
@@ -1157,6 +1159,8 @@ const CollectionScreen = ({ navigation }) => {
                 placeholderTextColor={COLORS.text.tertiary}
                 value={searchText}
                 onChangeText={setSearchText}
+                returnKeyType="search"
+                onSubmitEditing={Keyboard.dismiss}
               />
             </View>
             <Pressable
@@ -1414,6 +1418,7 @@ const CollectionScreen = ({ navigation }) => {
                   <View style={styles.inputFieldContainer}>
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
                     <TextInput
+                      ref={collectedAmountRef}
                       style={[
                         styles.inputField,
                         paymentErrors.collectedAmount && styles.inputFieldError,
@@ -1422,6 +1427,10 @@ const CollectionScreen = ({ navigation }) => {
                       placeholderTextColor={COLORS.text.tertiary}
                       value={collectedAmount}
                       keyboardType="numeric"
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => remarksRef.current?.focus()}
                       onChangeText={(text) => {
                         // Remove non-digits
                         const digitsOnly = text.replace(/[^0-9]/g, '');
@@ -1463,6 +1472,7 @@ const CollectionScreen = ({ navigation }) => {
                   <View style={styles.inputFieldContainer}>
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
                     <TextInput
+                      ref={remarksRef}
                       style={[styles.inputField, styles.textArea]}
                       placeholder={t('collection.enterRemarks')}
                       placeholderTextColor={COLORS.text.tertiary}
@@ -1470,6 +1480,9 @@ const CollectionScreen = ({ navigation }) => {
                       onChangeText={setRemarks}
                       multiline
                       numberOfLines={3}
+                      returnKeyType="done"
+                      blurOnSubmit
+                      onSubmitEditing={Keyboard.dismiss}
                     />
                   </View>
                 </KeyboardAwareScrollView>

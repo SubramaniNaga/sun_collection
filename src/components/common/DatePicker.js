@@ -15,9 +15,17 @@ const DatePicker = ({
   style = {},
   minimumDate,
   maximumDate,
+  visible: visibleProp,
+  onVisibleChange,
 }) => {
-  
-  const [show, setShow] = useState(false);
+  const isControlled = visibleProp !== undefined;
+  const [internalShow, setInternalShow] = useState(false);
+  const show = isControlled ? visibleProp : internalShow;
+
+  const setShow = (next) => {
+    if (!isControlled) setInternalShow(next);
+    onVisibleChange?.(next);
+  };
 
   // Convert the ISO string from your formData back to a Date object for the picker
   const dateValue = value ? new Date(value) : getCalendarDate();

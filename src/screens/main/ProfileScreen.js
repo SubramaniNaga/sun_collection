@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
@@ -43,6 +43,14 @@ const ProfileScreen = ({ navigation }) => {
     email: user?.email || '',
     phone: user?.phone || '',
   });
+  const firstNameRef = useRef(null);
+  const lastNameRef = useRef(null);
+  const emailRef = useRef(null);
+  const phoneRef = useRef(null);
+  const phoneAutoAdvancedRef = useRef(false);
+  const currentPasswordRef = useRef(null);
+  const newPasswordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
 
   const handleSave = () => {
     // In a real app, this would call the API
@@ -312,34 +320,63 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.editTitle}>{t('profile.editProfile')}</Text>
 
             <Input
+              ref={firstNameRef}
               label={t('profile.firstName')}
               value={formData.firstName}
               onChangeText={(text) => setFormData({ ...formData, firstName: text })}
               style={styles.input}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              submitBehavior="submit"
+              onSubmitEditing={() => lastNameRef.current?.focus()}
             />
 
             <Input
+              ref={lastNameRef}
               label={t('profile.lastName')}
               value={formData.lastName}
               onChangeText={(text) => setFormData({ ...formData, lastName: text })}
               style={styles.input}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              submitBehavior="submit"
+              onSubmitEditing={() => emailRef.current?.focus()}
             />
 
             <Input
+              ref={emailRef}
               label={t('profile.email')}
               value={formData.email}
               onChangeText={(text) => setFormData({ ...formData, email: text })}
               keyboardType="email-address"
               autoCapitalize="none"
               style={styles.input}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              submitBehavior="submit"
+              onSubmitEditing={() => phoneRef.current?.focus()}
             />
 
             <Input
+              ref={phoneRef}
               label={t('profile.phone')}
               value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
+              onChangeText={(text) => {
+                const numericValue = String(text || '').replace(/[^0-9]/g, '').slice(0, 10);
+                setFormData({ ...formData, phone: numericValue });
+                if (numericValue.length === 10 && !phoneAutoAdvancedRef.current) {
+                  phoneAutoAdvancedRef.current = true;
+                  Keyboard.dismiss();
+                }
+                if (numericValue.length < 10) {
+                  phoneAutoAdvancedRef.current = false;
+                }
+              }}
               keyboardType="phone-pad"
+              maxLength={10}
               style={styles.input}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
 
             <View style={styles.buttonRow}>
@@ -518,6 +555,7 @@ const ProfileScreen = ({ navigation }) => {
                   </Text>
                   <View style={styles.passwordInputWrapper}>
                     <TextInput
+                      ref={currentPasswordRef}
                       style={styles.passwordInput}
                       placeholder={truncateText(t('profile.enterCurrentPassword') || 'Enter current password', 18)}
                       placeholderTextColor={COLORS.text.tertiary}
@@ -525,6 +563,10 @@ const ProfileScreen = ({ navigation }) => {
                       onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
                       secureTextEntry={!showPasswords.current}
                       autoCapitalize="none"
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => newPasswordRef.current?.focus()}
                     />
                     <TouchableOpacity
                       style={styles.eyeIcon}
@@ -546,6 +588,7 @@ const ProfileScreen = ({ navigation }) => {
                   </Text>
                   <View style={styles.passwordInputWrapper}>
                     <TextInput
+                      ref={newPasswordRef}
                       style={styles.passwordInput}
                       placeholder={truncateText(t('profile.enterNewPassword') || 'Enter new password', 18)}
                       placeholderTextColor={COLORS.text.tertiary}
@@ -553,6 +596,10 @@ const ProfileScreen = ({ navigation }) => {
                       onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
                       secureTextEntry={!showPasswords.new}
                       autoCapitalize="none"
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => confirmPasswordRef.current?.focus()}
                     />
                     <TouchableOpacity
                       style={styles.eyeIcon}
@@ -574,6 +621,7 @@ const ProfileScreen = ({ navigation }) => {
                   </Text>
                   <View style={styles.passwordInputWrapper}>
                     <TextInput
+                      ref={confirmPasswordRef}
                       style={styles.passwordInput}
                       placeholder={truncateText(t('profile.confirmNewPassword') || 'Confirm new password', 18)}
                       placeholderTextColor={COLORS.text.tertiary}
@@ -581,6 +629,8 @@ const ProfileScreen = ({ navigation }) => {
                       onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
                       secureTextEntry={!showPasswords.confirm}
                       autoCapitalize="none"
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
                     />
                     <TouchableOpacity
                       style={styles.eyeIcon}

@@ -1,7 +1,8 @@
+import { forwardRef } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
 
-const FormInput = ({
+const FormInput = forwardRef(({
   label,
   value,
   onChangeText,
@@ -15,7 +16,7 @@ const FormInput = ({
   required = false,
   style = {},
   ...props
-}) => {
+}, ref) => {
   return (
     <View style={[{ marginBottom: SIZES.margin }, style]}>
       {label && (
@@ -32,6 +33,7 @@ const FormInput = ({
         </Text>
       )}
       <TextInput
+        ref={ref}
         style={{
           borderWidth: 1,
           borderColor: error ? 'red' : COLORS.border,
@@ -66,6 +68,8 @@ const FormInput = ({
       )}
     </View>
   );
-};
+});
+
+FormInput.displayName = 'FormInput';
 
 export default FormInput;

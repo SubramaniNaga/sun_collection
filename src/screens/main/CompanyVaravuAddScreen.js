@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -37,6 +38,12 @@ const CompanyVaravuAddScreen = ({ navigation }) => {
     amount: '',
     remarks: '',
   });
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const amountRef = useRef(null);
+  const remarksRef = useRef(null);
+  const navOpenedRef = useRef(null);
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
 
   useEffect(() => {
     let cancelled = false;
@@ -204,12 +211,26 @@ const CompanyVaravuAddScreen = ({ navigation }) => {
               <DatePicker
                 label={t('companyVaravu.createDate')}
                 value={formData.createDate}
-                onValueChange={(value) => handleInputChange('createDate', value)}
+                onValueChange={(value) => {
+                  handleInputChange('createDate', value);
+                  if (navOpenedRef.current === 'date') {
+                    navOpenedRef.current = null;
+                    setTimeout(() => amountRef.current?.focus(), 300);
+                  }
+                }}
                 error={errors.createDate}
                 required
+                visible={datePickerOpen}
+                onVisibleChange={(open) => {
+                  setDatePickerOpen(open);
+                  if (!open && navOpenedRef.current === 'date' && !formDataRef.current.createDate) {
+                    navOpenedRef.current = null;
+                  }
+                }}
               />
 
               <FormInput
+                ref={amountRef}
                 label={t('companyVaravu.amount')}
                 value={formData.amount}
                 onChangeText={(value) => handleInputChange('amount', value)}
@@ -217,9 +238,14 @@ const CompanyVaravuAddScreen = ({ navigation }) => {
                 keyboardType="decimal-pad"
                 error={errors.amount}
                 required
+                returnKeyType="next"
+                blurOnSubmit={false}
+                submitBehavior="submit"
+                onSubmitEditing={() => remarksRef.current?.focus()}
               />
 
               <FormInput
+                ref={remarksRef}
                 label={t('companyVaravu.remarks')}
                 value={formData.remarks}
                 onChangeText={(value) => handleInputChange('remarks', value)}
@@ -227,6 +253,9 @@ const CompanyVaravuAddScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={4}
                 error={errors.remarks}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
               />
               <Text style={styles.helperText}>
                 {t('companyVaravu.remarksOptional')}

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotificationsAsync } from '../../utils/notifications';
 import { ATTENDANCE, applyAttendanceFromResponse, isAttendanceCheckedIn } from '../../config/appToggles';
 import { getServerDateTimeISO } from '../../utils/dateFormatter';
 import { getDeviceId } from '../../utils/deviceId';
@@ -72,6 +73,23 @@ export const apiServices = {
           requestPayload.language = credentials.language;
         }
 
+        let firebaseToken =
+          credentials.firebase_token ||
+          credentials.firebaseToken ||
+          (await AsyncStorage.getItem('fcmToken'));
+
+        if (!firebaseToken) {
+          firebaseToken = await registerForPushNotificationsAsync();
+          if (firebaseToken) {
+            await AsyncStorage.setItem('fcmToken', firebaseToken);
+          }
+        }
+
+        if (firebaseToken) {
+          requestPayload.firebase_token = firebaseToken;
+        }
+
+        console.log('🔔 AUTH LOGIN - Firebase token:', firebaseToken || 'NOT AVAILABLE');
         console.log('🔑 AUTH LOGIN - Request Payload:', JSON.stringify(requestPayload, null, 2));
 
         // Real API call

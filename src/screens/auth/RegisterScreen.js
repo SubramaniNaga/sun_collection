@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Keyboard, StyleSheet, Text, View } from 'react-native';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import Input from '../../components/common/Input';
@@ -17,6 +17,10 @@ const RegisterScreen = ({ navigation }) => {
     confirmPassword: '',
   });
   const [errors, setErrors] = useState({});
+  const nameRef = useRef(null);
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
   
   const { register, loading } = useAuthContext();
 
@@ -63,14 +67,20 @@ const RegisterScreen = ({ navigation }) => {
           <Text style={styles.subtitle}>{t('auth.signUpToGetStarted')}</Text>
           
           <Input
+            ref={nameRef}
             label={t('auth.fullName')}
             value={formData.name}
             onChangeText={(value) => handleInputChange('name', value)}
             placeholder={t('auth.enterFullName')}
             error={errors.name}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => emailRef.current?.focus()}
           />
           
           <Input
+            ref={emailRef}
             label={t('common.email')}
             value={formData.email}
             onChangeText={(value) => handleInputChange('email', value)}
@@ -78,24 +88,36 @@ const RegisterScreen = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             error={errors.email}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
           
           <Input
+            ref={passwordRef}
             label={t('auth.password')}
             value={formData.password}
             onChangeText={(value) => handleInputChange('password', value)}
             placeholder={t('auth.enterPassword')}
             secureTextEntry
             error={errors.password}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => confirmPasswordRef.current?.focus()}
           />
           
           <Input
+            ref={confirmPasswordRef}
             label={t('auth.confirmPassword')}
             value={formData.confirmPassword}
             onChangeText={(value) => handleInputChange('confirmPassword', value)}
             placeholder={t('auth.enterConfirmPassword')}
             secureTextEntry
             error={errors.confirmPassword}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
           />
           
           {errors.general && (

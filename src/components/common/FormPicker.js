@@ -198,6 +198,8 @@ const FormPicker = ({
                   autoCorrect={false}
                   autoCapitalize="none"
                   showSoftInputOnFocus
+                  returnKeyType="search"
+                  onSubmitEditing={Keyboard.dismiss}
                 />
                 {searchQuery.length > 0 ? (
                   <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
@@ -278,6 +280,8 @@ const FormPicker = ({
               autoCorrect={false}
               autoCapitalize="none"
               clearButtonMode="while-editing"
+              returnKeyType="search"
+              onSubmitEditing={Keyboard.dismiss}
             />
             {searchQuery.length > 0 ? (
               <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
@@ -339,7 +343,7 @@ const FormPicker = ({
           ]}
           numberOfLines={1}
           adjustsFontSizeToFit={compactUseFullLabel}
-          minimumFontScale={0.75}
+          minimumFontScale={0.9}
         >
           {selectedItem ? selectedLabel : placeholder}
         </Text>
@@ -405,8 +409,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   triggerTextCompactFull: {
-    fontSize: SIZES.body5,
+    fontSize: SIZES.body3,
     fontWeight: '600',
+    lineHeight: 18,
   },
   triggerPlaceholder: {
     color: COLORS.text.tertiary,

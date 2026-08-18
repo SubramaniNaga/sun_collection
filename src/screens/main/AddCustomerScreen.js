@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getDeviceId } from '../../utils/deviceId';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
@@ -34,6 +34,26 @@ const AddCustomerScreen = ({ navigation }) => {
   const [pickingImage, setPickingImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const customerNoRef = useRef(null);
+  const customerNameRef = useRef(null);
+  const customerPhoneRef = useRef(null);
+  const customerAddressRef = useRef(null);
+  const askAmountRef = useRef(null);
+  const phoneAutoAdvancedRef = useRef(false);
+  const customerPhotoRef = useRef(customerPhoto);
+  customerPhotoRef.current = customerPhoto;
+
+  const handlePhoneChange = (text) => {
+    const numericValue = String(text || '').replace(/[^0-9]/g, '').slice(0, 10);
+    setCustomerPhone(numericValue);
+    if (numericValue.length === 10 && !phoneAutoAdvancedRef.current) {
+      phoneAutoAdvancedRef.current = true;
+      customerAddressRef.current?.focus();
+    }
+    if (numericValue.length < 10) {
+      phoneAutoAdvancedRef.current = false;
+    }
+  };
 
   // Validation
   const validateForm = () => {
@@ -186,6 +206,7 @@ const AddCustomerScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
         >
           <Input
+            ref={customerNoRef}
             label="Customer Number"
             value={customerNo}
             onChangeText={setCustomerNo}
@@ -193,29 +214,44 @@ const AddCustomerScreen = ({ navigation }) => {
             keyboardType="numeric"
             error={errors.customerNo}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => customerNameRef.current?.focus()}
           />
 
           <Input
+            ref={customerNameRef}
             label="Customer Name"
             value={customerName}
             onChangeText={setCustomerName}
             placeholder="Enter customer name"
             error={errors.customerName}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => customerPhoneRef.current?.focus()}
           />
 
           <Input
+            ref={customerPhoneRef}
             label="Phone Number"
             value={customerPhone}
-            onChangeText={setCustomerPhone}
+            onChangeText={handlePhoneChange}
             placeholder="Enter 10-digit phone number"
             keyboardType="phone-pad"
             maxLength={10}
             error={errors.customerPhone}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => customerAddressRef.current?.focus()}
           />
 
           <Input
+            ref={customerAddressRef}
             label="Address"
             value={customerAddress}
             onChangeText={setCustomerAddress}
@@ -224,9 +260,14 @@ const AddCustomerScreen = ({ navigation }) => {
             numberOfLines={3}
             error={errors.customerAddress}
             required
+            returnKeyType="next"
+            blurOnSubmit
+            submitBehavior="submit"
+            onSubmitEditing={() => askAmountRef.current?.focus()}
           />
 
           <Input
+            ref={askAmountRef}
             label="Loan Amount"
             value={askAmount}
             onChangeText={setAskAmount}
@@ -234,6 +275,15 @@ const AddCustomerScreen = ({ navigation }) => {
             keyboardType="numeric"
             error={errors.askAmount}
             required
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => {
+              Keyboard.dismiss();
+              if (!customerPhotoRef.current) {
+                handlePhotoCapture();
+              }
+            }}
           />
 
           <View style={styles.photoSection}>

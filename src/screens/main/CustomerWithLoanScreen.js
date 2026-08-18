@@ -83,6 +83,21 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [addingCity, setAddingCity] = useState(false);
   const [addCityError, setAddCityError] = useState('');
   const addCityInputRef = useRef(null);
+  const scrollViewRef = useRef(null);
+  const stepYRef = useRef({});
+  const navOpenedRef = useRef(null);
+  const navContextRef = useRef({});
+  const phoneAutoAdvancedRef = useRef(false);
+  const loanPeriodRef = useRef(null);
+  const phoneRef = useRef(null);
+  const nameRef = useRef(null);
+  const addressRef = useRef(null);
+  const loanAmountRef = useRef(null);
+  const aathayamRef = useRef(null);
+  const magimaiRef = useRef(null);
+  const existingSearchRef = useRef(null);
+  const [loanTypePickerOpen, setLoanTypePickerOpen] = useState(false);
+  const [registerDayPickerOpen, setRegisterDayPickerOpen] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
   /** Aathayam — sent as `processing_fees` */
   const [aathayamAmount, setAathayamAmount] = useState('');
@@ -427,6 +442,27 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const isWeeklyLoanType = String(selectedLoanTypeLabel).toLowerCase() === 'weekly';
   const loanTypeParam = loanTypeId ? String(loanTypeId) : '';
 
+  navContextRef.current = {
+    customerType,
+    isWeeklyLoanType,
+    isLoanPeriodDisabled,
+    showExistingLoanForm,
+    loanTypeId,
+    loanPeriod,
+    registerDay,
+    customerPhone,
+    customerName,
+    customerAddress,
+    cityId,
+    loanAmount,
+    aathayamAmount,
+    magimaiAmount,
+    aadharImage,
+    customerPhoto,
+    addressProof,
+    existingSearch,
+  };
+
   useEffect(() => {
     if (!isWeeklyLoanType) {
       setRegisterDay('');
@@ -438,25 +474,177 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
   // Handle phone input change (same as LoginScreen)
   const handlePhoneChange = (text) => {
-    // Remove any non-numeric characters
     const numericValue = text.replace(/[^0-9]/g, '');
 
-    // Enforce that first digit must be above 5 (6, 7, 8, or 9)
     if (numericValue.length > 0) {
-      const firstDigit = parseInt(numericValue[0]);
+      const firstDigit = parseInt(numericValue[0], 10);
       if (firstDigit <= 5) {
-        return; // Don't allow if first digit is 0-5
+        return;
       }
     }
 
-    // Limit to 10 digits
-    if (numericValue.length <= 10) {
-      setCustomerPhone(numericValue);
-      // Clear phone error when user starts typing
-      if (errors.customerPhone) {
-        setErrors({ ...errors, customerPhone: null });
-      }
+    if (numericValue.length > 10) {
+      return;
     }
+
+    const previousLength = String(customerPhone || '').replace(/[^0-9]/g, '').length;
+    setCustomerPhone(numericValue);
+    if (errors.customerPhone) {
+      setErrors({ ...errors, customerPhone: null });
+    }
+
+    const isValidCompletePhone = /^[6-9]\d{9}$/.test(numericValue);
+    if (isValidCompletePhone && previousLength < 10 && !phoneAutoAdvancedRef.current) {
+      phoneAutoAdvancedRef.current = true;
+      goToNextFrom('phone');
+      return;
+    }
+
+    if (numericValue.length < 10) {
+      phoneAutoAdvancedRef.current = false;
+    }
+  };
+
+  const recordStepY = (step) => (event) => {
+    stepYRef.current[step] = event.nativeEvent.layout.y;
+  };
+
+  const scrollToStep = (step) => {
+    const y = stepYRef.current[step];
+    if (y == null) return;
+    scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+  };
+
+  const getFormSteps = () => {
+    const ctx = navContextRef.current;
+    if (ctx.customerType === 'Existing') {
+      const steps = ['loanType'];
+      if (ctx.isWeeklyLoanType) steps.push('registerDay');
+      steps.push('search');
+      if (ctx.showExistingLoanForm) {
+        steps.push('loanAmount', 'magimai', 'aathayam', 'customerPhoto', 'addressProof');
+      }
+      return steps;
+    }
+    const steps = ['loanType', 'loanPeriod'];
+    if (ctx.isWeeklyLoanType) steps.push('registerDay');
+    steps.push(
+      'phone',
+      'name',
+      'address',
+      'city',
+      'loanAmount',
+      'aathayam',
+      'magimai',
+      'aadhar',
+      'customerPhoto',
+      'addressProof',
+    );
+    return steps;
+  };
+
+  const goToStep = (step) => {
+    const ctx = navContextRef.current;
+    scrollToStep(step);
+
+    switch (step) {
+      case 'loanType': {
+        if (ctx.loanTypeId) {
+          goToNextFrom('loanType');
+          return;
+        }
+        Keyboard.dismiss();
+        navOpenedRef.current = 'loanType';
+        setLoanTypePickerOpen(true);
+        return;
+      }
+      case 'loanPeriod': {
+        if (ctx.isLoanPeriodDisabled) {
+          goToNextFrom('loanPeriod');
+          return;
+        }
+        setTimeout(() => loanPeriodRef.current?.focus(), 350);
+        return;
+      }
+      case 'registerDay': {
+        if (ctx.registerDay) {
+          goToNextFrom('registerDay');
+          return;
+        }
+        if (ctx.customerType === 'New') {
+          goToNextFrom('registerDay');
+          return;
+        }
+        Keyboard.dismiss();
+        navOpenedRef.current = 'registerDay';
+        setRegisterDayPickerOpen(true);
+        return;
+      }
+      case 'phone':
+        setTimeout(() => phoneRef.current?.focus(), 80);
+        return;
+      case 'name':
+        setTimeout(() => nameRef.current?.focus(), 80);
+        return;
+      case 'address':
+        setTimeout(() => addressRef.current?.focus(), 80);
+        return;
+      case 'city': {
+        if (ctx.cityId) {
+          goToNextFrom('city');
+          return;
+        }
+        Keyboard.dismiss();
+        navOpenedRef.current = 'city';
+        setCityPickerVisible(true);
+        return;
+      }
+      case 'loanAmount':
+        setTimeout(() => loanAmountRef.current?.focus(), 80);
+        return;
+      case 'aathayam':
+        setTimeout(() => aathayamRef.current?.focus(), 80);
+        return;
+      case 'magimai':
+        setTimeout(() => magimaiRef.current?.focus(), 80);
+        return;
+      case 'search':
+        setTimeout(() => existingSearchRef.current?.focus(), 80);
+        return;
+      case 'aadhar':
+      case 'customerPhoto':
+      case 'addressProof': {
+        Keyboard.dismiss();
+        const imageValue =
+          step === 'aadhar' ? ctx.aadharImage : step === 'customerPhoto' ? ctx.customerPhoto : ctx.addressProof;
+        setTimeout(() => {
+          scrollToStep(step);
+          if (imageValue) {
+            goToNextFrom(step);
+            return;
+          }
+          navOpenedRef.current = step;
+          const imageType = step === 'aadhar' ? 'aadhar' : step === 'customerPhoto' ? 'customer' : 'address';
+          handleImagePick(imageType, 'camera');
+        }, 250);
+        return;
+      }
+      default:
+        return;
+    }
+  };
+
+  const goToNextFrom = (step) => {
+    const steps = getFormSteps();
+    const index = steps.indexOf(step);
+    if (index < 0 || index >= steps.length - 1) return;
+    goToStep(steps[index + 1]);
+  };
+
+  const continueIfOpenedByNav = (step) => {
+    if (navOpenedRef.current !== step) return;
+    navOpenedRef.current = null;
+    setTimeout(() => goToNextFrom(step), 300);
   };
 
   // Validation (New customer only)
@@ -597,6 +785,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           if (type === 'aadhar') setAadharImage(image);
           else if (type === 'customer') setCustomerPhoto(image);
           else if (type === 'address') setAddressProof(image);
+          const navStep = type === 'aadhar' ? 'aadhar' : type === 'customer' ? 'customerPhoto' : 'addressProof';
+          continueIfOpenedByNav(navStep);
+        } else if (navOpenedRef.current === (type === 'aadhar' ? 'aadhar' : type === 'customer' ? 'customerPhoto' : 'addressProof')) {
+          navOpenedRef.current = null;
         }
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -969,161 +1161,241 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         style={styles.keyboardContainer}
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode="none"
         >
           {customerType === 'New' && (
             <>
-              <FormPicker
-                label={t('customer.loanType')}
-                value={loanTypeId}
-                onValueChange={setLoanTypeId}
-                items={loanTypeOptions}
-                placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : (language === 'en' ? 'Select loan type' : 'கடன் வகையை தேர்ந்தெடுக்கவும்')}
-                error={errors.loanTypeId}
-                onOpen={ensureCheckedInForInteraction}
-                // editable={!isLoanTypeDisabled}
-                required
-              />
-
-              <Input
-                label={`${t('customer.loanPeriod')} (${periodUnit})`}
-                value={loanPeriod}
-                onChangeText={setLoanPeriod}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? 'Enter period' : 'காலத்தை உள்ளிடவும்'}
-                placeholderTextColor={COLORS.text.tertiary}
-                keyboardType="numeric"
-                error={errors.loanPeriod}
-                disabled={isLoanPeriodDisabled}
-                required
-              />
-
-              {isWeeklyLoanType && (
+              <View onLayout={recordStepY('loanType')}>
                 <FormPicker
-                  label={t('customer.registerDay')}
-                  value={registerDay}
-                  onValueChange={setRegisterDay}
-                  items={loanDayOptions}
-                  placeholder={t('customer.selectRegisterDay')}
-                  error={errors.registerDay}
-                  editable={false}
+                  label={t('customer.loanType')}
+                  value={loanTypeId}
+                  onValueChange={(value) => {
+                    setLoanTypeId(value);
+                    continueIfOpenedByNav('loanType');
+                  }}
+                  items={loanTypeOptions}
+                  placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') || 'Loading...' : (language === 'en' ? 'Select loan type' : 'கடன் வகையை தேர்ந்தெடுக்கவும்')}
+                  error={errors.loanTypeId}
+                  onOpen={ensureCheckedInForInteraction}
+                  visible={loanTypePickerOpen}
+                  onVisibleChange={(open) => {
+                    setLoanTypePickerOpen(open);
+                    if (!open && navOpenedRef.current === 'loanType' && !navContextRef.current.loanTypeId) {
+                      navOpenedRef.current = null;
+                    }
+                  }}
                   required
                 />
+              </View>
+
+              <View onLayout={recordStepY('loanPeriod')}>
+                <Input
+                  ref={loanPeriodRef}
+                  label={`${t('customer.loanPeriod')} (${periodUnit})`}
+                  value={loanPeriod}
+                  onChangeText={setLoanPeriod}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? 'Enter period' : 'காலத்தை உள்ளிடவும்'}
+                  placeholderTextColor={COLORS.text.tertiary}
+                  keyboardType="numeric"
+                  error={errors.loanPeriod}
+                  disabled={isLoanPeriodDisabled}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('loanPeriod')}
+                />
+              </View>
+
+              {isWeeklyLoanType && (
+                <View onLayout={recordStepY('registerDay')}>
+                  <FormPicker
+                    label={t('customer.registerDay')}
+                    value={registerDay}
+                    onValueChange={(value) => {
+                      setRegisterDay(value);
+                      continueIfOpenedByNav('registerDay');
+                    }}
+                    items={loanDayOptions}
+                    placeholder={t('customer.selectRegisterDay')}
+                    error={errors.registerDay}
+                    editable={false}
+                    required
+                  />
+                </View>
               )}
 
-              <Input
-                label={t('customer.customerPhone')}
-                value={customerPhone}
-                onChangeText={handlePhoneChange}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? '10 digit mobile number' : '10 இலக்க மொபைல் எண்ணை'}
-                placeholderTextColor={COLORS.text.tertiary}
-                keyboardType="number-pad"
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={10}
-                error={errors.customerPhone}
-                required
-              />
+              <View onLayout={recordStepY('phone')}>
+                <Input
+                  ref={phoneRef}
+                  label={t('customer.customerPhone')}
+                  value={customerPhone}
+                  onChangeText={handlePhoneChange}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? '10 digit mobile number' : '10 இலக்க மொபைல் எண்ணை'}
+                  placeholderTextColor={COLORS.text.tertiary}
+                  keyboardType="number-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={10}
+                  error={errors.customerPhone}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('phone')}
+                />
+              </View>
 
-              <Input
-                label={t('customer.customerName')}
-                value={customerName}
-                onChangeText={setCustomerName}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? 'Full name' : 'முழு பெயர்'}
-                error={errors.customerName}
-                required
-              />
+              <View onLayout={recordStepY('name')}>
+                <Input
+                  ref={nameRef}
+                  label={t('customer.customerName')}
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? 'Full name' : 'முழு பெயர்'}
+                  error={errors.customerName}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('name')}
+                />
+              </View>
 
-              <Input
-                label={t('customer.customerAddress')}
-                value={customerAddress}
-                onChangeText={setCustomerAddress}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? 'Full address' : 'முழு முகவரி'}
-                multiline
-                numberOfLines={2}
-                error={errors.customerAddress}
-                required
-              />
+              <View onLayout={recordStepY('address')}>
+                <Input
+                  ref={addressRef}
+                  label={t('customer.customerAddress')}
+                  value={customerAddress}
+                  onChangeText={setCustomerAddress}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? 'Full address' : 'முழு முகவரி'}
+                  multiline
+                  numberOfLines={2}
+                  error={errors.customerAddress}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('address')}
+                />
+              </View>
 
-              <FormPicker
-                label={t('customer.city')}
-                value={cityId}
-                onValueChange={(value) => {
-                  setCityId(value);
-                  if (errors.cityId) setErrors((prev) => ({ ...prev, cityId: null }));
-                }}
-                items={cityOptions}
-                placeholder={citiesLoading ? t('customer.loadingCities') : t('customer.selectCity')}
-                searchPlaceholder={t('customer.searchCity')}
-                noResultsText={t('customer.noCitiesFound')}
-                error={errors.cityId}
-                searchable
-                loading={citiesLoading}
-                visible={cityPickerVisible}
-                onVisibleChange={setCityPickerVisible}
-                onOpen={ensureCheckedInForInteraction}
-                onAddPress={handleOpenAddCity}
-                required
-              />
+              <View onLayout={recordStepY('city')}>
+                <FormPicker
+                  label={t('customer.city')}
+                  value={cityId}
+                  onValueChange={(value) => {
+                    setCityId(value);
+                    if (errors.cityId) setErrors((prev) => ({ ...prev, cityId: null }));
+                    continueIfOpenedByNav('city');
+                  }}
+                  items={cityOptions}
+                  placeholder={citiesLoading ? t('customer.loadingCities') : t('customer.selectCity')}
+                  searchPlaceholder={t('customer.searchCity')}
+                  noResultsText={t('customer.noCitiesFound')}
+                  error={errors.cityId}
+                  searchable
+                  loading={citiesLoading}
+                  visible={cityPickerVisible}
+                  onVisibleChange={(open) => {
+                    setCityPickerVisible(open);
+                    if (!open && navOpenedRef.current === 'city' && !navContextRef.current.cityId) {
+                      navOpenedRef.current = null;
+                    }
+                  }}
+                  onOpen={ensureCheckedInForInteraction}
+                  onAddPress={handleOpenAddCity}
+                  required
+                />
+              </View>
 
-              <Input
-                label={t('customer.loanAmount')}
-                value={loanAmount}
-                onChangeText={setLoanAmount}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
-                keyboardType="numeric"
-                error={errors.loanAmount}
-                required
-              />
+              <View onLayout={recordStepY('loanAmount')}>
+                <Input
+                  ref={loanAmountRef}
+                  label={t('customer.loanAmount')}
+                  value={loanAmount}
+                  onChangeText={setLoanAmount}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                  keyboardType="numeric"
+                  error={errors.loanAmount}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('loanAmount')}
+                />
+              </View>
 
-              <Input
-                label={t('customer.aathayam')}
-                value={aathayamAmount}
-                onChangeText={(text) => {
-                  setAathayamAmount(text);
-                  if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
-                }}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
-                placeholderTextColor={COLORS.text.tertiary}
-                keyboardType="decimal-pad"
-                error={errors.aathayamAmount}
-                required
-              />
+              <View onLayout={recordStepY('aathayam')}>
+                <Input
+                  ref={aathayamRef}
+                  label={t('customer.aathayam')}
+                  value={aathayamAmount}
+                  onChangeText={(text) => {
+                    setAathayamAmount(text);
+                    if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
+                  }}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                  placeholderTextColor={COLORS.text.tertiary}
+                  keyboardType="decimal-pad"
+                  error={errors.aathayamAmount}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('aathayam')}
+                />
+              </View>
 
-              <Input
-                label={t('customer.magimai')}
-                value={magimaiAmount}
-                onChangeText={(text) => {
-                  setMagimaiAmount(text);
-                  if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
-                }}
-                onFocus={ensureCheckedInForInteraction}
-                placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
-                placeholderTextColor={COLORS.text.tertiary}
-                keyboardType="decimal-pad"
-                error={errors.magimaiAmount}
-                required
-              />
+              <View onLayout={recordStepY('magimai')}>
+                <Input
+                  ref={magimaiRef}
+                  label={t('customer.magimai')}
+                  value={magimaiAmount}
+                  onChangeText={(text) => {
+                    setMagimaiAmount(text);
+                    if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
+                  }}
+                  onFocus={ensureCheckedInForInteraction}
+                  placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                  placeholderTextColor={COLORS.text.tertiary}
+                  keyboardType="decimal-pad"
+                  error={errors.magimaiAmount}
+                  required
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  submitBehavior="submit"
+                  onSubmitEditing={() => goToNextFrom('magimai')}
+                />
+              </View>
 
-              {renderImageSection(t('customer.aadharImage'), aadharImage, 'aadhar', 'aadharImage', true)}
-              {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer', 'customerPhoto', true)}
-              {renderImageSection(t('customer.addressProof'), addressProof, 'address', 'addressProof', true)}
+              <View onLayout={recordStepY('aadhar')}>
+                {renderImageSection(t('customer.aadharImage'), aadharImage, 'aadhar', 'aadharImage', true)}
+              </View>
+              <View onLayout={recordStepY('customerPhoto')}>
+                {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer', 'customerPhoto', true)}
+              </View>
+              <View onLayout={recordStepY('addressProof')}>
+                {renderImageSection(t('customer.addressProof'), addressProof, 'address', 'addressProof', true)}
+              </View>
             </>
           )}
 
           {customerType === 'Existing' && (
             <View style={styles.existingSection}>
               <View style={styles.existingPickerGrid}>
-                <View style={styles.existingPickerGridItem}>
+                <View style={styles.existingPickerGridItem} onLayout={recordStepY('loanType')}>
 
 
                   <FormPicker
@@ -1134,32 +1406,51 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                       if (errors.loanTypeId) {
                         setErrors((prev) => ({ ...prev, loanTypeId: null }));
                       }
+                      continueIfOpenedByNav('loanType');
                     }}
                     items={existingLoanTypeOptions}
                     placeholder={loanTypesLoading ? t('customer.loadingLoanTypes') : t('customer.selectLoanType')}
                     error={errors.loanTypeId}
                     style={styles.existingPickerCompact}
                     onOpen={ensureCheckedInForInteraction}
+                    visible={loanTypePickerOpen}
+                    onVisibleChange={(open) => {
+                      setLoanTypePickerOpen(open);
+                      if (!open && navOpenedRef.current === 'loanType' && !navContextRef.current.loanTypeId) {
+                        navOpenedRef.current = null;
+                      }
+                    }}
                     required
                   />
                 </View>
                 {isWeeklyLoanType && (
-                  <View style={styles.existingPickerGridItem}>
+                  <View style={styles.existingPickerGridItem} onLayout={recordStepY('registerDay')}>
                     <FormPicker
                       label={t('customer.registerDay')}
                       value={registerDay}
-                      onValueChange={setRegisterDay}
+                      onValueChange={(value) => {
+                        setRegisterDay(value);
+                        continueIfOpenedByNav('registerDay');
+                      }}
                       items={loanDayOptions}
                       placeholder={t('customer.selectRegisterDay')}
                       error={errors.registerDay}
                       editable
                       style={styles.existingPickerCompact}
+                      visible={registerDayPickerOpen}
+                      onVisibleChange={(open) => {
+                        setRegisterDayPickerOpen(open);
+                        if (!open && navOpenedRef.current === 'registerDay' && !navContextRef.current.registerDay) {
+                          navOpenedRef.current = null;
+                        }
+                      }}
                       required
                     />
                   </View>
                 )}
               </View>
 
+              <View onLayout={recordStepY('search')}>
               <Text style={styles.existingSearchLabel}>
                 {t('customer.searchCustomer')}
                 <Text style={styles.labelRequiredMark}> *</Text>
@@ -1167,6 +1458,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
               <View style={styles.searchInputWrap}>
                 <Ionicons name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
                 <TextInput
+                  ref={existingSearchRef}
                   style={styles.searchInput}
                   placeholder={language === 'en' ? 'Enter phone number to search' : t('customer.enterPhoneToSearch')}
                   placeholderTextColor={COLORS.text.tertiary}
@@ -1175,10 +1467,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                   onFocus={ensureCheckedInForInteraction}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  returnKeyType="search"
+                  blurOnSubmit={false}
                 />
                 {searchLoading && <ActivityIndicator size="small" color={COLORS.primary} style={styles.searchLoader} />}
               </View>
               {searchError && <Text style={styles.searchErrorText}>{searchError}</Text>}
+              </View>
 
               {searchResults.length > 0 &&
                 !searchLoading &&
@@ -1241,50 +1536,75 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
               {customerType === 'Existing' && canSubmitLoanForExisting && showExistingLoanForm && (
                 <View style={styles.existingLoanForm}>
-                  <Input
-                    label={t('customer.loanAmount')}
-                    value={loanAmount}
-                    onChangeText={(text) => {
-                      setLoanAmount(text);
-                      if (errors.loanAmount) setErrors((prev) => ({ ...prev, loanAmount: null }));
-                    }}
-                    onFocus={ensureCheckedInForInteraction}
-                    placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
-                    keyboardType="numeric"
-                    error={errors.loanAmount}
-                    required
-                  />
+                  <View onLayout={recordStepY('loanAmount')}>
+                    <Input
+                      ref={loanAmountRef}
+                      label={t('customer.loanAmount')}
+                      value={loanAmount}
+                      onChangeText={(text) => {
+                        setLoanAmount(text);
+                        if (errors.loanAmount) setErrors((prev) => ({ ...prev, loanAmount: null }));
+                      }}
+                      onFocus={ensureCheckedInForInteraction}
+                      placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                      keyboardType="numeric"
+                      error={errors.loanAmount}
+                      required
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => goToNextFrom('loanAmount')}
+                    />
+                  </View>
 
-                  <Input
-                    label={t('loan.processingFees') || 'Processing fees'}
-                    value={magimaiAmount}
-                    onChangeText={(text) => {
-                      setMagimaiAmount(text);
-                      if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
-                    }}
-                    onFocus={ensureCheckedInForInteraction}
-                    placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
-                    keyboardType="decimal-pad"
-                    error={errors.magimaiAmount}
-                    required
-                  />
+                  <View onLayout={recordStepY('magimai')}>
+                    <Input
+                      ref={magimaiRef}
+                      label={t('loan.processingFees') || 'Processing fees'}
+                      value={magimaiAmount}
+                      onChangeText={(text) => {
+                        setMagimaiAmount(text);
+                        if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
+                      }}
+                      onFocus={ensureCheckedInForInteraction}
+                      placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                      keyboardType="decimal-pad"
+                      error={errors.magimaiAmount}
+                      required
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => goToNextFrom('magimai')}
+                    />
+                  </View>
 
-                  <Input
-                    label={t('loan.interestAmount') || 'Interest amount'}
-                    value={aathayamAmount}
-                    onChangeText={(text) => {
-                      setAathayamAmount(text);
-                      if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
-                    }}
-                    onFocus={ensureCheckedInForInteraction}
-                    placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
-                    keyboardType="decimal-pad"
-                    error={errors.aathayamAmount}
-                    required
-                  />
+                  <View onLayout={recordStepY('aathayam')}>
+                    <Input
+                      ref={aathayamRef}
+                      label={t('loan.interestAmount') || 'Interest amount'}
+                      value={aathayamAmount}
+                      onChangeText={(text) => {
+                        setAathayamAmount(text);
+                        if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
+                      }}
+                      onFocus={ensureCheckedInForInteraction}
+                      placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
+                      keyboardType="decimal-pad"
+                      error={errors.aathayamAmount}
+                      required
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => goToNextFrom('aathayam')}
+                    />
+                  </View>
 
-                  {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer', 'customerPhoto', true)}
-                  {renderImageSection(t('customer.addressProof'), addressProof, 'address', 'addressProof', true)}
+                  <View onLayout={recordStepY('customerPhoto')}>
+                    {renderImageSection(t('customer.customerPhoto'), customerPhoto, 'customer', 'customerPhoto', true)}
+                  </View>
+                  <View onLayout={recordStepY('addressProof')}>
+                    {renderImageSection(t('customer.addressProof'), addressProof, 'address', 'addressProof', true)}
+                  </View>
                 </View>
               )}
             </View>
