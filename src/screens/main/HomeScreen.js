@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
-import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -17,11 +17,11 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import apiServices from '../../api/services/apiServices';
-import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
-import Header from '../../components/common/Header';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import apiServices from "../../api/services/apiServices";
+import AppUpdateBottomSheet from "../../components/common/AppUpdateBottomSheet";
+import Header from "../../components/common/Header";
 import {
   ATTENDANCE,
   applyAppBlockFromResponse,
@@ -30,19 +30,23 @@ import {
   isAttendanceClosed,
   setLocalAttendanceClosed,
   setLocalCheckInState,
-} from '../../config/appToggles';
-import { COLORS, SIZES } from '../../constants/theme';
-import { useAppVersionCheck } from '../../hooks/useAppVersionCheck';
-import Dashboard from '../../models/Dashboard';
-import NIPLoan from '../../models/NIPLoan';
-import { useAuthContext } from '../../store/AuthContext';
-import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
-import { getServerDateTimeISO } from '../../utils/dateFormatter';
-import ErrorHandler from '../../utils/errorHandler';
-import { compressImageAssetIfNeeded } from '../../utils/imageCompression';
-import { syncLocationTracking } from '../../utils/locationTracker';
-import { syncUserLanguageWithApi } from '../../utils/syncUserLanguageWithApi';
+} from "../../config/appToggles";
+import { COLORS, SIZES } from "../../constants/theme";
+import { useAppVersionCheck } from "../../hooks/useAppVersionCheck";
+import Dashboard from "../../models/Dashboard";
+import NIPLoan from "../../models/NIPLoan";
+import { useAuthContext } from "../../store/AuthContext";
+import { useLanguage } from "../../store/LanguageContext";
+import {
+  getApiErrorMessage,
+  showAlert,
+  showError,
+} from "../../utils/alertService";
+import { getServerDateTimeISO } from "../../utils/dateFormatter";
+import ErrorHandler from "../../utils/errorHandler";
+import { compressImageAssetIfNeeded } from "../../utils/imageCompression";
+import { syncLocationTracking } from "../../utils/locationTracker";
+import { syncUserLanguageWithApi } from "../../utils/syncUserLanguageWithApi";
 
 const LANG_SWITCH_W = 58;
 const LANG_SWITCH_H = 30;
@@ -52,15 +56,25 @@ const LANG_THUMB_TRAVEL = LANG_SWITCH_W - LANG_THUMB - LANG_PAD * 2;
 
 /** Normalize GET /frontcash/dashboard/today response for Dashboard.fromApiResponse */
 function dashboardDataFromTodayApi(res) {
-  if (!res || typeof res !== 'object') return {};
-  if (res.success && res.data && typeof res.data === 'object') return res.data;
-  if (res.data && typeof res.data === 'object') {
+  if (!res || typeof res !== "object") return {};
+  if (res.success && res.data && typeof res.data === "object") return res.data;
+  if (res.data && typeof res.data === "object") {
     const d = res.data;
-    if (d.expenses != null || d.collections != null || d.frontcash != null || d.loans_given != null) {
+    if (
+      d.expenses != null ||
+      d.collections != null ||
+      d.frontcash != null ||
+      d.loans_given != null
+    ) {
       return d;
     }
   }
-  if (res.expenses != null || res.collections != null || res.frontcash != null || res.loans_given != null) {
+  if (
+    res.expenses != null ||
+    res.collections != null ||
+    res.frontcash != null ||
+    res.loans_given != null
+  ) {
     return res;
   }
   return {};
@@ -68,7 +82,7 @@ function dashboardDataFromTodayApi(res) {
 
 const formatRupee = (value) => {
   const amount = parseFloat(value) || 0;
-  return `₹${amount.toLocaleString('en-IN')}`;
+  return `₹${amount.toLocaleString("en-IN")}`;
 };
 
 const HomeScreen = ({ navigation }) => {
@@ -76,19 +90,22 @@ const HomeScreen = ({ navigation }) => {
   const { user, updateUser } = useAuthContext();
   const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
   const [langSaving, setLangSaving] = useState(false);
-  const [showAttendance, setShowAttendance] = useState(ATTENDANCE.allow_attendance === 1);
-  const [attendanceStatus, setAttendanceStatus] = useState(
-    isAttendanceCheckedIn() ? 'present' : 'absent'
+  const [showAttendance, setShowAttendance] = useState(
+    ATTENDANCE.allow_attendance === 1,
   );
-  const [attendanceClosed, setAttendanceClosed] = useState(isAttendanceClosed());
+  const [attendanceStatus, setAttendanceStatus] = useState(
+    isAttendanceCheckedIn() ? "present" : "absent",
+  );
+  const [attendanceClosed, setAttendanceClosed] =
+    useState(isAttendanceClosed());
   const [fetchingLocation, setFetchingLocation] = useState(false);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const isAttendanceBusy = fetchingLocation || attendanceSaving;
   const slideAnim = useRef(
-    new Animated.Value(language === 'ta' ? LANG_THUMB_TRAVEL : 0)
+    new Animated.Value(language === "ta" ? LANG_THUMB_TRAVEL : 0),
   ).current;
   const attendanceSlideAnim = useRef(
-    new Animated.Value(isAttendanceCheckedIn() ? LANG_THUMB_TRAVEL : 0)
+    new Animated.Value(isAttendanceCheckedIn() ? LANG_THUMB_TRAVEL : 0),
   ).current; // A left, P right
   const delayPulseAnim = useRef(new Animated.Value(1)).current;
   const delayShimmerAnim = useRef(new Animated.Value(0)).current;
@@ -100,19 +117,21 @@ const HomeScreen = ({ navigation }) => {
   const syncAttendanceUiFromConfig = useCallback(() => {
     const nextShow = ATTENDANCE.allow_attendance === 1;
     const nextClosed = isAttendanceClosed();
-    const uiStatus = isAttendanceCheckedIn() ? 'present' : 'absent';
+    const uiStatus = isAttendanceCheckedIn() ? "present" : "absent";
     setShowAttendance((prev) => (prev === nextShow ? prev : nextShow));
     setAttendanceClosed((prev) => (prev === nextClosed ? prev : nextClosed));
     setAttendanceStatus((prev) => {
       if (prev === uiStatus) return prev;
-      attendanceSlideAnim.setValue(uiStatus === 'present' ? LANG_THUMB_TRAVEL : 0);
+      attendanceSlideAnim.setValue(
+        uiStatus === "present" ? LANG_THUMB_TRAVEL : 0,
+      );
       return uiStatus;
     });
   }, [attendanceSlideAnim]);
 
   const ensureLocationTracking = useCallback(() => {
     syncLocationTracking().catch((e) => {
-      console.warn('[Home] location sync failed:', e?.message || e);
+      console.warn("[Home] location sync failed:", e?.message || e);
     });
   }, []);
 
@@ -121,7 +140,10 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const dashboardAlertShownRef = useRef(false);
 
-  const [collectionSummary, setCollectionSummary] = useState({ totalBalance: 0, count: 0 });
+  const [collectionSummary, setCollectionSummary] = useState({
+    totalBalance: 0,
+    count: 0,
+  });
   const [nipSummary, setNipSummary] = useState({ totalBalance: 0, count: 0 });
   const loadHomeDataRef = useRef(null);
   const syncAttendanceUiRef = useRef(syncAttendanceUiFromConfig);
@@ -129,29 +151,32 @@ const HomeScreen = ({ navigation }) => {
   const ensureLocationTrackingRef = useRef(ensureLocationTracking);
   ensureLocationTrackingRef.current = ensureLocationTracking;
 
-  const showDashboardLoadError = useCallback((error) => {
-    if (error && ErrorHandler.isAuthError(error)) {
-      return;
-    }
-    if (dashboardAlertShownRef.current) {
-      return;
-    }
-    dashboardAlertShownRef.current = true;
-    showError(
-      t('common.error'),
-      getApiErrorMessage(error, t('home.failedToLoadDashboard')),
-      [
-        {
-          text: t('common.retry'),
-          onPress: () => {
-            dashboardAlertShownRef.current = false;
-            loadHomeDataRef.current?.();
+  const showDashboardLoadError = useCallback(
+    (error) => {
+      if (error && ErrorHandler.isAuthError(error)) {
+        return;
+      }
+      if (dashboardAlertShownRef.current) {
+        return;
+      }
+      dashboardAlertShownRef.current = true;
+      showError(
+        t("common.error"),
+        getApiErrorMessage(error, t("home.failedToLoadDashboard")),
+        [
+          {
+            text: t("common.retry"),
+            onPress: () => {
+              dashboardAlertShownRef.current = false;
+              loadHomeDataRef.current?.();
+            },
           },
-        },
-        { text: t('common.ok') },
-      ],
-    );
-  }, [t]);
+          { text: t("common.ok") },
+        ],
+      );
+    },
+    [t],
+  );
 
   const showDashboardLoadErrorRef = useRef(showDashboardLoadError);
   showDashboardLoadErrorRef.current = showDashboardLoadError;
@@ -161,10 +186,12 @@ const HomeScreen = ({ navigation }) => {
     if (!skipPageLoader) setLoadingDashboard(true);
 
     let dashboardFetchError = null;
-    const dashPromise = apiServices.dashboard.getTodayStats({ skipGlobalLoader: true }).catch((err) => {
-      dashboardFetchError = err;
-      return null;
-    });
+    const dashPromise = apiServices.dashboard
+      .getTodayStats({ skipGlobalLoader: true })
+      .catch((err) => {
+        dashboardFetchError = err;
+        return null;
+      });
 
     const summaryPromise = Promise.all([
       Promise.resolve(null),
@@ -172,7 +199,10 @@ const HomeScreen = ({ navigation }) => {
     ]);
 
     try {
-      const [res, [colRes, nipRes]] = await Promise.all([dashPromise, summaryPromise]);
+      const [res, [colRes, nipRes]] = await Promise.all([
+        dashPromise,
+        summaryPromise,
+      ]);
 
       if (res != null) {
         applyAppBlockFromResponse(res);
@@ -186,9 +216,12 @@ const HomeScreen = ({ navigation }) => {
           dashboardAlertShownRef.current = false;
 
           // Store loan_period from dashboard so CustomerWithLoanScreen can use it
-          const dashLoanPeriod = raw.loan_period ?? res?.data?.loan_period ?? res?.loan_period;
-          if (dashLoanPeriod != null && dashLoanPeriod !== '') {
-            AsyncStorage.setItem('loanPeriod', String(dashLoanPeriod)).catch(() => { });
+          const dashLoanPeriod =
+            raw.loan_period ?? res?.data?.loan_period ?? res?.loan_period;
+          if (dashLoanPeriod != null && dashLoanPeriod !== "") {
+            AsyncStorage.setItem("loanPeriod", String(dashLoanPeriod)).catch(
+              () => {},
+            );
           }
         } else {
           setDashboardData(null);
@@ -204,7 +237,7 @@ const HomeScreen = ({ navigation }) => {
         const nips = NIPLoan.fromApiResponseArray(nipRaw);
         const totalNipBalance = nips.reduce(
           (sum, n) => sum + (parseFloat(n.balanceAmount) || 0),
-          0
+          0,
         );
         setNipSummary({ totalBalance: totalNipBalance, count: nips.length });
       } else {
@@ -232,15 +265,12 @@ const HomeScreen = ({ navigation }) => {
   const getAddress = async (latitude, longitude) => {
     try {
       const response = await fetch(
-        `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${LOCATION_API_KEY}`
+        `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${LOCATION_API_KEY}`,
       );
 
       const data = await response.json();
 
-      console.log(
-        "OpenCage Response:",
-        JSON.stringify(data, null, 2)
-      );
+      console.log("OpenCage Response:", JSON.stringify(data, null, 2));
 
       if (data.results && data.results.length > 0) {
         return data.results[0].formatted;
@@ -253,40 +283,43 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const submitAttendancePayload = async (payload, { manageSaving = true } = {}) => {
+  const submitAttendancePayload = async (
+    payload,
+    { manageSaving = true } = {},
+  ) => {
     if (manageSaving) {
       setAttendanceSaving(true);
     }
     try {
       const formData = new FormData();
-      formData.append('user_id', String(payload.userId ?? ''));
-      formData.append('status', payload.status);
-      formData.append('time', getServerDateTimeISO());
-      formData.append('latitude', String(payload.latitude));
-      formData.append('longitude', String(payload.longitude));
-      formData.append('address', payload.address || '');
+      formData.append("user_id", String(payload.userId ?? ""));
+      formData.append("status", payload.status);
+      formData.append("time", getServerDateTimeISO());
+      formData.append("latitude", String(payload.latitude));
+      formData.append("longitude", String(payload.longitude));
+      formData.append("address", payload.address || "");
       if (payload.imageUri) {
-        formData.append('image', {
+        formData.append("image", {
           uri: payload.imageUri,
-          name: 'attendance_image.jpg',
-          type: 'image/jpeg',
+          name: "attendance_image.jpg",
+          type: "image/jpeg",
         });
       }
 
       const res = await apiServices.attendance.markPresent(formData);
-      console.log('[Attendance] API response:', JSON.stringify(res, null, 2));
+      console.log("[Attendance] API response:", JSON.stringify(res, null, 2));
       applyAttendanceFromResponse(res);
       attendanceRetryRef.current = null;
 
-      const isCheckIn = payload.status === 'present';
+      const isCheckIn = payload.status === "present";
       if (isCheckIn) {
         setLocalCheckInState(true);
         setAttendanceClosed(false);
-        setAttendanceStatus('present');
+        setAttendanceStatus("present");
       } else {
         setLocalAttendanceClosed();
         setAttendanceClosed(true);
-        setAttendanceStatus('absent');
+        setAttendanceStatus("absent");
       }
       Animated.spring(attendanceSlideAnim, {
         toValue: isCheckIn ? LANG_THUMB_TRAVEL : 0,
@@ -299,29 +332,29 @@ const HomeScreen = ({ navigation }) => {
       ensureLocationTracking();
 
       showAlert({
-        type: 'success',
-        title: t('common.success'),
+        type: "success",
+        title: t("common.success"),
         message: isCheckIn
-          ? t('home.attendanceMarked')
-          : t('home.attendanceCheckedOut'),
+          ? t("home.attendanceMarked")
+          : t("home.attendanceCheckedOut"),
       });
     } catch (error) {
-      console.warn('[Attendance Error]', error);
+      console.warn("[Attendance Error]", error);
       attendanceRetryRef.current = payload;
       showAlert({
-        type: 'error',
-        title: t('common.error'),
-        message: getApiErrorMessage(error, t('home.attendanceFailed')),
+        type: "error",
+        title: t("common.error"),
+        message: getApiErrorMessage(error, t("home.attendanceFailed")),
         buttons: [
           {
-            text: t('common.retry'),
+            text: t("common.retry"),
             onPress: () => {
               if (attendanceRetryRef.current) {
                 submitAttendancePayload(attendanceRetryRef.current);
               }
             },
           },
-          { text: t('common.cancel'), style: 'cancel' },
+          { text: t("common.cancel"), style: "cancel" },
         ],
       });
     } finally {
@@ -337,22 +370,22 @@ const HomeScreen = ({ navigation }) => {
     // Already punched in & out for the day
     if (attendanceClosed) {
       showAlert({
-        type: 'warning',
-        title: t('home.attendance'),
-        message: t('home.attendanceAlreadyClosed'),
+        type: "warning",
+        title: t("home.attendance"),
+        message: t("home.attendanceAlreadyClosed"),
       });
       return;
     }
 
     // Check-out: ask confirmation first
-    if (attendanceStatus === 'present') {
+    if (attendanceStatus === "present") {
       showAlert({
-        type: 'warning',
-        title: t('home.confirmCheckoutTitle'),
-        message: t('home.confirmCheckoutMessage'),
+        type: "warning",
+        title: t("home.confirmCheckoutTitle"),
+        message: t("home.confirmCheckoutMessage"),
         buttons: [
-          { text: t('common.no'), style: 'cancel' },
-          { text: t('common.yes'), onPress: () => performAttendanceMark() },
+          { text: t("common.no"), style: "cancel" },
+          { text: t("common.yes"), onPress: () => performAttendanceMark() },
         ],
       });
       return;
@@ -365,17 +398,17 @@ const HomeScreen = ({ navigation }) => {
     if (isAttendanceBusy || attendanceClosed) return;
 
     // Check-in: present + photo | Check-out: checkout, no photo
-    const apiStatus = attendanceStatus === 'present' ? 'checkout' : 'present';
+    const apiStatus = attendanceStatus === "present" ? "checkout" : "present";
     // Keep busy continuously until camera opens on top (do not clear mid-flow — that flickers)
     setFetchingLocation(true);
 
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         showAlert({
-          type: 'error',
-          title: t('common.error'),
-          message: t('home.locationPermissionDenied'),
+          type: "error",
+          title: t("common.error"),
+          message: t("home.locationPermissionDenied"),
         });
         return;
       }
@@ -385,17 +418,18 @@ const HomeScreen = ({ navigation }) => {
       });
 
       const { latitude, longitude } = location.coords;
-      const storedUserId = await AsyncStorage.getItem('userId');
+      const storedUserId = await AsyncStorage.getItem("userId");
       const userId = user?.id ?? storedUserId;
 
       let rawImageAsset = null;
-      if (apiStatus === 'present') {
-        const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      if (apiStatus === "present") {
+        const cameraPermission =
+          await ImagePicker.requestCameraPermissionsAsync();
         if (!cameraPermission.granted) {
           showAlert({
-            type: 'error',
-            title: t('common.error'),
-            message: t('home.cameraPermissionDenied'),
+            type: "error",
+            title: t("common.error"),
+            message: t("home.cameraPermissionDenied"),
           });
           return;
         }
@@ -406,21 +440,21 @@ const HomeScreen = ({ navigation }) => {
         setFetchingLocation(false);
 
         const cameraResult = await ImagePicker.launchCameraAsync({
-          mediaTypes: 'images',
+          mediaTypes: "images",
           allowsEditing: false,
           quality: 0.5,
         });
 
         if (!cameraResult.canceled && cameraResult.assets?.length > 0) {
           rawImageAsset = cameraResult.assets[0];
-        } else if (Platform.OS === 'android' && cameraResult.canceled) {
+        } else if (Platform.OS === "android" && cameraResult.canceled) {
           try {
             const pending = await ImagePicker.getPendingResultAsync();
             if (pending && !pending.canceled && pending.assets?.length > 0) {
               rawImageAsset = pending.assets[0];
             }
           } catch (e) {
-            console.warn('getPendingResultAsync fallback failed:', e?.message);
+            console.warn("getPendingResultAsync fallback failed:", e?.message);
           }
         }
 
@@ -450,7 +484,7 @@ const HomeScreen = ({ navigation }) => {
             status: apiStatus,
             latitude,
             longitude,
-            address: address || '',
+            address: address || "",
             imageUri,
           },
           { manageSaving: false },
@@ -459,12 +493,12 @@ const HomeScreen = ({ navigation }) => {
         setAttendanceSaving(false);
       }
     } catch (error) {
-      console.warn('[Attendance Error]', error);
+      console.warn("[Attendance Error]", error);
       setAttendanceSaving(false);
       showAlert({
-        type: 'error',
-        title: t('common.error'),
-        message: getApiErrorMessage(error, t('home.attendanceFailed')),
+        type: "error",
+        title: t("common.error"),
+        message: getApiErrorMessage(error, t("home.attendanceFailed")),
       });
     } finally {
       setFetchingLocation(false);
@@ -514,7 +548,11 @@ const HomeScreen = ({ navigation }) => {
           ...native,
         }),
         Animated.delay(900),
-        Animated.timing(delayShimmerAnim, { toValue: 0, duration: 0, ...native }),
+        Animated.timing(delayShimmerAnim, {
+          toValue: 0,
+          duration: 0,
+          ...native,
+        }),
       ]),
     );
     const makeRingLoop = (anim, startDelay) =>
@@ -545,7 +583,13 @@ const HomeScreen = ({ navigation }) => {
       ring1Loop.stop();
       ring2Loop.stop();
     };
-  }, [delayPulseAnim, delayShimmerAnim, delayRing1Anim, delayRing2Anim, delayGlowAnim]);
+  }, [
+    delayPulseAnim,
+    delayShimmerAnim,
+    delayRing1Anim,
+    delayRing2Anim,
+    delayGlowAnim,
+  ]);
 
   // Refresh block + attendance when app returns to foreground (silent — no global loader).
   // Re-sync FS when allow_location / capture_time / check-in gate change.
@@ -554,7 +598,9 @@ const HomeScreen = ({ navigation }) => {
 
     const checkDashboardFlags = async () => {
       try {
-        const res = await apiServices.dashboard.getTodayStats({ skipGlobalLoader: true });
+        const res = await apiServices.dashboard.getTodayStats({
+          skipGlobalLoader: true,
+        });
         applyAppBlockFromResponse(res);
         applyAttendanceFromResponse(res);
         syncAttendanceUiRef.current?.();
@@ -569,8 +615,8 @@ const HomeScreen = ({ navigation }) => {
       }
     };
 
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
         checkDashboardFlags();
       }
     });
@@ -585,12 +631,12 @@ const HomeScreen = ({ navigation }) => {
       syncAttendanceUiRef.current?.();
       runCheck();
       loadHomeDataRef.current?.();
-    }, [runCheck])
+    }, [runCheck]),
   );
 
   useEffect(() => {
     Animated.spring(slideAnim, {
-      toValue: language === 'ta' ? LANG_THUMB_TRAVEL : 0,
+      toValue: language === "ta" ? LANG_THUMB_TRAVEL : 0,
       useNativeDriver: true,
       friction: 9,
       tension: 80,
@@ -601,13 +647,15 @@ const HomeScreen = ({ navigation }) => {
     if (newLanguage === language || langSaving) return;
     setLangSaving(true);
     try {
-      const storedUserId = await AsyncStorage.getItem('userId');
+      const storedUserId = await AsyncStorage.getItem("userId");
       const userId = user?.id ?? storedUserId;
       if (!userId) {
         showAlert({
-          type: 'error',
-          title: t('common.error'),
-          message: t('profile.updateFailed') || 'Unable to update language. Please login again.',
+          type: "error",
+          title: t("common.error"),
+          message:
+            t("profile.updateFailed") ||
+            "Unable to update language. Please login again.",
         });
         return;
       }
@@ -616,12 +664,14 @@ const HomeScreen = ({ navigation }) => {
       updateUser({ language: newLanguage, lang: newLanguage });
     } catch (error) {
       const message =
-        error?.code === 'NO_AUTH'
-          ? t('profile.updateFailed') || 'Unable to update language. Please login again.'
-          : error?.response?.data?.message || 'Failed to change language. Please try again.';
+        error?.code === "NO_AUTH"
+          ? t("profile.updateFailed") ||
+            "Unable to update language. Please login again."
+          : error?.response?.data?.message ||
+            "Failed to change language. Please try again.";
       showAlert({
-        type: 'error',
-        title: t('common.error'),
+        type: "error",
+        title: t("common.error"),
         message,
       });
     } finally {
@@ -655,7 +705,12 @@ const HomeScreen = ({ navigation }) => {
         onPress={onPress}
         activeOpacity={0.85}
       >
-        <View style={[styles.amountCardHeader, hideDetails && styles.amountCardHeaderCentered]}>
+        <View
+          style={[
+            styles.amountCardHeader,
+            hideDetails && styles.amountCardHeaderCentered,
+          ]}
+        >
           <Ionicons
             name={iconName}
             size={hideDetails ? 32 : 22}
@@ -675,11 +730,19 @@ const HomeScreen = ({ navigation }) => {
         </View>
         {!hideDetails && (
           <>
-            <Text style={[styles.amountCardValue, isOutlined && styles.amountCardValueOutlined]}>
+            <Text
+              style={[
+                styles.amountCardValue,
+                isOutlined && styles.amountCardValueOutlined,
+              ]}
+            >
               {amountText}
             </Text>
             <Text
-              style={[styles.amountCardSub, isOutlined && styles.amountCardSubOutlined]}
+              style={[
+                styles.amountCardSub,
+                isOutlined && styles.amountCardSubOutlined,
+              ]}
               numberOfLines={2}
             >
               {subText}
@@ -692,11 +755,14 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <>
-      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView
+        style={styles.container}
+        edges={["left", "right", "bottom"]}
+      >
         <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
         <Header
-          title={t('home.title')}
+          title={t("home.title")}
           showMenuButton={true}
           onMenuPress={() => navigation.openDrawer()}
           rightComponent={
@@ -706,17 +772,25 @@ const HomeScreen = ({ navigation }) => {
                   styles.langSwitchTrack,
                   langSaving && styles.langSwitchTrackDisabled,
                 ]}
-                onPress={() => handleHomeLanguageChange(language === 'en' ? 'ta' : 'en')}
+                onPress={() =>
+                  handleHomeLanguageChange(language === "en" ? "ta" : "en")
+                }
                 disabled={langSaving}
                 activeOpacity={0.8}
               >
-                {language === 'ta' && (
-                  <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
+                {language === "ta" && (
+                  <View
+                    style={styles.langSwitchInactiveLeft}
+                    pointerEvents="none"
+                  >
                     <Text style={styles.langSwitchInactiveText}>EN</Text>
                   </View>
                 )}
-                {language === 'en' && (
-                  <View style={styles.langSwitchInactiveRight} pointerEvents="none">
+                {language === "en" && (
+                  <View
+                    style={styles.langSwitchInactiveRight}
+                    pointerEvents="none"
+                  >
                     <Text style={styles.langSwitchInactiveText}>த</Text>
                   </View>
                 )}
@@ -727,7 +801,7 @@ const HomeScreen = ({ navigation }) => {
                   ]}
                 >
                   <Text style={styles.langSwitchThumbText}>
-                    {language === 'en' ? 'EN' : 'த'}
+                    {language === "en" ? "EN" : "த"}
                   </Text>
                 </Animated.View>
               </TouchableOpacity>
@@ -750,12 +824,14 @@ const HomeScreen = ({ navigation }) => {
         >
           <View style={styles.dashboardSection}>
             <View style={styles.dashboardTitleRow}>
-              <Text style={styles.dashboardTitle}>{t('home.todaysStatistics')}</Text>
+              <Text style={styles.dashboardTitle}>
+                {t("home.todaysStatistics")}
+              </Text>
               {showAttendance && (
                 <TouchableOpacity
                   style={[
                     styles.attendanceSwitchTrack,
-                    attendanceStatus === 'present'
+                    attendanceStatus === "present"
                       ? styles.attendanceSwitchTrackPresent
                       : styles.attendanceSwitchTrackAbsent,
                     attendanceClosed && styles.attendanceSwitchTrackDisabled,
@@ -763,15 +839,21 @@ const HomeScreen = ({ navigation }) => {
                   onPress={handleMarkAttendance}
                   disabled={isAttendanceBusy}
                   activeOpacity={1}
-                  accessibilityLabel={t('home.attendance')}
+                  accessibilityLabel={t("home.attendance")}
                 >
-                  {attendanceStatus === 'present' && (
-                    <View style={styles.langSwitchInactiveLeft} pointerEvents="none">
+                  {attendanceStatus === "present" && (
+                    <View
+                      style={styles.langSwitchInactiveLeft}
+                      pointerEvents="none"
+                    >
                       <Text style={styles.attendanceSwitchInactiveText}>A</Text>
                     </View>
                   )}
-                  {attendanceStatus === 'absent' && (
-                    <View style={styles.langSwitchInactiveRight} pointerEvents="none">
+                  {attendanceStatus === "absent" && (
+                    <View
+                      style={styles.langSwitchInactiveRight}
+                      pointerEvents="none"
+                    >
                       <Text style={styles.attendanceSwitchInactiveText}>P</Text>
                     </View>
                   )}
@@ -784,12 +866,12 @@ const HomeScreen = ({ navigation }) => {
                     <Text
                       style={[
                         styles.langSwitchThumbText,
-                        attendanceStatus === 'present'
+                        attendanceStatus === "present"
                           ? styles.attendanceThumbPresent
                           : styles.attendanceThumbAbsent,
                       ]}
                     >
-                      {attendanceStatus === 'present' ? 'P' : 'A'}
+                      {attendanceStatus === "present" ? "P" : "A"}
                     </Text>
                   </Animated.View>
                 </TouchableOpacity>
@@ -860,9 +942,17 @@ const HomeScreen = ({ navigation }) => {
                 <TouchableOpacity
                   style={styles.delayedCollectionButton}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate('DelayCollection', { delayUnit: 'weeks' })}
+                  onPress={() =>
+                    navigation.navigate("DelayCollection", {
+                      delayUnit: "weeks",
+                    })
+                  }
                 >
-                  <Text style={styles.delayedCollectionButtonText}>Delayed Collection</Text>
+                  <Text style={styles.delayedCollectionButtonText}>
+                    {t("home.delayedCollectionWithCount", {
+                      count: dashboardData?.delayedCollectionCount ?? 0,
+                    })}
+                  </Text>
                   <Animated.View
                     pointerEvents="none"
                     style={[
@@ -875,7 +965,7 @@ const HomeScreen = ({ navigation }) => {
                               outputRange: [-80, 360],
                             }),
                           },
-                          { rotate: '20deg' },
+                          { rotate: "20deg" },
                         ],
                       },
                     ]}
@@ -896,42 +986,44 @@ const HomeScreen = ({ navigation }) => {
             {loadingDashboard ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.loadingText}>{t('home.loadingDashboard')}</Text>
+                <Text style={styles.loadingText}>
+                  {t("home.loadingDashboard")}
+                </Text>
               </View>
             ) : (
               <>
                 <View style={styles.homeGrid}>
                   {renderAmountCard({
-                    cardKey: 'collection',
-                    backgroundColor: '#1d7ee2',
-                    iconName: 'cash-outline',
-                    title: t('home.collection'),
+                    cardKey: "collection",
+                    backgroundColor: "#1d7ee2",
+                    iconName: "cash-outline",
+                    title: t("home.collection"),
                     amountText: formatRupee(collectionSummary.totalBalance),
-                    subText: `${collectionSummary.count} ${t('home.dueToday')}`,
-                    onPress: () => navigation.navigate('Collection'),
+                    subText: `${collectionSummary.count} ${t("home.dueToday")}`,
+                    onPress: () => navigation.navigate("Collection"),
                     hideDetails: true,
                     outlined: true,
                   })}
                   {renderAmountCard({
-                    cardKey: 'intermediate-income',
-                    backgroundColor: '#1d7ee2',
-                    iconName: 'sync-outline',
-                    title: t('home.intermediateIncome'),
+                    cardKey: "intermediate-income",
+                    backgroundColor: "#1d7ee2",
+                    iconName: "sync-outline",
+                    title: t("home.intermediateIncome"),
                     // amountText: formatRupee(collectionSummary.totalBalance),
                     // subText: `${collectionSummary.count} ${t('home.dueToday')}`,
-                    onPress: () => navigation.navigate('IntermediateIncome'),
+                    onPress: () => navigation.navigate("IntermediateIncome"),
                     outlined: true,
                     hideDetails: true,
                   })}
                   {renderAmountCard({
-                    cardKey: 'loan-mgmt',
-                    iconName: 'document-text-outline',
-                    title: t('home.loanManagement'),
+                    cardKey: "loan-mgmt",
+                    iconName: "document-text-outline",
+                    title: t("home.loanManagement"),
                     amountText: dashboardData
                       ? dashboardData.getFormattedLoansGivenAmount()
                       : formatRupee(0),
-                    subText: `${dashboardData?.loansGiven?.count ?? 0} ${t('home.loans')}`,
-                    onPress: () => navigation.navigate('Loan'),
+                    subText: `${dashboardData?.loansGiven?.count ?? 0} ${t("home.loans")}`,
+                    onPress: () => navigation.navigate("Loan"),
                     outlined: true,
                   })}
 
@@ -948,51 +1040,56 @@ const HomeScreen = ({ navigation }) => {
                   })} */}
 
                   {renderAmountCard({
-                    cardKey: 'expenses',
-                    backgroundColor: '#FF3B30',
-                    iconName: 'card-outline',
-                    title: t('home.expenses'),
+                    cardKey: "expenses",
+                    backgroundColor: "#FF3B30",
+                    iconName: "card-outline",
+                    title: t("home.expenses"),
                     amountText: dashboardData
                       ? dashboardData.getFormattedExpensesAmount()
                       : formatRupee(0),
-                    subText: `${dashboardData?.expenses?.count ?? 0} ${t('home.expensesCount')}`,
-                    onPress: () => navigation.navigate('Expenses'),
+                    subText: `${dashboardData?.expenses?.count ?? 0} ${t("home.expensesCount")}`,
+                    onPress: () => navigation.navigate("Expenses"),
                     outlined: true,
                   })}
 
                   {renderAmountCard({
-                    cardKey: 'coll-hist',
-                    backgroundColor: '#FF9500',
-                    iconName: 'bar-chart-outline',
-                    title: t('home.collectionHistory'),
+                    cardKey: "coll-hist",
+                    backgroundColor: "#FF9500",
+                    iconName: "bar-chart-outline",
+                    title: t("home.collectionHistory"),
                     amountText: dashboardData
                       ? dashboardData.getFormattedCollectionsAmount()
                       : formatRupee(0),
-                    subText: `${dashboardData?.collections?.count ?? 0} ${t('home.collectionsCount')}`,
-                    onPress: () => navigation.navigate('CollectionHistory'),
+                    subText: `${dashboardData?.collections?.count ?? 0} ${t("home.collectionsCount")}`,
+                    onPress: () => navigation.navigate("CollectionHistory"),
                     outlined: true,
                   })}
 
                   {renderAmountCard({
-                    cardKey: 'nip',
-                    backgroundColor: '#5856D6',
-                    iconName: 'link-outline',
-                    title: t('home.nip'),
+                    cardKey: "nip",
+                    backgroundColor: "#5856D6",
+                    iconName: "link-outline",
+                    title: t("home.nip"),
                     amountText: formatRupee(nipSummary.totalBalance),
-                    subText: `${nipSummary.count} ${t('home.loans')}`,
-                    onPress: () => navigation.navigate('NIP'),
+                    subText: `${nipSummary.count} ${t("home.loans")}`,
+                    onPress: () => navigation.navigate("NIP"),
                     outlined: true,
                   })}
-                  
                 </View>
 
                 <TouchableOpacity
                   style={styles.cashAccountCard}
-                  onPress={() => navigation.navigate('CashAccount')}
+                  onPress={() => navigation.navigate("CashAccount")}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="calculator-outline" size={22} color={COLORS.primary} />
-                  <Text style={styles.cashAccountCardText}>{t('cashAccount.closeAccount')}</Text>
+                  <Ionicons
+                    name="calculator-outline"
+                    size={22}
+                    color={COLORS.primary}
+                  />
+                  <Text style={styles.cashAccountCardText}>
+                    {t("cashAccount.closeAccount")}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1004,7 +1101,7 @@ const HomeScreen = ({ navigation }) => {
             styles.attendanceLoadingOverlay,
             !isAttendanceBusy && styles.attendanceLoadingOverlayHidden,
           ]}
-          pointerEvents={isAttendanceBusy ? 'auto' : 'none'}
+          pointerEvents={isAttendanceBusy ? "auto" : "none"}
         >
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
@@ -1030,9 +1127,9 @@ const styles = StyleSheet.create({
   },
   attendanceLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.55)",
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 20,
   },
   attendanceLoadingOverlayHidden: {
@@ -1046,9 +1143,9 @@ const styles = StyleSheet.create({
     paddingBottom: SIZES.padding * 2,
   },
   homeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
   cashAccountCard: {
     marginTop: SIZES.base,
@@ -1058,19 +1155,19 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius * 1.5,
     paddingVertical: SIZES.padding,
     paddingHorizontal: SIZES.padding,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   cashAccountCardText: {
     marginLeft: SIZES.base,
     fontSize: SIZES.body1,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.primary,
     letterSpacing: -0.2,
   },
   amountCard: {
-    width: '48%',
+    width: "48%",
     minHeight: 132,
     borderRadius: SIZES.radius * 1.5,
     padding: SIZES.padding,
@@ -1083,23 +1180,23 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   amountCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: SIZES.base,
   },
   amountCardCentered: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   amountCardHeaderCentered: {
-    justifyContent: 'center',
+    justifyContent: "center",
     marginBottom: 0,
     flex: 1,
   },
   amountCardHeaderTextLarge: {
     fontSize: SIZES.body1,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
     color: COLORS.primary,
   },
   amountCardHeaderTextDanger: {
@@ -1108,7 +1205,7 @@ const styles = StyleSheet.create({
   amountCardHeaderText: {
     flex: 1,
     fontSize: SIZES.body1,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.primary,
     marginLeft: SIZES.base,
   },
@@ -1117,7 +1214,7 @@ const styles = StyleSheet.create({
   },
   amountCardValue: {
     fontSize: SIZES.h2,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.primary,
     marginBottom: SIZES.base / 2,
   },
@@ -1127,7 +1224,7 @@ const styles = StyleSheet.create({
   amountCardSub: {
     fontSize: SIZES.body4,
     color: COLORS.text.secondary,
-    fontWeight: '400',
+    fontWeight: "400",
   },
   amountCardSubOutlined: {
     color: COLORS.text.secondary,
@@ -1137,21 +1234,21 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.margin,
   },
   dashboardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: SIZES.margin,
   },
   dashboardTitle: {
     flex: 1,
     fontSize: SIZES.h3,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.text.secondary,
     marginRight: SIZES.base,
   },
   loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: SIZES.padding * 2,
   },
   loadingText: {
@@ -1160,86 +1257,86 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   attendanceSwitchTrack: {
     width: LANG_SWITCH_W,
     height: LANG_SWITCH_H,
     borderRadius: LANG_SWITCH_H / 2,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   attendanceSwitchTrackPresent: {
-    backgroundColor: 'rgba(52, 199, 89, 0.45)',
+    backgroundColor: "rgba(52, 199, 89, 0.45)",
   },
   attendanceSwitchTrackAbsent: {
-    backgroundColor: 'rgba(255, 59, 48, 0.45)',
+    backgroundColor: "rgba(255, 59, 48, 0.45)",
   },
   attendanceSwitchTrackDisabled: {
     opacity: 0.55,
   },
   attendanceSwitchInactiveText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(0, 0, 0, 0.42)',
+    fontWeight: "700",
+    color: "rgba(0, 0, 0, 0.42)",
     letterSpacing: 0.2,
   },
   attendanceThumbPresent: {
-    color: '#34C759',
+    color: "#34C759",
   },
   attendanceThumbAbsent: {
-    color: '#FF3B30',
+    color: "#FF3B30",
   },
   langSwitchTrack: {
     width: LANG_SWITCH_W,
     height: LANG_SWITCH_H,
     borderRadius: LANG_SWITCH_H / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.38)',
+    backgroundColor: "rgba(255, 255, 255, 0.38)",
     marginRight: 6,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   langSwitchTrackDisabled: {
     opacity: 0.55,
   },
   langSwitchInactiveLeft: {
-    position: 'absolute',
+    position: "absolute",
     left: 6,
     top: LANG_PAD,
     bottom: LANG_PAD,
-    justifyContent: 'center',
+    justifyContent: "center",
     minWidth: 18,
   },
   langSwitchInactiveRight: {
-    position: 'absolute',
+    position: "absolute",
     right: 6,
     top: LANG_PAD,
     bottom: LANG_PAD,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
+    justifyContent: "center",
+    alignItems: "flex-end",
     minWidth: 18,
   },
   langSwitchInactiveText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(0, 0, 0, 0.42)',
+    fontWeight: "700",
+    color: "rgba(0, 0, 0, 0.42)",
     letterSpacing: 0.2,
   },
   langSwitchThumb: {
-    position: 'absolute',
+    position: "absolute",
     left: LANG_PAD,
     top: LANG_PAD,
     width: LANG_THUMB,
     height: LANG_THUMB,
     borderRadius: LANG_THUMB / 2,
     backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: "rgba(0, 0, 0, 0.08)",
   },
   langSwitchThumbText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
     color: COLORS.primary,
     letterSpacing: 0.2,
   },
@@ -1247,42 +1344,42 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.margin,
   },
   delayedCollectionGlow: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
     borderRadius: SIZES.radius * 1.5,
-    backgroundColor: '#FF6B66',
+    backgroundColor: "#FF6B66",
   },
   delayedCollectionRing: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
     borderRadius: SIZES.radius * 1.5,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
+    borderColor: "rgba(255, 255, 255, 0.95)",
   },
   delayedCollectionButton: {
     backgroundColor: COLORS.error,
     padding: SIZES.padding,
     borderRadius: SIZES.radius * 1.5,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   delayedCollectionShimmer: {
-    position: 'absolute',
+    position: "absolute",
     top: -40,
     bottom: -40,
     width: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    backgroundColor: "rgba(255, 255, 255, 0.42)",
   },
   delayedCollectionButtonText: {
     color: COLORS.white,
     fontSize: SIZES.body1,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontWeight: "800",
+    textAlign: "center",
     letterSpacing: -0.2,
   },
 });

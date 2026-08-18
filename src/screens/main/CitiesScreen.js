@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -32,6 +34,7 @@ const CitiesScreen = ({ navigation }) => {
   const [cityName, setCityName] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [showAddCityModal, setShowAddCityModal] = useState(false);
 
   const loadCities = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -59,6 +62,25 @@ const CitiesScreen = ({ navigation }) => {
     }, [loadCities])
   );
 
+  useEffect(() => {
+    if (!showAddCityModal) return undefined;
+    const timer = setTimeout(() => cityInputRef.current?.focus(), 400);
+    return () => clearTimeout(timer);
+  }, [showAddCityModal]);
+
+  const handleOpenAddCity = () => {
+    setCityName('');
+    setError('');
+    setShowAddCityModal(true);
+  };
+
+  const handleCloseAddCity = () => {
+    if (adding) return;
+    setShowAddCityModal(false);
+    setCityName('');
+    setError('');
+  };
+
   const handleAddCity = async () => {
     const name = String(cityName || '').trim();
     if (!name) {
@@ -72,9 +94,9 @@ const CitiesScreen = ({ navigation }) => {
     try {
       await apiServices.city.create(name);
       setCityName('');
+      setShowAddCityModal(false);
       showSuccess(t('common.success'), t('customer.cityAdded'));
       await loadCities({ silent: true });
-      cityInputRef.current?.focus();
     } catch (err) {
       showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
     } finally {
@@ -113,7 +135,7 @@ const CitiesScreen = ({ navigation }) => {
           contentContainerStyle={[
             styles.listContent,
             cities.length === 0 && styles.listContentEmpty,
-            { paddingBottom: 108 + insets.bottom },
+            { paddingBottom: 84 + insets.bottom },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
@@ -136,43 +158,69 @@ const CitiesScreen = ({ navigation }) => {
         />
       )}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+      <View style={[styles.addBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleOpenAddCity}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={18} color={COLORS.white} />
+          <Text style={styles.addButtonText}>{t('customer.addCity')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={showAddCityModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleCloseAddCity}
       >
-        <View style={[styles.addBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TextInput
-            ref={cityInputRef}
-            style={[styles.addInput, error ? styles.addInputError : null]}
-            value={cityName}
-            onChangeText={(text) => {
-              setCityName(text);
-              if (error) setError('');
-            }}
-            placeholder={t('customer.enterCityName')}
-            placeholderTextColor={COLORS.text.tertiary}
-            returnKeyType="done"
-            blurOnSubmit={false}
-            submitBehavior="submit"
-            onSubmitEditing={handleAddCity}
-          />
-          <TouchableOpacity
-            style={[styles.addButton, adding && styles.addButtonDisabled]}
-            onPress={handleAddCity}
-            disabled={adding}
-          >
-            {adding ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <>
-                <Ionicons name="add" size={18} color={COLORS.white} />
-                <Text style={styles.addButtonText}>{t('customer.addCity')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          {error ? <Text style={styles.addError}>{error}</Text> : null}
-        </View>
-      </KeyboardAvoidingView>
+        <KeyboardAvoidingView
+          style={styles.addCityOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.addCityBackdrop} onPress={handleCloseAddCity} />
+          <View style={styles.addCityCard}>
+            <Text style={styles.addCityTitle}>{t('customer.addCity')}</Text>
+            <TextInput
+              ref={cityInputRef}
+              style={[styles.addCityInput, error ? styles.addInputError : null]}
+              value={cityName}
+              onChangeText={(text) => {
+                setCityName(text);
+                if (error) setError('');
+              }}
+              placeholder={t('customer.enterCityName')}
+              placeholderTextColor={COLORS.text.tertiary}
+              returnKeyType="done"
+              blurOnSubmit={false}
+              onSubmitEditing={handleAddCity}
+            />
+            {error ? <Text style={styles.addError}>{error}</Text> : null}
+            <View style={styles.addCityActions}>
+              <TouchableOpacity
+                style={styles.addCityCancelBtn}
+                onPress={handleCloseAddCity}
+                disabled={adding}
+              >
+                <Text style={styles.addCityCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.addCitySaveBtn, adding && styles.addButtonDisabled]}
+                onPress={handleAddCity}
+                disabled={adding}
+              >
+                {adding ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Text style={styles.addCitySaveText}>{t('common.save')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -237,19 +285,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingTop: 12,
   },
-  addInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: 12,
-    fontSize: SIZES.body2,
-    color: COLORS.black,
-    marginBottom: 10,
-  },
-  addInputError: {
-    borderColor: COLORS.error,
-  },
   addButton: {
     backgroundColor: COLORS.primary,
     borderRadius: SIZES.radius,
@@ -267,10 +302,76 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 6,
   },
+  addCityOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  addCityBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  addCityCard: {
+    width: '88%',
+    maxWidth: 400,
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius * 1.5,
+    padding: SIZES.padding,
+    zIndex: 1,
+  },
+  addCityTitle: {
+    fontSize: SIZES.h3,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    marginBottom: SIZES.padding,
+  },
+  addCityInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 12,
+    fontSize: SIZES.body2,
+    color: COLORS.black,
+    marginBottom: SIZES.base,
+  },
+  addInputError: {
+    borderColor: COLORS.error,
+  },
   addError: {
     color: COLORS.error,
     fontSize: SIZES.body4,
-    marginTop: 8,
+    marginBottom: SIZES.padding,
+  },
+  addCityActions: {
+    flexDirection: 'row',
+    gap: SIZES.base,
+  },
+  addCityCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+  },
+  addCityCancelText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  addCitySaveBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.primary,
+  },
+  addCitySaveText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.white,
   },
 });
 

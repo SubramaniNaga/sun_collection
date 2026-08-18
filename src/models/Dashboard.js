@@ -108,6 +108,8 @@ class Dashboard {
       distance: data.tracking?.distance || 0,
       isTracking: data.tracking?.isTracking || false,
     };
+
+    this.delayedCollectionCount = parseInt(data.delayed_collection_count, 10) || 0;
   }
 
   /**

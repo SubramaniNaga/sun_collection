@@ -212,7 +212,6 @@ const DelayCollectionScreen = ({ navigation, route }) => {
 
   const renderItem = ({ item }) => {
     const customerName = String(item?.customer_name ?? '').trim();
-    const isLongCustomerName = customerName.length > 12;
     const displayId = item?.customer_no ?? item?.customer_id ?? '—';
     const unpaidValue = delayUnit === 'days' ? item?.unpaid_days : item?.unpaid_weeks;
     const unpaidLabel = delayUnit === 'days' ? t('collection.unpaidDays') : t('collection.unpaidWeeks');
@@ -240,39 +239,27 @@ const DelayCollectionScreen = ({ navigation, route }) => {
             )}
           </TouchableOpacity>
           <View style={styles.collectionCardHeaderBody}>
-            <View style={styles.itemRow}>
-            {isLongCustomerName ? (
-              <>
-                <Text style={styles.collectionCardNameLine} numberOfLines={2}>
-                  {displayId} - {customerName || '—'}
-                </Text>
-                {renderActionIcons(item)}
-              </>
-            ) : (
-              <View style={styles.collectionCardNameRow}>
-                <Text
-                  style={[styles.collectionCardNameLine, styles.collectionCardNameLineInline]}
-                  numberOfLines={1}
-                >
-                  {displayId} - {customerName || '—'}
-                </Text>
-                {renderActionIcons(item)}
+            <View style={styles.collectionCardNameRow}>
+              <Text
+                style={[styles.collectionCardNameLine, styles.collectionCardNameLineInline]}
+                numberOfLines={2}
+              >
+                {displayId} - {customerName || '—'}
+              </Text>
+              {renderActionIcons(item)}
+            </View>
+            <View style={styles.itemMetaRow}>
+              <View style={styles.itemMetaGroup}>
+                <Text style={styles.itemMetaLeft}>{t('loan.balance')}:</Text>
+                <Text style={styles.itemMetaRight}>{formatBalance(item?.balance_amount)}</Text>
               </View>
-            )}
-            </View>
-            <View style={styles.itemRow}>
-            <View style={styles.itemRow}>
-              <Text style={styles.itemMetaLeft}>{t('loan.balance')}:</Text>
-              <Text style={styles.itemMetaRight}>{formatBalance(item?.balance_amount)}</Text>
-            </View>
-            <View style={styles.itemRow}>
-              <Text style={styles.itemMetaLeft}>{unpaidLabel}:</Text>
-              <Text style={styles.itemMetaRight}>{unpaidValue ?? '—'}</Text>
-            </View>
+              <View style={styles.itemMetaGroup}>
+                <Text style={styles.itemMetaLeft}>{unpaidLabel}:</Text>
+                <Text style={styles.itemMetaRight}>{unpaidValue ?? '—'}</Text>
+              </View>
             </View>
           </View>
         </View>
-        {/* <View style={styles.itemDivider} /> */}
       </View>
     );
   };
@@ -496,6 +483,7 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.base / 2,
     borderWidth: 1,
     borderColor: COLORS.border,
+    overflow: 'hidden',
   },
   collectionCardHeader: {
     flexDirection: 'row',
@@ -523,25 +511,24 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body1,
     fontWeight: '600',
     color: COLORS.black,
-    marginBottom: SIZES.base * 0.375,
     lineHeight: Math.round((SIZES.body1 || 16) * 1.25),
   },
   collectionCardNameLineInline: {
-    marginBottom: 0,
     flex: 1,
-    marginRight: SIZES.base * 0.75,
     minWidth: 0,
+    marginRight: SIZES.base / 2,
   },
   collectionCardNameRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+    marginBottom: SIZES.base / 2,
   },
   collectionCardIconsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: SIZES.base / 2,
-    alignSelf: 'flex-start',
   },
   collectionCardIconButton: {
     padding: SIZES.base / 2,
@@ -557,11 +544,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginVertical: SIZES.base / 2,
   },
+  itemMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SIZES.base,
+  },
+  itemMetaGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  
   },
   itemRowBalance: {
     flexDirection: 'column',
@@ -580,7 +578,8 @@ const styles = StyleSheet.create({
   itemMetaRight: {
     fontSize: SIZES.body3,
     color: COLORS.text.secondary,
-    marginLeft: SIZES.base,
+    marginLeft: SIZES.base / 2,
+    flexShrink: 1,
   },
   center: {
     flex: 1,

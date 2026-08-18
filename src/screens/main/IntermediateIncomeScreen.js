@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -222,6 +223,41 @@ const IntermediateIncomeScreen = ({ navigation }) => {
     setRefreshing(true);
     fetchList(1, false, true);
   }, [fetchList]);
+
+  const handlePhonePress = (phoneNumber) => {
+    if (!phoneNumber) return;
+    Linking.openURL(`tel:${phoneNumber}`).catch(() => {
+      showError(t('common.error'), t('collection.call'));
+    });
+  };
+
+  const handleMapPress = (address) => {
+    if (!address || !String(address).trim()) {
+      showError(t('common.error'), t('collection.map'));
+      return;
+    }
+    const encodedAddress = encodeURIComponent(String(address).trim());
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`).catch(() => {
+      showError(t('common.error'), t('collection.map'));
+    });
+  };
+
+  const renderActionIcons = (collection) => (
+    <View style={styles.collectionCardIconsRow}>
+      <TouchableOpacity
+        style={styles.collectionCardIconButton}
+        onPress={() => handleMapPress(collection.customerAddress)}
+      >
+        <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.collectionCardIconButton}
+        onPress={() => handlePhonePress(collection.customerPhone)}
+      >
+        <Ionicons name="call" size={18} color={COLORS.primary} />
+      </TouchableOpacity>
+    </View>
+  );
 
   const shouldAllowPaymentWhenBalanceZero = (collection) => {
     const balanceAmount = parseFloat(collection?.balanceAmount) || 0;
@@ -484,12 +520,15 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
           <View style={styles.collectionCardHeaderBody}>
-            <Text style={styles.collectionCardNameLine} numberOfLines={1}>
-              {displayId} - {collection.customerName || '—'}
-            </Text>
-            {/* <Text style={styles.itemMetaLeft} numberOfLines={1}>
-              {collection.customerPhone || ''}
-            </Text> */}
+            <View style={styles.collectionCardNameRow}>
+              <Text
+                style={[styles.collectionCardNameLine, styles.collectionCardNameLineInline]}
+                numberOfLines={2}
+              >
+                {displayId} - {collection.customerName || '—'}
+              </Text>
+              {renderActionIcons(collection)}
+            </View>
           </View>
         </View>
 
@@ -944,7 +983,7 @@ const styles = StyleSheet.create({
   },
   collectionCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   collectionCardHeaderBody: {
     flex: 1,
@@ -971,7 +1010,32 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     fontWeight: '600',
     color: COLORS.black,
-    marginBottom: 0,
+    lineHeight: Math.round((SIZES.body2 || 16) * 1.25),
+  },
+  collectionCardNameLineInline: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: SIZES.base / 2,
+  },
+  collectionCardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  collectionCardIconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: SIZES.base / 2,
+  },
+  collectionCardIconButton: {
+    padding: SIZES.base / 2,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
   },
   itemDivider: {
     height: StyleSheet.hairlineWidth,
