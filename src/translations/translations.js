@@ -90,6 +90,12 @@ const translations = {
       loggedOutTitle: 'Logged Out',
       sessionExpiredLoggedOutMessage: 'Your session expired, so you were logged out. Please sign in again.',
       deviceMismatchLoggedOutMessage: 'This account was logged out because the registered device does not match this device. Please sign in again or contact admin if needed.',
+      loginFailedTitle: 'Login Failed',
+      deviceConflictTitle: 'Device Conflict',
+      deviceMismatchTitle: 'Device ID Mismatch',
+      deviceUpdateTitle: 'Device Update',
+      changeDeviceFailed: 'Failed to change device. Please try again.',
+      deviceConflictDefaultMessage: 'You are logged in on another device. Do you want to continue on this mobile?',
     },
 
     // Home
@@ -858,6 +864,12 @@ const translations = {
       loggedOutTitle: 'வெளியேற்றப்பட்டது',
       sessionExpiredLoggedOutMessage: 'உங்கள் அமர்வு காலாவதியானதால் நீங்கள் வெளியேற்றப்பட்டுள்ளீர்கள். தயவுசெய்து மீண்டும் உள்நுழையவும்.',
       deviceMismatchLoggedOutMessage: 'இந்த சாதனம் பதிவு செய்யப்பட்ட சாதனத்துடன் பொருந்தாததால் இந்த கணக்கு வெளியேற்றப்பட்டது. தேவையெனில் மீண்டும் உள்நுழையவும் அல்லது நிர்வாகியை தொடர்புகொள்ளவும்.',
+      loginFailedTitle: 'உள்நுழைவு தோல்வி',
+      deviceConflictTitle: 'சாதன மோதல்',
+      deviceMismatchTitle: 'சாதன ID பொருந்தவில்லை',
+      deviceUpdateTitle: 'சாதன புதுப்பிப்பு',
+      changeDeviceFailed: 'சாதனத்தை மாற்ற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+      deviceConflictDefaultMessage: 'நீங்கள் வேறொரு சாதனத்தில் உள்நுழைந்துள்ளீர்கள். இந்த மொபைலில் தொடர விரும்புகிறீர்களா?',
     },
 
     // Home
