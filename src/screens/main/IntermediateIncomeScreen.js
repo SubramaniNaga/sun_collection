@@ -523,12 +523,15 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
           <View style={styles.collectionCardHeaderBody}>
-            <Text style={styles.collectionCardNameLine} numberOfLines={1}>
-              {displayId} - {collection.customerName || '—'}
-            </Text>
-            {/* <Text style={styles.itemMetaLeft} numberOfLines={1}>
-              {collection.customerPhone || ''}
-            </Text> */}
+            <View style={styles.collectionCardNameRow}>
+              <Text
+                style={[styles.collectionCardNameLine, styles.collectionCardNameLineInline]}
+                numberOfLines={2}
+              >
+                {displayId} - {collection.customerName || '—'}
+              </Text>
+              {renderActionIcons(collection)}
+            </View>
           </View>
         </View>
 
@@ -995,6 +998,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 1,
     borderColor: COLORS.border,
+    overflow: 'hidden',
   },
   listItemPending: {
     borderColor: '#F5D000',

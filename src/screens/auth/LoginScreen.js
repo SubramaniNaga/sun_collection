@@ -38,7 +38,6 @@ const LoginScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [deviceConflictData, setDeviceConflictData] = useState(null);
   const [fcmToken, setFcmToken] = useState(null);
-  const passwordInputRef = useRef(null);
 
   const { login, loading } = useAuthContext();
   const { t } = useLanguage();
@@ -128,13 +127,11 @@ const LoginScreen = ({ navigation }) => {
       }
 
       if (numericValue.length === 10) {
-        passwordInputRef.current?.focus();
-      }
-      if (numericValue.length === 10 && !phoneAutoAdvancedRef.current) {
-        phoneAutoAdvancedRef.current = true;
-        passwordRef.current?.focus();
-      }
-      if (numericValue.length < 10) {
+        if (!phoneAutoAdvancedRef.current) {
+          phoneAutoAdvancedRef.current = true;
+          passwordRef.current?.focus();
+        }
+      } else {
         phoneAutoAdvancedRef.current = false;
       }
     }
@@ -149,7 +146,7 @@ const LoginScreen = ({ navigation }) => {
 
   const focusPasswordField = () => {
     if (phone.length === 10) {
-      passwordInputRef.current?.focus();
+      passwordRef.current?.focus();
     }
   };
 
@@ -561,6 +558,11 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
+  const submitLogin = () => {
+    Keyboard.dismiss();
+    handleLogin();
+  };
+
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
@@ -600,24 +602,19 @@ const LoginScreen = ({ navigation }) => {
               blurOnSubmit={false}
               onSubmitEditing={focusPasswordField}
               error={errors.phone}
-              returnKeyType="next"
-              blurOnSubmit={false}
-              submitBehavior="submit"
-              onSubmitEditing={() => passwordRef.current?.focus()}
             />
 
             <Input
-              ref={passwordInputRef}
+              ref={passwordRef}
               label={t("auth.password")}
               value={password}
               onChangeText={handlePasswordChange}
               placeholder={t("auth.enterPassword")}
               secureTextEntry={!showPassword}
               returnKeyType="done"
-              onSubmitEditing={handleLogin}
+              blurOnSubmit
+              onSubmitEditing={submitLogin}
               error={errors.password}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
               rightIcon={
                 <TouchableOpacity
                   onPress={togglePasswordVisibility}
