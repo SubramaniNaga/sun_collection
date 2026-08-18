@@ -5,7 +5,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import apiServices from '../../api/services/apiServices';
@@ -39,6 +40,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const pickingImageRef = useRef(false);
   const [pickingImageType, setPickingImageType] = useState(null);
   const [showExistingLoanForm, setShowExistingLoanForm] = useState(false);
+  const [existingListExpanded, setExistingListExpanded] = useState(true);
   // console.log('searchResult', searchResult);
   const dismissKeyboard = useCallback(() => {
     Keyboard.dismiss();
@@ -83,8 +85,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const [addingCity, setAddingCity] = useState(false);
   const [addCityError, setAddCityError] = useState('');
   const addCityInputRef = useRef(null);
+  const kasvRef = useRef(null);
   const scrollViewRef = useRef(null);
   const stepYRef = useRef({});
+  const stepNodeRefs = useRef({});
+  const keyboardHeightRef = useRef(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const navOpenedRef = useRef(null);
   const navContextRef = useRef({});
   const phoneAutoAdvancedRef = useRef(false);
@@ -96,6 +102,27 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const aathayamRef = useRef(null);
   const magimaiRef = useRef(null);
   const existingSearchRef = useRef(null);
+
+  useEffect(() => {
+    const onShow = (event) => {
+      const height = event?.endCoordinates?.height ?? 0;
+      keyboardHeightRef.current = height;
+      setKeyboardHeight(height);
+    };
+    const onHide = () => {
+      keyboardHeightRef.current = 0;
+      setKeyboardHeight(0);
+    };
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const [loanTypePickerOpen, setLoanTypePickerOpen] = useState(false);
   const [registerDayPickerOpen, setRegisterDayPickerOpen] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
@@ -389,9 +416,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         setSearchedCustomerId(singleCustomer?.id ?? null);
         resetExistingLoanEntryFields();
         setShowExistingLoanForm(!singleCustomerHasOpenLoans);
+        setExistingListExpanded(false);
       } else {
         setSearchedCustomerId(null);
         setShowExistingLoanForm(false);
+        setExistingListExpanded(true);
       }
       if (!normalizedResults.length) setSearchError(t('customer.noCustomerFound'));
     } catch (err) {
@@ -505,6 +534,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
     }
   };
 
+  const bindStep = (step) => (node) => {
+    if (node) stepNodeRefs.current[step] = node;
+  };
+
   const recordStepY = (step) => (event) => {
     stepYRef.current[step] = event.nativeEvent.layout.y;
   };
@@ -512,7 +545,36 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const scrollToStep = (step) => {
     const y = stepYRef.current[step];
     if (y == null) return;
-    scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    const scroller = scrollViewRef.current;
+    if (typeof scroller?.scrollTo !== 'function') return;
+    scroller.scrollTo({ y: Math.max(0, y - 24), animated: true });
+  };
+
+  const revealFocusedInput = (inputRef, step) => {
+    setTimeout(() => {
+      try {
+        const kasv = kasvRef.current;
+        if (inputRef?.current && typeof kasv?.scrollToFocusedInput === 'function') {
+          kasv.scrollToFocusedInput(inputRef.current, 170, 56);
+          return;
+        }
+      } catch {
+        /* KeyboardAwareScrollView / New Architecture may reject native handles */
+      }
+      scrollToStep(step);
+    }, 280);
+  };
+
+  const focusInput = (inputRef, step) => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+      revealFocusedInput(inputRef, step);
+    }, 40);
+  };
+
+  const handleFieldFocus = (step, inputRef) => () => {
+    if (!ensureCheckedInForInteraction()) return;
+    revealFocusedInput(inputRef, step);
   };
 
   const getFormSteps = () => {
@@ -522,30 +584,21 @@ const CustomerWithLoanScreen = ({ navigation }) => {
       if (ctx.isWeeklyLoanType) steps.push('registerDay');
       steps.push('search');
       if (ctx.showExistingLoanForm) {
-        steps.push('loanAmount', 'magimai', 'aathayam', 'customerPhoto', 'addressProof');
+        steps.push('loanAmount', 'magimai', 'aathayam');
       }
       return steps;
     }
     const steps = ['loanType', 'loanPeriod'];
     if (ctx.isWeeklyLoanType) steps.push('registerDay');
-    steps.push(
-      'phone',
-      'name',
-      'address',
-      'city',
-      'loanAmount',
-      'aathayam',
-      'magimai',
-      'aadhar',
-      'customerPhoto',
-      'addressProof',
-    );
+    steps.push('phone', 'name', 'address', 'city', 'loanAmount', 'aathayam', 'magimai');
     return steps;
   };
 
   const goToStep = (step) => {
     const ctx = navContextRef.current;
-    scrollToStep(step);
+    if (step !== 'loanType' && step !== 'registerDay' && step !== 'city') {
+      scrollToStep(step);
+    }
 
     switch (step) {
       case 'loanType': {
@@ -563,31 +616,21 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           goToNextFrom('loanPeriod');
           return;
         }
-        setTimeout(() => loanPeriodRef.current?.focus(), 350);
+        focusInput(loanPeriodRef, 'loanPeriod');
         return;
       }
       case 'registerDay': {
-        if (ctx.registerDay) {
-          goToNextFrom('registerDay');
-          return;
-        }
-        if (ctx.customerType === 'New') {
-          goToNextFrom('registerDay');
-          return;
-        }
-        Keyboard.dismiss();
-        navOpenedRef.current = 'registerDay';
-        setRegisterDayPickerOpen(true);
+        goToNextFrom('registerDay');
         return;
       }
       case 'phone':
-        setTimeout(() => phoneRef.current?.focus(), 80);
+        focusInput(phoneRef, 'phone');
         return;
       case 'name':
-        setTimeout(() => nameRef.current?.focus(), 80);
+        focusInput(nameRef, 'name');
         return;
       case 'address':
-        setTimeout(() => addressRef.current?.focus(), 80);
+        focusInput(addressRef, 'address');
         return;
       case 'city': {
         if (ctx.cityId) {
@@ -600,35 +643,17 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         return;
       }
       case 'loanAmount':
-        setTimeout(() => loanAmountRef.current?.focus(), 80);
+        focusInput(loanAmountRef, 'loanAmount');
         return;
       case 'aathayam':
-        setTimeout(() => aathayamRef.current?.focus(), 80);
+        focusInput(aathayamRef, 'aathayam');
         return;
       case 'magimai':
-        setTimeout(() => magimaiRef.current?.focus(), 80);
+        focusInput(magimaiRef, 'magimai');
         return;
       case 'search':
-        setTimeout(() => existingSearchRef.current?.focus(), 80);
+        focusInput(existingSearchRef, 'search');
         return;
-      case 'aadhar':
-      case 'customerPhoto':
-      case 'addressProof': {
-        Keyboard.dismiss();
-        const imageValue =
-          step === 'aadhar' ? ctx.aadharImage : step === 'customerPhoto' ? ctx.customerPhoto : ctx.addressProof;
-        setTimeout(() => {
-          scrollToStep(step);
-          if (imageValue) {
-            goToNextFrom(step);
-            return;
-          }
-          navOpenedRef.current = step;
-          const imageType = step === 'aadhar' ? 'aadhar' : step === 'customerPhoto' ? 'customer' : 'address';
-          handleImagePick(imageType, 'camera');
-        }, 250);
-        return;
-      }
       default:
         return;
     }
@@ -637,7 +662,11 @@ const CustomerWithLoanScreen = ({ navigation }) => {
   const goToNextFrom = (step) => {
     const steps = getFormSteps();
     const index = steps.indexOf(step);
-    if (index < 0 || index >= steps.length - 1) return;
+    if (index < 0) return;
+    if (index >= steps.length - 1) {
+      Keyboard.dismiss();
+      return;
+    }
     goToStep(steps[index + 1]);
   };
 
@@ -1139,6 +1168,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
             setCustomerType('Existing');
             setErrors({});
             setShowExistingLoanForm(false);
+            setExistingListExpanded(true);
             setLoanAmount('');
             setAathayamAmount('');
             setMagimaiAmount('');
@@ -1156,21 +1186,28 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardContainer}
+      <KeyboardAwareScrollView
+        ref={kasvRef}
+        innerRef={(ref) => {
+          scrollViewRef.current = ref;
+        }}
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 32 + (keyboardHeight > 0 ? keyboardHeight + 88 : 180) },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+        enableOnAndroid
+        enableAutomaticScroll
+        extraHeight={Platform.OS === 'android' ? 180 : 140}
+        extraScrollHeight={Platform.OS === 'android' ? 80 : 60}
+        keyboardOpeningTime={0}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-        >
           {customerType === 'New' && (
             <>
-              <View onLayout={recordStepY('loanType')}>
+              <View ref={bindStep('loanType')} onLayout={recordStepY('loanType')}>
                 <FormPicker
                   label={t('customer.loanType')}
                   value={loanTypeId}
@@ -1193,13 +1230,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('loanPeriod')}>
+              <View ref={bindStep('loanPeriod')} onLayout={recordStepY('loanPeriod')}>
                 <Input
                   ref={loanPeriodRef}
                   label={`${t('customer.loanPeriod')} (${periodUnit})`}
                   value={loanPeriod}
                   onChangeText={setLoanPeriod}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('loanPeriod', loanPeriodRef)}
                   placeholder={language === 'en' ? 'Enter period' : 'காலத்தை உள்ளிடவும்'}
                   placeholderTextColor={COLORS.text.tertiary}
                   keyboardType="numeric"
@@ -1214,7 +1251,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
               </View>
 
               {isWeeklyLoanType && (
-                <View onLayout={recordStepY('registerDay')}>
+                <View ref={bindStep('registerDay')} onLayout={recordStepY('registerDay')}>
                   <FormPicker
                     label={t('customer.registerDay')}
                     value={registerDay}
@@ -1231,13 +1268,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 </View>
               )}
 
-              <View onLayout={recordStepY('phone')}>
+              <View ref={bindStep('phone')} onLayout={recordStepY('phone')}>
                 <Input
                   ref={phoneRef}
                   label={t('customer.customerPhone')}
                   value={customerPhone}
                   onChangeText={handlePhoneChange}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('phone', phoneRef)}
                   placeholder={language === 'en' ? '10 digit mobile number' : '10 இலக்க மொபைல் எண்ணை'}
                   placeholderTextColor={COLORS.text.tertiary}
                   keyboardType="number-pad"
@@ -1253,13 +1290,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('name')}>
+              <View ref={bindStep('name')} onLayout={recordStepY('name')}>
                 <Input
                   ref={nameRef}
                   label={t('customer.customerName')}
                   value={customerName}
                   onChangeText={setCustomerName}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('name', nameRef)}
                   placeholder={language === 'en' ? 'Full name' : 'முழு பெயர்'}
                   error={errors.customerName}
                   required
@@ -1270,13 +1307,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('address')}>
+              <View ref={bindStep('address')} onLayout={recordStepY('address')}>
                 <Input
                   ref={addressRef}
                   label={t('customer.customerAddress')}
                   value={customerAddress}
                   onChangeText={setCustomerAddress}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('address', addressRef)}
                   placeholder={language === 'en' ? 'Full address' : 'முழு முகவரி'}
                   multiline
                   numberOfLines={2}
@@ -1289,7 +1326,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('city')}>
+              <View ref={bindStep('city')} onLayout={recordStepY('city')}>
                 <FormPicker
                   label={t('customer.city')}
                   value={cityId}
@@ -1318,13 +1355,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('loanAmount')}>
+              <View ref={bindStep('loanAmount')} onLayout={recordStepY('loanAmount')}>
                 <Input
                   ref={loanAmountRef}
                   label={t('customer.loanAmount')}
                   value={loanAmount}
                   onChangeText={setLoanAmount}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('loanAmount', loanAmountRef)}
                   placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                   keyboardType="numeric"
                   error={errors.loanAmount}
@@ -1336,7 +1373,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('aathayam')}>
+              <View ref={bindStep('aathayam')} onLayout={recordStepY('aathayam')}>
                 <Input
                   ref={aathayamRef}
                   label={t('customer.aathayam')}
@@ -1345,7 +1382,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                     setAathayamAmount(text);
                     if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
                   }}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('aathayam', aathayamRef)}
                   placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                   placeholderTextColor={COLORS.text.tertiary}
                   keyboardType="decimal-pad"
@@ -1358,7 +1395,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 />
               </View>
 
-              <View onLayout={recordStepY('magimai')}>
+              <View ref={bindStep('magimai')} onLayout={recordStepY('magimai')}>
                 <Input
                   ref={magimaiRef}
                   label={t('customer.magimai')}
@@ -1367,14 +1404,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                     setMagimaiAmount(text);
                     if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
                   }}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('magimai', magimaiRef)}
                   placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                   placeholderTextColor={COLORS.text.tertiary}
                   keyboardType="decimal-pad"
                   error={errors.magimaiAmount}
                   required
-                  returnKeyType="next"
-                  blurOnSubmit={false}
+                  returnKeyType="done"
+                  blurOnSubmit
                   submitBehavior="submit"
                   onSubmitEditing={() => goToNextFrom('magimai')}
                 />
@@ -1395,7 +1432,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           {customerType === 'Existing' && (
             <View style={styles.existingSection}>
               <View style={styles.existingPickerGrid}>
-                <View style={styles.existingPickerGridItem} onLayout={recordStepY('loanType')}>
+                <View style={styles.existingPickerGridItem} ref={bindStep('loanType')} onLayout={recordStepY('loanType')}>
 
 
                   <FormPicker
@@ -1424,7 +1461,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                   />
                 </View>
                 {isWeeklyLoanType && (
-                  <View style={styles.existingPickerGridItem} onLayout={recordStepY('registerDay')}>
+                  <View style={styles.existingPickerGridItem} ref={bindStep('registerDay')} onLayout={recordStepY('registerDay')}>
                     <FormPicker
                       label={t('customer.registerDay')}
                       value={registerDay}
@@ -1435,7 +1472,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                       items={loanDayOptions}
                       placeholder={t('customer.selectRegisterDay')}
                       error={errors.registerDay}
-                      editable
+                      editable={false}
                       style={styles.existingPickerCompact}
                       visible={registerDayPickerOpen}
                       onVisibleChange={(open) => {
@@ -1450,7 +1487,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                 )}
               </View>
 
-              <View onLayout={recordStepY('search')}>
+              <View ref={bindStep('search')} onLayout={recordStepY('search')}>
               <Text style={styles.existingSearchLabel}>
                 {t('customer.searchCustomer')}
                 <Text style={styles.labelRequiredMark}> *</Text>
@@ -1464,7 +1501,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                   placeholderTextColor={COLORS.text.tertiary}
                   value={existingSearch}
                   onChangeText={setExistingSearch}
-                  onFocus={ensureCheckedInForInteraction}
+                  onFocus={handleFieldFocus('search', existingSearchRef)}
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="search"
@@ -1477,22 +1514,44 @@ const CustomerWithLoanScreen = ({ navigation }) => {
 
               {searchResults.length > 0 &&
                 !searchLoading &&
-                searchResults.map((item, index) => (
+                (existingListExpanded || !selectedExistingCustomer
+                  ? searchResults
+                  : [selectedExistingCustomer]
+                ).map((item, index) => {
+                  const isSelected = String(item.id) === String(searchedCustomerId)
+                    || (selectedExistingCustomer && String(item.id) === String(selectedExistingCustomer.id));
+                  const isCollapsedSelection = isSelected && !existingListExpanded;
+                  return (
                   <TouchableOpacity
                     key={item.id ?? item.customer_no ?? index}
-                    style={String(item.id) === String(searchedCustomerId) ? styles.existingResultCardActive : styles.existingResultCard}
+                    style={isSelected ? styles.existingResultCardActive : styles.existingResultCard}
                     activeOpacity={0.85}
                     onPress={() => {
                       setSearchedCustomerId(item.id);
                       const hasOpenLoansForCustomer = Array.isArray(item.open_loans) && item.open_loans.length > 0;
                       resetExistingLoanEntryFields();
                       setShowExistingLoanForm(!hasOpenLoansForCustomer);
+                      setExistingListExpanded(false);
                     }}
                   >
-
-                    <Text style={styles.existingResultName}>
-                      {item.customer_name ?? '—'}
-                    </Text>
+                    <View style={styles.existingResultHeaderRow}>
+                      <Text style={[styles.existingResultName, styles.existingResultNameFlex]}>
+                        {item.customer_name ?? '—'}
+                      </Text>
+                      {isSelected ? (
+                        <TouchableOpacity
+                          onPress={() => setExistingListExpanded((open) => !open)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.existingExpandBtn}
+                        >
+                          <Ionicons
+                            name={isCollapsedSelection ? 'chevron-down' : 'chevron-up'}
+                            size={22}
+                            color={COLORS.primary}
+                          />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
 
                     <Text style={styles.existingResultMeta}>
                       {t('customer.no')} {item.customer_no ?? '—'} ·{' '}
@@ -1532,11 +1591,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                       </View>
                     )}
                   </TouchableOpacity>
-                ))}
+                  );
+                })}
 
               {customerType === 'Existing' && canSubmitLoanForExisting && showExistingLoanForm && (
                 <View style={styles.existingLoanForm}>
-                  <View onLayout={recordStepY('loanAmount')}>
+                  <View ref={bindStep('loanAmount')} onLayout={recordStepY('loanAmount')}>
                     <Input
                       ref={loanAmountRef}
                       label={t('customer.loanAmount')}
@@ -1545,7 +1605,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                         setLoanAmount(text);
                         if (errors.loanAmount) setErrors((prev) => ({ ...prev, loanAmount: null }));
                       }}
-                      onFocus={ensureCheckedInForInteraction}
+                      onFocus={handleFieldFocus('loanAmount', loanAmountRef)}
                       placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                       keyboardType="numeric"
                       error={errors.loanAmount}
@@ -1557,7 +1617,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                     />
                   </View>
 
-                  <View onLayout={recordStepY('magimai')}>
+                  <View ref={bindStep('magimai')} onLayout={recordStepY('magimai')}>
                     <Input
                       ref={magimaiRef}
                       label={t('loan.processingFees') || 'Processing fees'}
@@ -1566,7 +1626,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                         setMagimaiAmount(text);
                         if (errors.magimaiAmount) setErrors((prev) => ({ ...prev, magimaiAmount: null }));
                       }}
-                      onFocus={ensureCheckedInForInteraction}
+                      onFocus={handleFieldFocus('magimai', magimaiRef)}
                       placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                       keyboardType="decimal-pad"
                       error={errors.magimaiAmount}
@@ -1578,7 +1638,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                     />
                   </View>
 
-                  <View onLayout={recordStepY('aathayam')}>
+                  <View ref={bindStep('aathayam')} onLayout={recordStepY('aathayam')}>
                     <Input
                       ref={aathayamRef}
                       label={t('loan.interestAmount') || 'Interest amount'}
@@ -1587,13 +1647,13 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                         setAathayamAmount(text);
                         if (errors.aathayamAmount) setErrors((prev) => ({ ...prev, aathayamAmount: null }));
                       }}
-                      onFocus={ensureCheckedInForInteraction}
+                      onFocus={handleFieldFocus('aathayam', aathayamRef)}
                       placeholder={language === 'en' ? 'Enter amount' : 'தொகையை உள்ளிடவும்'}
                       keyboardType="decimal-pad"
                       error={errors.aathayamAmount}
                       required
-                      returnKeyType="next"
-                      blurOnSubmit={false}
+                      returnKeyType="done"
+                      blurOnSubmit
                       submitBehavior="submit"
                       onSubmitEditing={() => goToNextFrom('aathayam')}
                     />
@@ -1609,12 +1669,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
               )}
             </View>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
 
-      {/* Fixed button bar outside KeyboardAvoidingView so it never moves */}
       {customerType === 'New' && (
-        <View style={[styles.fixedBottomContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
+        <View style={[styles.fixedBottomContainer, { paddingBottom: keyboardHeight > 0 ? keyboardHeight : Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
           <Button
             title={t('customer.createCustomer')}
             onPress={handleSubmit}
@@ -1624,7 +1682,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
         </View>
       )}
       {customerType === 'Existing' && (
-        <View style={[styles.fixedBottomContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
+        <View style={[styles.fixedBottomContainer, { paddingBottom: keyboardHeight > 0 ? keyboardHeight : Math.max(insets.bottom, Platform.OS === 'android' ? 56 : 20) }]}>
           <Button
             title={t('loan.createLoan')}
             onPress={handleSubmit}
@@ -1813,6 +1871,19 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     marginBottom: SIZES.base / 2,
   },
+  existingResultHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.base / 2,
+  },
+  existingResultNameFlex: {
+    flex: 1,
+    marginBottom: 0,
+    marginRight: SIZES.base,
+  },
+  existingExpandBtn: {
+    padding: 4,
+  },
   existingResultMeta: {
     fontSize: SIZES.body3,
     color: COLORS.text.secondary,
@@ -1860,7 +1931,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SIZES.padding,
-    paddingBottom: 120,
+    paddingBottom: 180,
   },
   imageSection: {
     marginBottom: SIZES.margin,
@@ -1951,6 +2022,8 @@ const styles = StyleSheet.create({
     paddingTop: SIZES.padding,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    zIndex: 2,
+    elevation: 12,
   },
   submitButton: {
     minHeight: 52,

@@ -4,9 +4,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, InteractionManager, Keyboard, Linking, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, FlatList, Image, InteractionManager, Keyboard, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
@@ -43,6 +42,14 @@ const formatCurrencyOrDash = (val) => {
 
 const UNPAID_LIMIT = 10;
 const PAID_LIMIT = 10;
+const ANDROID_NAV_BAR_HEIGHT = 56;
+const KEYBOARD_FALLBACK_HEIGHT = 280;
+
+const getBottomInset = (insets) => (
+  Platform.OS === 'android'
+    ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
+    : Math.max(insets.bottom, SIZES.base)
+);
 
 const parseCollectionsFromResponse = (response) => {
   const raw = response?.data?.collections ?? response?.collections;
@@ -143,6 +150,8 @@ const CollectionListPane = memo(function CollectionListPane({
 
 const CollectionScreen = ({ navigation }) => {
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
+  const bottomInset = getBottomInset(insets);
   const [searchText, setSearchText] = useState('');
   const [selectedDate, setSelectedDate] = useState(getCalendarDate());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -201,6 +210,11 @@ const CollectionScreen = ({ navigation }) => {
   const [remarks, setRemarks] = useState('');
   const collectedAmountRef = useRef(null);
   const remarksRef = useRef(null);
+  const paymentScrollRef = useRef(null);
+  const amountFieldYRef = useRef(0);
+  const remarksFieldYRef = useRef(0);
+  const lastKeyboardHeightRef = useRef(KEYBOARD_FALLBACK_HEIGHT);
+  const [paymentKeyboardHeight, setPaymentKeyboardHeight] = useState(0);
   const [paymentErrors, setPaymentErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
@@ -903,12 +917,55 @@ const CollectionScreen = ({ navigation }) => {
   };
 
   const handleClosePaymentModal = () => {
+    Keyboard.dismiss();
+    setPaymentKeyboardHeight(0);
     setShowPaymentModal(false);
     setSelectedCollection(null);
     setPaymentMode('Cash');
     setCollectedAmount('');
     setRemarks('');
     setPaymentErrors({});
+  };
+
+  useEffect(() => {
+    if (!showPaymentModal) {
+      setPaymentKeyboardHeight(0);
+      return undefined;
+    }
+
+    const applyKeyboardHeight = (event) => {
+      const height = event?.endCoordinates?.height ?? 0;
+      if (height <= 0) return;
+      lastKeyboardHeightRef.current = height;
+      setPaymentKeyboardHeight(height);
+    };
+
+    const showSubs = [
+      Keyboard.addListener('keyboardDidShow', applyKeyboardHeight),
+      Keyboard.addListener('keyboardWillShow', applyKeyboardHeight),
+    ];
+    const hideSubs = [
+      Keyboard.addListener('keyboardDidHide', () => setPaymentKeyboardHeight(0)),
+      Keyboard.addListener('keyboardWillHide', () => setPaymentKeyboardHeight(0)),
+    ];
+
+    return () => {
+      showSubs.forEach((sub) => sub.remove());
+      hideSubs.forEach((sub) => sub.remove());
+    };
+  }, [showPaymentModal]);
+
+  const scrollPaymentToField = (y) => {
+    paymentScrollRef.current?.scrollTo({
+      y: Math.max(0, y - 12),
+      animated: true,
+    });
+  };
+
+  const ensurePaymentScrollRoom = () => {
+    setPaymentKeyboardHeight((current) => (
+      current > 0 ? current : lastKeyboardHeightRef.current || KEYBOARD_FALLBACK_HEIGHT
+    ));
   };
 
   const handleTabPress = useCallback((tab) => {
@@ -1346,16 +1403,13 @@ const CollectionScreen = ({ navigation }) => {
 
       <Modal
         visible={showPaymentModal}
-        transparent={true}
-        animationType="fade"
+        transparent
+        animationType="slide"
         onRequestClose={handleClosePaymentModal}
       >
-        <View style={styles.centeredModalOverlay}>
-          <Pressable
-            style={styles.centeredModalBackdrop}
-            onPress={handleClosePaymentModal}
-          />
-          <View style={styles.centeredModalContainer}>
+        <View style={[styles.paymentDrawerOverlay, { paddingBottom: bottomInset }]}>
+          <Pressable style={styles.paymentDrawerDismiss} onPress={handleClosePaymentModal} />
+          <View style={styles.paymentDrawerSheet}>
             <View style={styles.centeredModalHeader}>
               <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
               <TouchableOpacity onPress={handleClosePaymentModal} style={styles.closeButton}>
@@ -1365,15 +1419,22 @@ const CollectionScreen = ({ navigation }) => {
 
             {selectedCollection && (
               <View style={styles.centeredModalBody}>
-                <KeyboardAwareScrollView
+                <ScrollView
+                  ref={paymentScrollRef}
                   style={styles.centeredModalScrollView}
-                  contentContainerStyle={styles.centeredModalContent}
+                  contentContainerStyle={[
+                    styles.centeredModalContent,
+                    {
+                      paddingBottom: SIZES.padding + (
+                        paymentKeyboardHeight > 0
+                          ? paymentKeyboardHeight
+                          : 24
+                      ),
+                    },
+                  ]}
                   keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={true}
-                  enableOnAndroid={true}
-                  enableAutomaticScroll={true}
-                  extraScrollHeight={100}
-                  keyboardOpeningTime={0}
+                  keyboardDismissMode="none"
+                  showsVerticalScrollIndicator={false}
                 >
                   <View style={styles.customerInfo}>
                     <Text style={styles.customerInfoName}>
@@ -1389,7 +1450,6 @@ const CollectionScreen = ({ navigation }) => {
                     )}
                   </View>
 
-                  {/* Payment Mode Radio Buttons */}
                   <View style={styles.paymentModeContainer}>
                     <Text style={styles.fieldLabel}>{t('collection.paymentMode')}</Text>
                     <View style={styles.radioButtonContainer}>
@@ -1414,8 +1474,12 @@ const CollectionScreen = ({ navigation }) => {
                     </View>
                   </View>
 
-                  {/* Collected Amount Input */}
-                  <View style={styles.inputFieldContainer}>
+                  <View
+                    style={styles.inputFieldContainer}
+                    onLayout={(event) => {
+                      amountFieldYRef.current = event.nativeEvent.layout.y;
+                    }}
+                  >
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
                     <TextInput
                       ref={collectedAmountRef}
@@ -1430,22 +1494,19 @@ const CollectionScreen = ({ navigation }) => {
                       returnKeyType="next"
                       blurOnSubmit={false}
                       submitBehavior="submit"
+                      onFocus={() => {
+                        ensurePaymentScrollRoom();
+                        scrollPaymentToField(amountFieldYRef.current);
+                      }}
                       onSubmitEditing={() => remarksRef.current?.focus()}
                       onChangeText={(text) => {
-                        // Remove non-digits
                         const digitsOnly = text.replace(/[^0-9]/g, '');
-
-                        // If there's a balance amount, restrict input
                         if (selectedCollection && digitsOnly) {
                           const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
                           const enteredAmount = parseFloat(digitsOnly);
                           const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
-
-                          // If entered amount exceeds balance, cap it at balance
                           if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
-                            // Set to balance amount
                             setCollectedAmount(String(balanceAmount));
-                            // Show error message
                             setPaymentErrors({
                               ...paymentErrors,
                               collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
@@ -1453,11 +1514,7 @@ const CollectionScreen = ({ navigation }) => {
                             return;
                           }
                         }
-
-                        // Update amount
                         setCollectedAmount(digitsOnly);
-
-                        // Clear error if amount is valid
                         if (paymentErrors.collectedAmount) {
                           setPaymentErrors({ ...paymentErrors, collectedAmount: '' });
                         }
@@ -1468,8 +1525,12 @@ const CollectionScreen = ({ navigation }) => {
                     )}
                   </View>
 
-                  {/* Remarks Input */}
-                  <View style={styles.inputFieldContainer}>
+                  <View
+                    style={styles.inputFieldContainer}
+                    onLayout={(event) => {
+                      remarksFieldYRef.current = event.nativeEvent.layout.y;
+                    }}
+                  >
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
                     <TextInput
                       ref={remarksRef}
@@ -1480,28 +1541,34 @@ const CollectionScreen = ({ navigation }) => {
                       onChangeText={setRemarks}
                       multiline
                       numberOfLines={3}
-                      returnKeyType="done"
+                      textAlignVertical="top"
+                      returnKeyType="next"
                       blurOnSubmit
-                      onSubmitEditing={Keyboard.dismiss}
+                      onFocus={() => {
+                        ensurePaymentScrollRoom();
+                        scrollPaymentToField(remarksFieldYRef.current);
+                      }}
+                      onSubmitEditing={() => {
+                        remarksRef.current?.blur();
+                        paymentScrollRef.current?.scrollToEnd?.({ animated: true });
+                      }}
                     />
                   </View>
-                </KeyboardAwareScrollView>
-
-                {/* Fixed Submit Button at Bottom */}
-                <View style={styles.submitButtonFixed}>
-                  <TouchableOpacity
-                    style={[
-                      styles.submitButton,
-                      isSubmitting && styles.submitButtonDisabled,
-                    ]}
-                    onPress={handleSubmitPayment}
-                    disabled={isSubmitting}
-                  >
-                    <Text style={styles.submitButtonText}>
-                      {isSubmitting ? t('common.loading') : t('common.submit')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.submitButtonInScroll}>
+                    <TouchableOpacity
+                      style={[
+                        styles.submitButton,
+                        isSubmitting && styles.submitButtonDisabled,
+                      ]}
+                      onPress={handleSubmitPayment}
+                      disabled={isSubmitting}
+                    >
+                      <Text style={styles.submitButtonText}>
+                        {isSubmitting ? t('common.loading') : t('common.submit')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
               </View>
             )}
           </View>
@@ -1902,35 +1969,21 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
   },
-  // Centered Modal Styles
-  centeredModalOverlay: {
+  // Payment drawer (same keyboard behavior as Edai Varavu)
+  paymentDrawerOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
-  centeredModalBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  paymentDrawerDismiss: {
+    flex: 1,
   },
-  centeredModalContainer: {
-    width: '90%',
-    maxWidth: 400,
-    height: '75%',
-    maxHeight: '75%',
+  paymentDrawerSheet: {
+    width: '100%',
+    maxHeight: '100%',
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius * 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderTopLeftRadius: SIZES.radius * 2,
+    borderTopRightRadius: SIZES.radius * 2,
     overflow: 'hidden',
   },
   centeredModalHeader: {
@@ -1954,22 +2007,20 @@ const styles = StyleSheet.create({
     color: COLORS.black,
   },
   centeredModalBody: {
-    flex: 1,
-    flexDirection: 'column',
+    flexGrow: 0,
+    flexShrink: 1,
   },
   centeredModalScrollView: {
-    flex: 1,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   centeredModalContent: {
     paddingHorizontal: SIZES.padding,
-    paddingBottom: SIZES.base,
+    paddingTop: SIZES.padding,
   },
-  submitButtonFixed: {
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.white,
+  submitButtonInScroll: {
+    marginTop: SIZES.padding,
+    marginBottom: SIZES.padding,
   },
   customerInfo: {
     backgroundColor: COLORS.lightGray,

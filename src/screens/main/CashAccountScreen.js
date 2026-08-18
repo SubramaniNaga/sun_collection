@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
@@ -193,20 +193,20 @@ const CashAccountScreen = ({ navigation }) => {
   const [collectionPaymentSplit, setCollectionPaymentSplit] = useState({ cash: 0, online: 0 });
   /** YYYY-MM-DD → true when close account succeeded with `data.inserted` (persisted). */
   const [closedInsertedDates, setClosedInsertedDates] = useState({});
-  const [expenseDetailsExpanded, setExpenseDetailsExpanded] = useState(false);
+  const [expenseDetailsVisible, setExpenseDetailsVisible] = useState(false);
 
-  /**
-   * Placeholder expense breakdown rows shown when the info icon is tapped.
-   * Replace this with API data when the expense-details endpoint is ready.
-   */
-  const expenseDetailRows = useMemo(
-    () => [
-      { id: 'placeholder-1', label: 'Item 1', amount: 0 },
-      { id: 'placeholder-2', label: 'Item 2', amount: 0 },
-      { id: 'placeholder-3', label: 'Item 3', amount: 0 },
-    ],
-    []
-  );
+  const expenseDetailRows = useMemo(() => {
+    const list =
+      (Array.isArray(openingSummary?.expenses_list) && openingSummary.expenses_list) ||
+      (Array.isArray(openingSummary?.expense_list) && openingSummary.expense_list) ||
+      (Array.isArray(stats?.expenses_list) && stats.expenses_list) ||
+      [];
+    return list.map((item, index) => ({
+      id: item?.id != null ? String(item.id) : `expense-${index}`,
+      label: String(item?.category_name || item?.title || '').trim() || t('cashAccount.expenses'),
+      amount: Number(item?.amount ?? 0) || 0,
+    }));
+  }, [openingSummary, stats, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -244,11 +244,13 @@ const CashAccountScreen = ({ navigation }) => {
 
   const handleStartDateChange = (newStartDate) => {
     setStartDate(newStartDate);
+    setExpenseDetailsVisible(false);
     setErrors({});
   };
 
   const handleEndDateChange = (newEndDate) => {
     setEndDate(newEndDate);
+    setExpenseDetailsVisible(false);
     setErrors({});
   };
 
@@ -762,7 +764,7 @@ const CashAccountScreen = ({ navigation }) => {
               t('cashAccount.expenses'),
               formatCurrency(String(expenses)),
               null,
-              !expenseDetailsExpanded ? styles.tableGridRowLastBeforeFooter : undefined,
+              styles.tableGridRowLastBeforeFooter,
               {
                 labelNode: (
                   <View style={styles.particularsWithInfo}>
@@ -776,14 +778,13 @@ const CashAccountScreen = ({ navigation }) => {
                       {t('cashAccount.expenses')}
                     </Text>
                     <TouchableOpacity
-                      onPress={() => setExpenseDetailsExpanded((open) => !open)}
+                      onPress={() => setExpenseDetailsVisible(true)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityRole="button"
                       accessibilityLabel={t('cashAccount.expenseDetails')}
-                      accessibilityState={{ expanded: expenseDetailsExpanded }}
                     >
                       <Ionicons
-                        name={expenseDetailsExpanded ? 'information-circle' : 'information-circle-outline'}
+                        name="information-circle-outline"
                         size={SIZES.body3}
                         color={COLORS.primary}
                       />
@@ -792,29 +793,6 @@ const CashAccountScreen = ({ navigation }) => {
                 ),
               }
             )}
-            {expenseDetailsExpanded
-              ? (expenseDetailRows.length > 0
-                  ? expenseDetailRows.map((row, index) =>
-                      renderTableRow3(
-                        `expense-detail-${row.id}`,
-                        row.label,
-                        formatCurrency(String(row.amount ?? 0)),
-                        null,
-                        index === expenseDetailRows.length - 1
-                          ? styles.tableGridRowLastBeforeFooter
-                          : undefined,
-                        { detailRow: true }
-                      )
-                    )
-                  : renderTableRow3(
-                      'expense-detail-empty',
-                      t('cashAccount.noExpenseDetails'),
-                      null,
-                      null,
-                      styles.tableGridRowLastBeforeFooter,
-                      { detailRow: true }
-                    ))
-              : null}
 
             <View style={styles.tableSummaryFooter}>
               <View style={[styles.tableGridCell, styles.tableGridColParticulars, styles.closingCalcLabelCell]}>
@@ -876,6 +854,54 @@ const CashAccountScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       ) : null}
+
+      <Modal
+        visible={expenseDetailsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExpenseDetailsVisible(false)}
+      >
+        <View style={styles.expenseModalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setExpenseDetailsVisible(false)} />
+          <View style={styles.expenseModalCard}>
+            <View style={styles.expenseModalHeader}>
+              <Text style={styles.expenseModalTitle}>{t('cashAccount.expenseDetails')}</Text>
+              <TouchableOpacity
+                onPress={() => setExpenseDetailsVisible(false)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+              >
+                <Ionicons name="close" size={22} color={COLORS.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.expenseModalHeadRow}>
+              <Text style={[styles.expenseModalHeadText, styles.expenseModalNameCol]}>
+                {t('cashAccount.expenseCategory')}
+              </Text>
+              <Text style={[styles.expenseModalHeadText, styles.expenseModalAmountCol]}>
+                {t('cashAccount.expenseAmount')}
+              </Text>
+            </View>
+            {expenseDetailRows.length === 0 ? (
+              <Text style={styles.expenseModalEmpty}>{t('cashAccount.noExpenseDetails')}</Text>
+            ) : (
+              <ScrollView style={styles.expenseModalList} showsVerticalScrollIndicator={false}>
+                {expenseDetailRows.map((row) => (
+                  <View key={row.id} style={styles.expenseModalRow}>
+                    <Text style={[styles.expenseModalName, styles.expenseModalNameCol]} numberOfLines={3}>
+                      {row.label}
+                    </Text>
+                    <Text style={[styles.expenseModalAmount, styles.expenseModalAmountCol]} numberOfLines={1}>
+                      {formatCurrency(String(row.amount ?? 0))}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1123,6 +1149,81 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: SIZES.body3,
     fontWeight: '800',
+  },
+  expenseModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SIZES.padding,
+  },
+  expenseModalCard: {
+    width: '100%',
+    maxHeight: '72%',
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius * 1.5,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.padding,
+  },
+  expenseModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SIZES.base,
+  },
+  expenseModalTitle: {
+    flex: 1,
+    fontSize: SIZES.h4 || 18,
+    fontWeight: '700',
+    color: COLORS.black,
+    marginRight: SIZES.base,
+  },
+  expenseModalHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  expenseModalHeadText: {
+    fontSize: SIZES.body4,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  expenseModalList: {
+    maxHeight: 360,
+  },
+  expenseModalRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  expenseModalNameCol: {
+    flex: 1.4,
+    paddingRight: 4,
+  },
+  expenseModalAmountCol: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  expenseModalName: {
+    fontSize: SIZES.body3,
+    color: COLORS.black,
+    fontWeight: '500',
+  },
+  expenseModalAmount: {
+    fontSize: SIZES.body3,
+    color: COLORS.black,
+    fontWeight: '700',
+  },
+  expenseModalEmpty: {
+    paddingVertical: SIZES.padding,
+    textAlign: 'center',
+    color: COLORS.text.tertiary,
+    fontSize: SIZES.body3,
   },
 });
 

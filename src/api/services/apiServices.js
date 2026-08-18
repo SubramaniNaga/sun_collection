@@ -1049,6 +1049,34 @@ export const apiServices = {
       }
     },
 
+    getRegisteredDayCollections: async (params = {}) => {
+      try {
+        const {
+          registered_day = '',
+          customer_name = '',
+          page,
+          limit,
+        } = params;
+        const nameTrimmed = typeof customer_name === 'string' ? customer_name.trim() : '';
+        const requestParams = {
+          ...(registered_day && { registered_day }),
+          ...(nameTrimmed && { customer_name: nameTrimmed }),
+          ...(page != null && { page }),
+          ...(limit != null && { limit }),
+        };
+        console.log('📋 API: getRegisteredDayCollections - GET', ENDPOINTS.COLLECTION.REGISTERED_DAY, '| params:', requestParams);
+        const response = await apiClient.get(ENDPOINTS.COLLECTION.REGISTERED_DAY, {
+          params: requestParams,
+        });
+        const list = response.data?.response ?? response.data?.data ?? response.data;
+        console.log('📋 API: getRegisteredDayCollections - Response: data length:', Array.isArray(list) ? list.length : 'N/A');
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn('Get registered-day collections error:', error);
+        throw error;
+      }
+    },
+
     getUnpaidCollections: async (params = {}) => {
       try {
         const { branchId, lineIdsString } = await getLineAndBranchIds();

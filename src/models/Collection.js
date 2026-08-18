@@ -45,7 +45,7 @@ class Collection {
     this.employeeId = data.employee_id || null;
     this.collectionDate = data.collection_date || null;
     this.amountPaid = data.total_amount_paid || '0';
-    this.balanceAmount = data.loanbalanceamount || '0';
+    this.balanceAmount = data.loanbalanceamount ?? data.balance_amount ?? data.loan_balance_amount ?? '0';
     this.collectionWeek = data.collection_week || null;
     this.notes = data.notes || null;
     this.createdAt = data.created_at || null;

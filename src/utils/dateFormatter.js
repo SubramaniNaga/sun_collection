@@ -44,6 +44,16 @@ export function formatDisplayDate(date) {
   return `${day}-${month}-${year}`;
 }
 
+export function formatDisplayDateYear(date) {
+  if (date == null || date === '') return FALLBACK;
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return FALLBACK;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+}
+
 export function formatDisplayDateWithDay(selectedDate) {
   if (selectedDate == null || selectedDate === '') return FALLBACK;
   const d = selectedDate instanceof Date ? selectedDate : new Date(selectedDate);

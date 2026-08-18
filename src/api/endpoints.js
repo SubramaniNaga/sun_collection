@@ -23,6 +23,7 @@ export const ENDPOINTS = {
   },
   COLLECTION: {
     LIST: "/collection",
+    REGISTERED_DAY: "/collection/registered-day",
     UNPAID_LIST: "/collection/list/unpaid",
     PAID_LIST: "/collection/list/paid",
     DELAY_LIST: "/collection/list/delay",
@@ -74,5 +75,5 @@ export const ENDPOINTS = {
     TRACK: "/attendance/location-tracking",
   },
 };
-
 export default ENDPOINTS;
+

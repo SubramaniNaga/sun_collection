@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -38,6 +39,12 @@ import { getRegisterDayNameFromDate } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const LIMIT = 10;
+/** true = fill renewal fields from the Edai Varavu list row; false = empty fields for manual entry */
+const prefill_data = false;
+/** true = tapping a card with balance_amount 0 asks for loan renewal; false = show "no balance to collect" */
+const renewal_on_zero_balance = true;
+
+
 const REGISTER_DAY_VALUES = [
   'Monday',
   'Tuesday',
@@ -58,24 +65,103 @@ const formatCurrencyOrDash = (val) => {
 const parseCollectionsFromResponse = (response) => {
   const data = response?.data ?? response;
   if (Array.isArray(data?.collections)) return data.collections;
+  if (Array.isArray(data?.response)) return data.response;
   if (Array.isArray(data)) return data;
   if (Array.isArray(response?.collections)) return response.collections;
+  if (Array.isArray(response?.response)) return response.response;
   return [];
+};
+
+const getPaymentResponseData = (response) => {
+  const payload = response?.data ?? response;
+  return payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? payload.data
+    : payload;
 };
 
 /** Loan closed / eligible for renewal when payment success has loan_status 6. */
 const getLoanStatusFromPaymentResponse = (response) => {
+  const nested = getPaymentResponseData(response);
   const payload = response?.data ?? response;
   return (
+    nested?.loan_status ??
     payload?.loan_status ??
+    nested?.loan?.loan_status ??
     payload?.loan?.loan_status ??
-    payload?.collection?.loan_status ??
+    nested?.collection?.loan_status ??
     response?.loan_status ??
     null
   );
 };
 
+const getBalanceAmountFromPaymentResponse = (response) => {
+  const nested = getPaymentResponseData(response);
+  const payload = response?.data ?? response;
+  return (
+    nested?.balance_amount ??
+    nested?.loan_balance_amount ??
+    payload?.balance_amount ??
+    payload?.loan_balance_amount ??
+    nested?.loan?.balance_amount ??
+    null
+  );
+};
+
 const isLoanStatusEligibleForRenewal = (status) => Number(status) === 6;
+
+const isBalanceEligibleForRenewal = (balance) => {
+  if (balance === null || balance === undefined || balance === '') return false;
+  const amount = Number(balance);
+  return !Number.isNaN(amount) && amount === 0;
+};
+
+const shouldAskLoanRenewal = (response) => (
+  isBalanceEligibleForRenewal(getBalanceAmountFromPaymentResponse(response))
+  || isLoanStatusEligibleForRenewal(getLoanStatusFromPaymentResponse(response))
+);
+
+/** Same agent defaults as CustomerWithLoanScreen (AsyncStorage + loginResponse). */
+const resolveAgentLoanDefaults = async (options = []) => {
+  const empty = { loanTypeId: '', loanPeriod: '', disableType: false, disablePeriod: false };
+  try {
+    const storedLoanType = await AsyncStorage.getItem('loanType');
+    const storedLoanPeriod = await AsyncStorage.getItem('loanPeriod');
+    if (storedLoanType) {
+      return {
+        loanTypeId: storedLoanType,
+        loanPeriod: storedLoanPeriod || '',
+        disableType: true,
+        disablePeriod: Boolean(storedLoanPeriod),
+      };
+    }
+
+    const loginResponse = await AsyncStorage.getItem('loginResponse');
+    if (!loginResponse) return empty;
+    const loginData = JSON.parse(loginResponse);
+    const loginLoanType = loginData?.data?.loan_type;
+    const loginLoanPeriod = loginData?.data?.loan_period;
+    if (!loginLoanType) return empty;
+
+    const matchingLoanType = options.find(
+      (option) => String(option.label).toLowerCase() === String(loginLoanType).toLowerCase(),
+    );
+    if (!matchingLoanType) return empty;
+
+    await AsyncStorage.setItem('loanType', matchingLoanType.value);
+    const isDaily = String(loginLoanType).toLowerCase() === 'daily';
+    if (isDaily && loginLoanPeriod) {
+      await AsyncStorage.setItem('loanPeriod', String(loginLoanPeriod));
+    }
+    return {
+      loanTypeId: matchingLoanType.value,
+      loanPeriod: loginLoanPeriod ? String(loginLoanPeriod) : '',
+      disableType: true,
+      disablePeriod: Boolean(loginLoanPeriod),
+    };
+  } catch {
+    return empty;
+  }
+};
 
 const ANDROID_NAV_BAR_HEIGHT = 56;
 const KEYBOARD_FALLBACK_HEIGHT = 280;
@@ -140,6 +226,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const [renewalDay, setRenewalDay] = useState('');
   const [renewalErrors, setRenewalErrors] = useState({});
   const [renewalSubmitting, setRenewalSubmitting] = useState(false);
+  const [isLoanTypeDisabled, setIsLoanTypeDisabled] = useState(false);
+  const [isLoanPeriodDisabled, setIsLoanPeriodDisabled] = useState(false);
 
   const registerDayOptions = useMemo(
     () => REGISTER_DAY_VALUES.map((value) => ({
@@ -150,12 +238,23 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   );
 
   const selectedLoanTypeLabel = loanTypeOptions.find((o) => o.value === loanTypeId)?.label ?? '';
+  const periodUnit = (() => {
+    const lower = String(selectedLoanTypeLabel).toLowerCase();
+    if (lower === 'daily') return t('loan.days') || 'days';
+    if (lower === 'weekly') return t('loan.weeks') || 'weeks';
+    if (lower === 'monthly') return t('loan.months') || 'months';
+    return t('loan.months') || 'months';
+  })();
   const isWeeklyLoanType = String(selectedLoanTypeLabel).toLowerCase() === 'weekly';
+  const isSearchPending =
+    String(searchQuery).trim() !== String(debouncedSearchQuery || '').trim();
+  const showSearchLoader = searchQuery.length > 0 && (isSearchPending || loading);
+  const showListLoader = loading || showSearchLoader;
 
   const buildSearchParams = useCallback((query) => {
     const trimmed = (query || '').trim();
     if (!trimmed) return {};
-    return { search: trimmed };
+    return { customer_name: trimmed };
   }, []);
 
   const fetchList = useCallback(async (page = 1, append = false, skipPageLoader = false) => {
@@ -167,7 +266,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         loadMoreLockRef.current = false;
       }
 
-      const response = await apiServices.collection.getCollectionList({
+      const response = await apiServices.collection.getRegisteredDayCollections({
         page,
         limit: LIMIT,
         registered_day: registerDayFilter,
@@ -297,7 +396,15 @@ const IntermediateIncomeScreen = ({ navigation }) => {
     if (!guardAttendanceGatedEntry(t)) return;
     const collection = item instanceof Collection ? item : new Collection(item);
     const balanceAmount = parseFloat(collection.balanceAmount) || 0;
-    if (balanceAmount <= 0 && !shouldAllowPaymentWhenBalanceZero(collection)) {
+    if (balanceAmount === 0) {
+      if (renewal_on_zero_balance) {
+        askLoanRenewal(collection, { afterPayment: false });
+        return;
+      }
+      showInfo('', t('collection.noBalanceToCollect'));
+      return;
+    }
+    if (balanceAmount < 0 && !shouldAllowPaymentWhenBalanceZero(collection)) {
       showInfo('', t('collection.noBalanceToCollect'));
       return;
     }
@@ -366,8 +473,9 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         errors.collectedAmount = t('collection.collectedAmountInvalid');
       } else if (selectedCollection) {
         const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
-        const allowExceed = shouldAllowPaymentWhenBalanceZero(selectedCollection);
-        if (!allowExceed && amount > balanceAmount) {
+        const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
+        const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
+        if (!isInitialZeroBalance && amount > balanceAmount) {
           errors.collectedAmount = `${t('collection.collectedAmountExceed')} (${selectedCollection.getFormattedBalanceAmount()})`;
         }
       }
@@ -393,23 +501,40 @@ const IntermediateIncomeScreen = ({ navigation }) => {
     return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
   };
 
-  const openRenewalForm = (collection) => {
-    const typeId = collection?.loanTypeId != null ? String(collection.loanTypeId) : '';
-    const matchedByName = loanTypeOptions.find(
-      (opt) => String(opt.label).toLowerCase() === String(collection?.loanTypeName || '').toLowerCase(),
-    );
+  const openRenewalForm = async (collection) => {
     setRenewalCollection(collection);
-    setLoanTypeId(typeId || matchedByName?.value || '');
-    setLoanAmount(collection?.loanAmount != null ? String(collection.loanAmount) : '');
-    setLoanPeriod(collection?.loanPeriod != null ? String(collection.loanPeriod) : '');
-    setAathayamAmount(collection?.processingFees != null ? String(collection.processingFees) : '');
-    setMagimaiAmount(collection?.intrestAmount != null ? String(collection.intrestAmount) : '');
-    setRenewalDay(collection?.registerDay || registerDayFilter);
     setRenewalErrors({});
+    const agent = await resolveAgentLoanDefaults(loanTypeOptions);
+    setLoanTypeId(agent.loanTypeId);
+    setLoanPeriod(agent.loanPeriod);
+    setIsLoanTypeDisabled(agent.disableType);
+    setIsLoanPeriodDisabled(agent.disablePeriod);
+
+    if (prefill_data) {
+      if (!agent.loanTypeId) {
+        const typeId = collection?.loanTypeId != null ? String(collection.loanTypeId) : '';
+        const matchedByName = loanTypeOptions.find(
+          (opt) => String(opt.label).toLowerCase() === String(collection?.loanTypeName || '').toLowerCase(),
+        );
+        setLoanTypeId(typeId || matchedByName?.value || '');
+      }
+      if (!agent.loanPeriod) {
+        setLoanPeriod(collection?.loanPeriod != null ? String(collection.loanPeriod) : '');
+      }
+      setLoanAmount(collection?.loanAmount != null ? String(collection.loanAmount) : '');
+      setAathayamAmount(collection?.processingFees != null ? String(collection.processingFees) : '');
+      setMagimaiAmount(collection?.intrestAmount != null ? String(collection.intrestAmount) : '');
+      setRenewalDay(registerDayFilter || collection?.registerDay || '');
+    } else {
+      setLoanAmount('');
+      setAathayamAmount('');
+      setMagimaiAmount('');
+      setRenewalDay('');
+    }
     setShowRenewalForm(true);
   };
 
-  const askLoanRenewal = (collection) => {
+  const askLoanRenewal = (collection, { afterPayment = false } = {}) => {
     showAlert({
       type: 'info',
       title: t('intermediateIncome.loanRenewalNeeded'),
@@ -419,8 +544,10 @@ const IntermediateIncomeScreen = ({ navigation }) => {
           text: t('common.no'),
           style: 'cancel',
           onPress: () => {
-            showSuccess(t('common.success'), t('success.collectionUpdated'));
-            fetchList(1, false, true);
+            if (afterPayment) {
+              showSuccess(t('common.success'), t('success.collectionUpdated'));
+              fetchList(1, false, true);
+            }
           },
         },
         {
@@ -483,9 +610,11 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       console.log(JSON.stringify(paymentRes, null, 2));
       handleClosePaymentModal();
 
+      const balanceAmount = getBalanceAmountFromPaymentResponse(paymentRes);
       const loanStatus = getLoanStatusFromPaymentResponse(paymentRes);
-      if (isLoanStatusEligibleForRenewal(loanStatus)) {
-        askLoanRenewal(collectionForRenewal);
+      console.log('📋 IntermediateIncome: renewal check:', { balanceAmount, loanStatus });
+      if (shouldAskLoanRenewal(paymentRes)) {
+        setTimeout(() => askLoanRenewal(collectionForRenewal, { afterPayment: true }), 350);
       } else {
         showSuccess(t('common.success'), t('success.collectionUpdated'));
         fetchList(1, false, true);
@@ -501,6 +630,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
     setShowRenewalForm(false);
     setRenewalCollection(null);
     setRenewalErrors({});
+    setIsLoanTypeDisabled(false);
+    setIsLoanPeriodDisabled(false);
     fetchList(1, false, true);
   };
 
@@ -540,6 +671,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         intrest_amount: Number(magimaiAmount) || 0,
         registered_day: String(renewalDay || registerDayFilter),
       };
+      console.log('💰 IntermediateIncome: renewLoan payload:', JSON.stringify(payload, null, 2));
       await apiServices.loan.renewLoan(payload);
       showSuccess(t('common.success'), t('loan.renewalSubmitted'), [
         { text: t('common.ok'), onPress: closeRenewalForm },
@@ -639,6 +771,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
             items={loanTypeOptions}
             placeholder={t('customer.selectLoanType')}
             error={renewalErrors.loanTypeId}
+            editable={!isLoanTypeDisabled}
             required
             visible={loanTypePickerOpen}
             onVisibleChange={(open) => {
@@ -664,12 +797,13 @@ const IntermediateIncomeScreen = ({ navigation }) => {
           />
           <Input
             ref={loanPeriodRef}
-            label={t('customer.loanPeriod')}
+            label={`${t('customer.loanPeriod')} (${periodUnit})`}
             value={loanPeriod}
             onChangeText={setLoanPeriod}
             placeholder={t('customer.enterLoanPeriod')}
             keyboardType="numeric"
             error={renewalErrors.loanPeriod}
+            disabled={isLoanPeriodDisabled}
             required
             returnKeyType="next"
             blurOnSubmit={false}
@@ -776,7 +910,9 @@ const IntermediateIncomeScreen = ({ navigation }) => {
               returnKeyType="search"
               onSubmitEditing={() => Keyboard.dismiss()}
             />
-            {searchQuery.length > 0 ? (
+            {showSearchLoader ? (
+              <ActivityIndicator size="small" color={COLORS.primary} style={styles.searchLoader} />
+            ) : searchQuery.length > 0 ? (
               <TouchableOpacity style={styles.clearButton} onPress={() => setSearchQuery('')}>
                 <Ionicons name="close-circle" size={16} color={COLORS.text.secondary} />
               </TouchableOpacity>
@@ -798,7 +934,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {loading ? (
+      {showListLoader ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>{t('collection.loadingCollections')}</Text>
@@ -944,6 +1080,20 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                       onSubmitEditing={() => remarksRef.current?.focus()}
                       onChangeText={(text) => {
                         const digitsOnly = text.replace(/[^0-9]/g, '');
+                        if (selectedCollection && digitsOnly) {
+                          const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
+                          const enteredAmount = parseFloat(digitsOnly);
+                          const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
+                          const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
+                          if (!isInitialZeroBalance && !Number.isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                            setCollectedAmount(String(Math.trunc(balanceAmount)));
+                            setPaymentErrors((prev) => ({
+                              ...prev,
+                              collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
+                            }));
+                            return;
+                          }
+                        }
                         setCollectedAmount(digitsOnly);
                         if (paymentErrors.collectedAmount) {
                           setPaymentErrors((prev) => ({ ...prev, collectedAmount: '' }));
@@ -1052,6 +1202,9 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     marginRight: 6,
+  },
+  searchLoader: {
+    marginLeft: 4,
   },
   clearButton: {
     paddingHorizontal: 4,

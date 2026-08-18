@@ -15,7 +15,7 @@ import { COLORS, SIZES } from "../../constants/theme";
 import { useLanguage } from "../../store/LanguageContext";
 import { getApiErrorMessage, showError } from "../../utils/alertService";
 import { formatCurrency } from "../../utils/amountFormatters";
-import { formatDisplayDate } from "../../utils/dateFormatter";
+import { formatDisplayDateYear } from "../../utils/dateFormatter";
 
 /** Shown columns: week, due date, payment date, amount paid, balance, type */
 const COLLECTION_KEYS = [
@@ -27,8 +27,15 @@ const COLLECTION_KEYS = [
   "payment_type",
 ];
 
-/** Same width for header + body so columns line up; text centered under each header */
-const COLUMN_WIDTH = 102;
+/** Widths sized to content: week is narrow, dates/amounts need more room for labels. */
+const COLUMN_WIDTHS = {
+  collection_week: 45,
+  collection_date: 70,
+  payment_date: 70,
+  amount_paid: 60,
+  balance_amount: 70,
+  payment_type: 60,
+};
 
 const formatCollectionCell = (key, val, t) => {
   if (val === null || val === undefined || val === "") return "—";
@@ -41,7 +48,7 @@ const formatCollectionCell = (key, val, t) => {
     (/_date|_at$|_time$/i.test(key) || key === "payment_time") &&
     !Number.isNaN(Date.parse(val))
   ) {
-    return formatDisplayDate(val);
+    return formatDisplayDateYear(val);
   }
   if (typeof val === "boolean") return val ? t("common.yes") : t("common.no");
   if (typeof val === "number" && Number.isFinite(val)) return String(val);
@@ -169,7 +176,7 @@ const LoanCollectionsModal = ({ visible, loanId, onClose }) => {
                       key={COLLECTION_KEYS[i]}
                       style={[
                         styles.headerCellWrap,
-                        { width: COLUMN_WIDTH },
+                        { width: COLUMN_WIDTHS[COLLECTION_KEYS[i]] },
                         i === headerLabels.length - 1 && styles.tableCellLast,
                       ]}
                     >
@@ -197,7 +204,7 @@ const LoanCollectionsModal = ({ visible, loanId, onClose }) => {
                           key={key}
                           style={[
                             styles.dataCellWrap,
-                            { width: COLUMN_WIDTH },
+                            { width: COLUMN_WIDTHS[key] },
                             ki === COLLECTION_KEYS.length - 1 &&
                               styles.tableCellLast,
                           ]}

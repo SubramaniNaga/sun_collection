@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 
@@ -47,26 +47,50 @@ const FormPicker = ({
   const insets = useSafeAreaInsets();
   const triggerRef = useRef(null);
   const [anchor, setAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const keyboard = useAnimatedKeyboard({
-    isStatusBarTranslucentAndroid: true,
-    isNavigationBarTranslucentAndroid: true,
-  });
+  const keyboardInset = useSharedValue(0);
   const overlayKeyboardStyle = useAnimatedStyle(() => ({
-    paddingBottom: keyboard.height.value,
+    paddingBottom: keyboardInset.value,
   }));
   const sheetKeyboardStyle = useAnimatedStyle(() => {
-    const kb = keyboard.height.value;
-    const available = windowHeight - kb;
-    const height = kb > 0
-      ? Math.max(available - 12, 280)
-      : Math.min(windowHeight * 0.7, available);
-    return { height, maxHeight: height };
+    const kb = keyboardInset.value;
+    const bottomSafe = kb > 1 ? 8 : Math.max(insets.bottom, 8);
+    const available = Math.max(windowHeight - kb - 8, windowHeight * 0.35);
+    const height = Math.min(windowHeight * 0.7, available);
+    return {
+      height,
+      maxHeight: height,
+      paddingBottom: bottomSafe,
+    };
   });
   const isControlled = visibleProp !== undefined;
   const [internalVisible, setInternalVisible] = useState(false);
   const modalVisible = isControlled ? visibleProp : internalVisible;
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!modalVisible) {
+      keyboardInset.value = 0;
+      return undefined;
+    }
+    const metrics = Keyboard.metrics?.();
+    keyboardInset.value = metrics?.height ?? 0;
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const duration = Platform.OS === 'ios' ? 250 : 120;
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const next = event?.endCoordinates?.height ?? 0;
+      keyboardInset.value = withTiming(next, { duration });
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      keyboardInset.value = withTiming(0, { duration });
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      keyboardInset.value = 0;
+    };
+  }, [keyboardInset, modalVisible]);
 
   const setModalVisible = (next) => {
     if (!isControlled) setInternalVisible(next);
@@ -93,6 +117,7 @@ const FormPicker = ({
   const closeModal = () => {
     searchInputRef.current?.blur();
     Keyboard.dismiss();
+    keyboardInset.value = 0;
     setModalVisible(false);
     setSearchQuery('');
   };
@@ -233,7 +258,7 @@ const FormPicker = ({
   const renderSheetModal = () => (
     <Modal
       animationType="slide"
-      transparent={Platform.OS === 'ios' || !searchable}
+      transparent
       visible={modalVisible}
       onRequestClose={closeModal}
       statusBarTranslucent
@@ -548,13 +573,11 @@ const styles = StyleSheet.create({
   },
   sheetOverlay: {
     flex: 1,
-    width: '100%',
-    height: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   sheetBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   sheetPanel: {
     width: '100%',
