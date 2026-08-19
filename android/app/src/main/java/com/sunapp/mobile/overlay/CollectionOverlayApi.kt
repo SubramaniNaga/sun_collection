@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -131,6 +132,115 @@ object CollectionOverlayApi {
     }
   }
 
+  fun submitDelayRemark(
+    config: OverlayConfig,
+    description: String,
+    photoPath: String,
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit,
+  ) {
+    if (config.remarkId <= 0) {
+      val msg = "Invalid remark id (${config.remarkId})"
+      OverlayApiLogger.logError("POST", delayRemarkUrl(config), null, msg, null)
+      mainHandler.post { onError(msg) }
+      return
+    }
+
+    val photoFile = File(photoPath)
+    if (!photoFile.exists() || photoFile.length() <= 0L) {
+      val msg = "Visit photo is required"
+      OverlayApiLogger.logError("POST", delayRemarkUrl(config), null, msg, null)
+      mainHandler.post { onError(msg) }
+      return
+    }
+
+    executor.execute {
+      try {
+        val url = URL(delayRemarkUrl(config))
+        val boundary = "----SunOverlay${System.currentTimeMillis()}"
+        val logBody =
+          JSONObject()
+            .apply {
+              put("remark_id", config.remarkId)
+              put("description", description)
+              put("profile_photo", photoFile.name)
+            }
+            .toString()
+        OverlayApiLogger.logRequest("POST", url.toString(), logBody)
+
+        val connection =
+          (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 30000
+            readTimeout = 30000
+            doOutput = true
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            if (config.authToken.isNotBlank()) {
+              setRequestProperty("Authorization", "Bearer ${config.authToken}")
+            }
+          }
+
+        connection.outputStream.use { output ->
+          writeMultipartField(output, boundary, "remark_id", config.remarkId.toString())
+          writeMultipartField(output, boundary, "description", description)
+          writeMultipartFile(output, boundary, "profile_photo", photoFile, "image/jpeg")
+          output.write("--$boundary--\r\n".toByteArray(Charsets.UTF_8))
+        }
+
+        try {
+          val response = readResponse(connection, "POST", url.toString())
+          if (response.success) {
+            mainHandler.post(onSuccess)
+          } else {
+            mainHandler.post { onError(response.message) }
+          }
+        } finally {
+          connection.disconnect()
+        }
+      } catch (e: Exception) {
+        OverlayApiLogger.logError(
+          "POST",
+          delayRemarkUrl(config),
+          null,
+          e.message ?: "Could not submit delay remark",
+          null,
+        )
+        mainHandler.post { onError(e.message ?: "Could not submit delay remark") }
+      }
+    }
+  }
+
+  private fun writeMultipartField(
+    output: java.io.OutputStream,
+    boundary: String,
+    name: String,
+    value: String,
+  ) {
+    output.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+    output.write(
+      "Content-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray(Charsets.UTF_8),
+    )
+  }
+
+  private fun writeMultipartFile(
+    output: java.io.OutputStream,
+    boundary: String,
+    fieldName: String,
+    file: File,
+    mimeType: String,
+  ) {
+    output.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+    output.write(
+      (
+        "Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${file.name}\"\r\n" +
+          "Content-Type: $mimeType\r\n\r\n"
+      ).toByteArray(Charsets.UTF_8),
+    )
+    file.inputStream().use { input -> input.copyTo(output) }
+    output.write("\r\n".toByteArray(Charsets.UTF_8))
+  }
+
+  /** @deprecated Use submitDelayRemark with photo capture instead */
   fun submitDecline(
     config: OverlayConfig,
     reason: String,
@@ -177,6 +287,10 @@ object CollectionOverlayApi {
 
   private fun collectionPaymentUrl(config: OverlayConfig, collectionId: Int): String {
     return "${config.apiBaseUrl.trimEnd('/')}/collection/payment/$collectionId"
+  }
+
+  private fun delayRemarkUrl(config: OverlayConfig): String {
+    return "${config.apiBaseUrl.trimEnd('/')}/collection/delay-remarks/submit"
   }
 
   private fun declineUrl(config: OverlayConfig): String {

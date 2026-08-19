@@ -1,6 +1,11 @@
 import { NativeModules, Platform, NativeEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../api/apiClient';
+import {
+  FEATURE_FLAGS,
+  persistDelayProximityOverlayFlag,
+  restoreFeatureFlagsFromStorage,
+} from '../config/appToggles';
 
 const { CollectionOverlay } = NativeModules;
 const overlayEmitter =
@@ -113,8 +118,48 @@ export function normalizeNearbyForOverlay(item = {}) {
   };
 }
 
+/**
+ * Attach remark_id from delay_proximity.notifications to nearby customers (by loan_id).
+ */
+export function enrichNearbyWithRemarkIds(nearby = [], notifications = []) {
+  const remarkByLoan = new Map();
+  (Array.isArray(notifications) ? notifications : []).forEach((entry) => {
+    const loanId = parseNumber(entry?.loan_id ?? entry?.loan?.id, 0);
+    const remarkId = parseNumber(entry?.remark_id, 0);
+    if (loanId > 0 && remarkId > 0) {
+      remarkByLoan.set(loanId, remarkId);
+    }
+  });
+
+  return (Array.isArray(nearby) ? nearby : []).map((item) => {
+    const loanId = parseNumber(item?.loan_id ?? item?.loan?.id, 0);
+    const existingRemark = parseNumber(item?.remark_id, 0);
+    const mappedRemark = loanId > 0 ? remarkByLoan.get(loanId) ?? 0 : 0;
+    return {
+      ...item,
+      remark_id: existingRemark > 0 ? existingRemark : mappedRemark,
+    };
+  });
+}
+
 export function hasCollectibleBalance(item = {}) {
   return normalizeNearbyForOverlay(item).balance_amount > 0;
+}
+
+/** Read local flag — when false, delay-proximity overlay is skipped. */
+export function isDelayProximityOverlayEnabled() {
+  return FEATURE_FLAGS.enable_delay_proximity_overlay === true;
+}
+
+/** Reload persisted flag (needed for background location task before first UI mount). */
+export async function refreshDelayProximityOverlayFlag() {
+  await restoreFeatureFlagsFromStorage();
+  return isDelayProximityOverlayEnabled();
+}
+
+/** Enable/disable overlay at runtime (persisted locally). */
+export async function setDelayProximityOverlayEnabled(enabled) {
+  await persistDelayProximityOverlayFlag(enabled);
 }
 
 export async function canDrawOverlays() {
@@ -159,6 +204,10 @@ export async function showCollectionOverlay({
   longitude = null,
   radiusMeters = 500,
 } = {}) {
+  if (!isDelayProximityOverlayEnabled()) {
+    return { shown: false, reason: 'overlay_disabled' };
+  }
+
   if (Platform.OS !== 'android' || !CollectionOverlay?.showOverlay) {
     return { shown: false, reason: 'unsupported_platform' };
   }
@@ -227,8 +276,16 @@ export async function handleDelayProximityFromLocationResponse(response, coords 
     return { handled: false, reason: 'unsupported_platform' };
   }
 
+  await refreshDelayProximityOverlayFlag();
+  if (!isDelayProximityOverlayEnabled()) {
+    return { handled: false, reason: 'overlay_disabled' };
+  }
+
   const delayProximity = response?.delay_proximity;
-  const nearby = Array.isArray(delayProximity?.nearby) ? delayProximity.nearby : [];
+  const nearby = enrichNearbyWithRemarkIds(
+    Array.isArray(delayProximity?.nearby) ? delayProximity.nearby : [],
+    delayProximity?.notifications,
+  );
 
   if (nearby.length === 0) {
     return { handled: false, reason: 'empty_nearby' };
@@ -254,6 +311,10 @@ export default {
   hideCollectionOverlay,
   handleDelayProximityFromLocationResponse,
   normalizeNearbyForOverlay,
+  enrichNearbyWithRemarkIds,
   hasCollectibleBalance,
+  isDelayProximityOverlayEnabled,
+  setDelayProximityOverlayEnabled,
+  refreshDelayProximityOverlayFlag,
   setupOverlayApiLogListener,
 };

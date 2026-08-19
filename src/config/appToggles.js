@@ -202,6 +202,17 @@ export const CALENDAR_TZ = {
   server_date: '',
 };
 
+/**
+ * Local feature flags (app-side only — not from API).
+ * Toggle at runtime via setDelayProximityOverlayEnabled() in collectionOverlay.js
+ */
+export const FEATURE_FLAGS = {
+  /** Android system overlay for delay_proximity.nearby collection popup */
+  enable_delay_proximity_overlay: true,
+};
+
+const STORAGE_DELAY_PROXIMITY_OVERLAY = 'feature_enable_delay_proximity_overlay';
+
 function getAppResponsePayload(res) {
   if (!res || typeof res !== 'object') return null;
   const d = res.data ?? res.response ?? res;
@@ -216,5 +227,29 @@ export function applyCalendarTimezoneFromResponse(res) {
   }
   if (typeof d.server_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.server_date)) {
     CALENDAR_TZ.server_date = d.server_date;
+  }
+}
+
+/** Restore persisted local feature flags on app start. */
+export async function restoreFeatureFlagsFromStorage() {
+  try {
+    const overlayFlag = await AsyncStorage.getItem(STORAGE_DELAY_PROXIMITY_OVERLAY);
+    if (overlayFlag === '0' || overlayFlag === '1') {
+      FEATURE_FLAGS.enable_delay_proximity_overlay = overlayFlag === '1';
+    }
+  } catch (e) {
+    // ignore — use in-memory defaults
+  }
+}
+
+export async function persistDelayProximityOverlayFlag(enabled) {
+  FEATURE_FLAGS.enable_delay_proximity_overlay = Boolean(enabled);
+  try {
+    await AsyncStorage.setItem(
+      STORAGE_DELAY_PROXIMITY_OVERLAY,
+      FEATURE_FLAGS.enable_delay_proximity_overlay ? '1' : '0',
+    );
+  } catch (e) {
+    // ignore
   }
 }

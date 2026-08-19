@@ -27,6 +27,7 @@ export const ENDPOINTS = {
     UNPAID_LIST: "/collection/list/unpaid",
     PAID_LIST: "/collection/list/paid",
     DELAY_LIST: "/collection/list/delay",
+    DELAY_REMARKS_SUBMIT: "/collection/delay-remarks/submit",
     UPDATE_AMOUNT: (id) => `/collection/payment/${id}`,
     HISTORY: "/collection/history",
     /** Day-end closing summary (adjust path if your backend uses a different route). */

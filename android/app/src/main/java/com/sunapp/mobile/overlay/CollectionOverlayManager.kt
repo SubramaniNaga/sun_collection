@@ -2,6 +2,7 @@ package com.sunapp.mobile.overlay
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.net.Uri
@@ -17,6 +18,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.RadioButton
@@ -135,11 +137,86 @@ object CollectionOverlayManager {
     val amountSubmit = view.findViewById<Button>(R.id.overlay_amount_submit)
 
     val reasonInput = view.findViewById<EditText>(R.id.overlay_reason_input)
+    val photoStatus = view.findViewById<TextView>(R.id.overlay_photo_status)
+    val photoPreview = view.findViewById<ImageView>(R.id.overlay_photo_preview)
+    val btnCapturePhoto = view.findViewById<Button>(R.id.overlay_btn_capture_photo)
     val reasonBack = view.findViewById<Button>(R.id.overlay_reason_back)
     val reasonSubmit = view.findViewById<Button>(R.id.overlay_reason_submit)
 
     val status = view.findViewById<TextView>(R.id.overlay_status)
     val progress = view.findViewById<ProgressBar>(R.id.overlay_progress)
+
+    var capturedPhotoPath: String? = null
+
+    fun updatePhotoUi() {
+      if (capturedPhotoPath.isNullOrBlank()) {
+        photoPreview.visibility = View.GONE
+        photoStatus.text = "Visit photo required"
+        photoStatus.setTextColor(Color.parseColor("#6B7280"))
+        btnCapturePhoto.text = "Capture Photo"
+        return
+      }
+
+      photoPreview.visibility = View.VISIBLE
+      photoStatus.text = "Photo captured"
+      photoStatus.setTextColor(Color.parseColor("#059669"))
+      btnCapturePhoto.text = "Retake Photo"
+      runCatching {
+        val bitmap = BitmapFactory.decodeFile(capturedPhotoPath)
+        if (bitmap != null) {
+          photoPreview.setImageBitmap(bitmap)
+        }
+      }
+    }
+
+    fun launchPhotoCapture(onDone: (Boolean) -> Unit) {
+      OverlayCameraBridge.requestCapture { path ->
+        if (!isActive()) return@requestCapture
+        if (path.isNullOrBlank()) {
+          showMessage("Photo capture cancelled", true)
+          onDone(false)
+          return@requestCapture
+        }
+        capturedPhotoPath = path
+        updatePhotoUi()
+        onDone(true)
+      }
+
+      val intent =
+        Intent(context, OverlayCaptureActivity::class.java).apply {
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+      runCatching { context.startActivity(intent) }
+        .onFailure {
+          OverlayCameraBridge.cancelPending()
+          showMessage("Unable to open camera", true)
+          onDone(false)
+        }
+    }
+
+    fun submitDelayRemarkRequest(config: OverlayConfig, description: String, photoPath: String) {
+      setBusy(true)
+      CollectionOverlayApi.submitDelayRemark(
+        config = config,
+        description = description,
+        photoPath = photoPath,
+        onSuccess = {
+          mainHandler.post {
+            if (!isActive()) return@post
+            setBusy(false)
+            showMessage("Delay remark submitted successfully", false)
+            mainHandler.postDelayed({ hide(context) }, 900)
+          }
+        },
+        onError = { msg ->
+          mainHandler.post {
+            if (!isActive()) return@post
+            setBusy(false)
+            showMessage(msg, true)
+          }
+        },
+      )
+    }
 
     fun isActive(): Boolean = overlayView === view
 
@@ -165,6 +242,7 @@ object CollectionOverlayManager {
       btnNext.isEnabled = !busy
       amountSubmit.isEnabled = !busy
       reasonSubmit.isEnabled = !busy
+      btnCapturePhoto.isEnabled = !busy
     }
 
     fun showMessage(message: String, isError: Boolean) {
@@ -295,6 +373,8 @@ object CollectionOverlayManager {
 
     btnNotCollect.setOnClickListener {
       reasonInput.setText("")
+      capturedPhotoPath = null
+      updatePhotoUi()
       showPanel("reason")
     }
 
@@ -342,6 +422,10 @@ object CollectionOverlayManager {
       }
     }
 
+    btnCapturePhoto.setOnClickListener {
+      launchPhotoCapture { }
+    }
+
     reasonSubmit.setOnClickListener {
       runCatching {
         val config = currentConfig() ?: return@setOnClickListener
@@ -350,27 +434,22 @@ object CollectionOverlayManager {
           showMessage("Please enter a reason", true)
           return@setOnClickListener
         }
+        if (config.remarkId <= 0) {
+          showMessage("Invalid remark id for this customer", true)
+          return@setOnClickListener
+        }
 
-        setBusy(true)
-        CollectionOverlayApi.submitDecline(
-          config = config,
-          reason = reason,
-          onSuccess = {
-            mainHandler.post {
-              if (!isActive()) return@post
-              setBusy(false)
-              showMessage("Reason submitted successfully", false)
-              mainHandler.postDelayed({ hide(context) }, 900)
+        val photoPath = capturedPhotoPath
+        if (photoPath.isNullOrBlank()) {
+          launchPhotoCapture { captured ->
+            if (captured && !capturedPhotoPath.isNullOrBlank()) {
+              submitDelayRemarkRequest(config, reason, capturedPhotoPath!!)
             }
-          },
-          onError = { msg ->
-            mainHandler.post {
-              if (!isActive()) return@post
-              setBusy(false)
-              showMessage(msg, true)
-            }
-          },
-        )
+          }
+          return@setOnClickListener
+        }
+
+        submitDelayRemarkRequest(config, reason, photoPath)
       }.onFailure { err ->
         showMessage(err.message ?: "Submit failed", true)
         setBusy(false)
