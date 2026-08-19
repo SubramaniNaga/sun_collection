@@ -19,6 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
@@ -183,9 +184,10 @@ const CitiesScreen = ({ navigation }) => {
           <Pressable style={styles.addCityBackdrop} onPress={handleCloseAddCity} />
           <View style={styles.addCityCard}>
             <Text style={styles.addCityTitle}>{t('customer.addCity')}</Text>
+            <View style={styles.voiceFieldRow}>
             <TextInput
               ref={cityInputRef}
-              style={[styles.addCityInput, error ? styles.addInputError : null]}
+              style={[styles.addCityInput, styles.voiceFieldInput, error ? styles.addInputError : null]}
               value={cityName}
               onChangeText={(text) => {
                 setCityName(text);
@@ -197,6 +199,14 @@ const CitiesScreen = ({ navigation }) => {
               blurOnSubmit={false}
               onSubmitEditing={handleAddCity}
             />
+            <VoiceMicButton
+              value={cityName}
+              onChangeText={(text) => {
+                setCityName(text);
+                if (error) setError('');
+              }}
+            />
+            </View>
             {error ? <Text style={styles.addError}>{error}</Text> : null}
             <View style={styles.addCityActions}>
               <TouchableOpacity
@@ -324,6 +334,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text.secondary,
     marginBottom: SIZES.padding,
+  },
+  voiceFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.base,
+  },
+  voiceFieldInput: {
+    flex: 1,
+    marginBottom: 0,
   },
   addCityInput: {
     borderWidth: 1,

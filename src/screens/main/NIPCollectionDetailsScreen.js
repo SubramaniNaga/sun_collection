@@ -20,12 +20,13 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { showError, showSuccess } from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -64,7 +65,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   const [formData, setFormData] = useState({
     nip_date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
     amount_paid: '',
-    balance_amount: loan?.balanceAmount || '0',
+    balance_amount: formatAmountPlain(loan?.balanceAmount) || '0',
     notes: '',
     payment_type: 'cash', // Default to cash
   });
@@ -85,7 +86,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
     if (loan?.balanceAmount) {
       setFormData(prev => ({
         ...prev,
-        balance_amount: loan.balanceAmount
+        balance_amount: formatAmountPlain(loan.balanceAmount) || '0',
       }));
     }
   }, [loan]);
@@ -328,9 +329,10 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       {/* Amount Paid */}
       <View style={styles.formRow}>
         {renderRequiredLabel(t('nip.amountPaid'))}
+        <View style={styles.voiceFieldRow}>
         <TextInput
           ref={amountPaidRef}
-          style={styles.textInput}
+          style={[styles.textInput, styles.voiceFieldInput]}
           placeholder={t('nip.enterAmountPaid')}
           placeholderTextColor={COLORS.text.tertiary}
           value={formData.amount_paid}
@@ -341,6 +343,11 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
           submitBehavior="submit"
           onSubmitEditing={() => notesRef.current?.focus()}
         />
+        <VoiceMicButton
+          value={formData.amount_paid}
+          onChangeText={(value) => handleInputChange('amount_paid', value)}
+        />
+        </View>
       </View>
 
       {/* Balance Amount */}
@@ -386,9 +393,10 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       {/* Notes */}
       <View style={styles.formRow}>
         {renderRequiredLabel(t('nip.notes'))}
+        <View style={styles.voiceFieldRow}>
         <TextInput
           ref={notesRef}
-          style={[styles.textInput, styles.notesInput]}
+          style={[styles.textInput, styles.notesInput, styles.voiceFieldInput]}
           placeholder={t('nip.enterNotes')}
           placeholderTextColor={COLORS.text.tertiary}
           value={formData.notes}
@@ -400,6 +408,11 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
           blurOnSubmit
           onSubmitEditing={Keyboard.dismiss}
         />
+        <VoiceMicButton
+          value={formData.notes}
+          onChangeText={(value) => handleInputChange('notes', value)}
+        />
+        </View>
       </View>
 
       {/* Location Status */}
@@ -675,6 +688,13 @@ const styles = StyleSheet.create({
   requiredMark: {
     color: COLORS.error,
     fontWeight: '600',
+  },
+  voiceFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  voiceFieldInput: {
+    flex: 1,
   },
   textInput: {
     borderWidth: 1,

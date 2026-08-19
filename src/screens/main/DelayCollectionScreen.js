@@ -6,8 +6,8 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Linking,
   Keyboard,
+  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -21,11 +21,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError } from '../../utils/alertService';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const PAGE_LIMIT = 20;
@@ -169,7 +170,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
         name: item?.customer_name ?? '',
         phone: item?.customer_phone ?? '',
         loanId: String(loanId),
-        initialAmount: item?.loan_amount ?? '',
+        initialAmount: formatAmountPlain(item?.loan_amount),
       },
     });
   };
@@ -287,6 +288,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
                 returnKeyType="search"
                 onSubmitEditing={Keyboard.dismiss}
               />
+              <VoiceMicButton value={searchText} onChangeText={setSearchText} />
             </View>
             <Pressable style={styles.unitDropdown} onPress={() => setShowUnitDropdown(true)}>
               <Text style={styles.unitDropdownText} numberOfLines={1}>

@@ -42,6 +42,8 @@ import Header from '../../components/common/Header';
 
 import ListSkeleton from '../../components/common/ListSkeleton';
 
+import VoiceMicButton from '../../components/common/VoiceMicButton';
+
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 
@@ -841,6 +843,7 @@ const NIPScreen = ({ navigation }) => {
                   underlineColorAndroid="transparent"
                 />
               </View>
+              <VoiceMicButton value={searchQuery} onChangeText={setSearchQuery} />
               <TouchableOpacity
                 style={styles.headerSearchCloseBtn}
                 onPress={closeHeaderSearch}

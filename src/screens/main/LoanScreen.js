@@ -13,6 +13,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -22,7 +23,7 @@ const API_BASE_URL = 'http://65.0.100.65:6005';
 const formatLoanAmount = (val) => {
   if (val == null || val === '') return '—';
   const num = parseFloat(val);
-  return isNaN(num) ? String(val) : `₹${num.toLocaleString('en-IN')}`;
+  return isNaN(num) ? String(val) : formatCurrency(val);
 };
 
 const LoanScreen = ({ navigation, route }) => {
@@ -117,7 +118,7 @@ const LoanScreen = ({ navigation, route }) => {
     name: loan?.customer_name ?? '',
     phone: loan?.customer_phone ?? '',
     loanId: String(loan?.id ?? ''),
-    initialAmount: loan?.loan_amount ?? '',
+    initialAmount: formatAmountPlain(loan?.loan_amount),
   } : {});
 
   // Approved loan-given flow (when loan is approved)
@@ -139,8 +140,8 @@ const LoanScreen = ({ navigation, route }) => {
   const [pickingLoanGivenPhoto, setPickingLoanGivenPhoto] = useState(false);
 
   // Renewal states
-  const [initialLoanAmount, setInitialLoanAmount] = useState(customerData.initialAmount || '');
-  const [renewalAmount, setRenewalAmount] = useState(customerData.initialAmount || '');
+  const [initialLoanAmount, setInitialLoanAmount] = useState(formatAmountPlain(customerData.initialAmount));
+  const [renewalAmount, setRenewalAmount] = useState(formatAmountPlain(customerData.initialAmount));
   const [requestExtraFunds, setRequestExtraFunds] = useState(false);
   const [additionalAmount, setAdditionalAmount] = useState('');
 

@@ -42,6 +42,7 @@ import {
   showAlert,
   showError,
 } from "../../utils/alertService";
+import { formatCurrency } from "../../utils/amountFormatters";
 import { getServerDateTimeISO } from "../../utils/dateFormatter";
 import ErrorHandler from "../../utils/errorHandler";
 import { compressImageAssetIfNeeded } from "../../utils/imageCompression";
@@ -80,10 +81,7 @@ function dashboardDataFromTodayApi(res) {
   return {};
 }
 
-const formatRupee = (value) => {
-  const amount = parseFloat(value) || 0;
-  return `₹${amount.toLocaleString("en-IN")}`;
-};
+const formatRupee = (value) => formatCurrency(value);
 
 const HomeScreen = ({ navigation }) => {
   const { t, language, changeLanguage } = useLanguage();

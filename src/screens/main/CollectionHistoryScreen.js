@@ -25,6 +25,7 @@ import CollectionHistory from '../../models/CollectionHistory';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -301,27 +302,20 @@ const CollectionHistoryScreen = ({ navigation }) => {
     fetchCollectionHistory(nextPage, true);
   }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchCollectionHistory]);
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    if (amount == null || amount === '') return '₹0';
-    const num = parseFloat(amount);
-    return isNaN(num) ? '₹0' : `₹${num.toLocaleString('en-IN')}`;
-  };
-
   const applyClosingFormFromHistoryStats = useCallback(() => {
     setClosingForm({
       expensesSpent:
         stats.expenses_spent != null && stats.expenses_spent !== ''
-          ? String(stats.expenses_spent)
+          ? formatAmountPlain(stats.expenses_spent)
           : '0',
       loanGiven:
         stats.loan_given_amount != null && stats.loan_given_amount !== ''
-          ? String(stats.loan_given_amount)
+          ? formatAmountPlain(stats.loan_given_amount)
           : '0',
       cashBrought: '0',
       collectionCompleted:
         stats.collected_amount != null && stats.collected_amount !== ''
-          ? String(stats.collected_amount)
+          ? formatAmountPlain(stats.collected_amount)
           : '0',
     });
   }, [stats]);
@@ -336,10 +330,10 @@ const CollectionHistoryScreen = ({ navigation }) => {
       const raw = dashboardDataFromTodayApi(res);
       const dash = Dashboard.fromApiResponse(raw);
       setClosingForm({
-        expensesSpent: String(dash.expenses?.totalAmount ?? 0),
-        loanGiven: String(dash.loansGiven?.totalAmount ?? 0),
-        cashBrought: String(dash.frontcash?.totalAmount ?? 0),
-        collectionCompleted: String(dash.collections?.totalAmount ?? 0),
+        expensesSpent: formatAmountPlain(dash.expenses?.totalAmount ?? 0) || '0',
+        loanGiven: formatAmountPlain(dash.loansGiven?.totalAmount ?? 0) || '0',
+        cashBrought: formatAmountPlain(dash.frontcash?.totalAmount ?? 0) || '0',
+        collectionCompleted: formatAmountPlain(dash.collections?.totalAmount ?? 0) || '0',
       });
     } catch (err) {
       console.warn('CollectionHistory: dashboard today for account closing:', err);

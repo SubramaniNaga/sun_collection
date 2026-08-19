@@ -10,12 +10,13 @@ import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
 import PaginationListFooter from '../../components/common/PaginationListFooter';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess, showWarning } from '../../utils/alertService';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, formatDisplayDate, formatDisplayDateWithDay, getCalendarDate, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -30,7 +31,7 @@ const openIosAppSettings = async () => {
 
 const formatAmount = (val) => {
   const num = parseFloat(val);
-  return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
+  return isNaN(num) ? '—' : formatCurrency(val);
 };
 
 const formatCurrencyOrDash = (val) => {
@@ -664,7 +665,7 @@ const CollectionScreen = ({ navigation }) => {
         name: collection.customerName ?? '',
         phone: collection.customerPhone ?? '',
         loanId: String(collection.loanId),
-        initialAmount: collection.loanAmount ?? '',
+        initialAmount: formatAmountPlain(collection.loanAmount),
       },
     });
   };
@@ -1219,6 +1220,7 @@ const CollectionScreen = ({ navigation }) => {
                 returnKeyType="search"
                 onSubmitEditing={Keyboard.dismiss}
               />
+              <VoiceMicButton value={searchText} onChangeText={setSearchText} />
             </View>
             <Pressable
               style={styles.datePickerButton}
@@ -1481,10 +1483,12 @@ const CollectionScreen = ({ navigation }) => {
                     }}
                   >
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
+                    <View style={styles.voiceFieldRow}>
                     <TextInput
                       ref={collectedAmountRef}
                       style={[
                         styles.inputField,
+                        styles.voiceFieldInput,
                         paymentErrors.collectedAmount && styles.inputFieldError,
                       ]}
                       placeholder={t('collection.enterAmount')}
@@ -1506,7 +1510,7 @@ const CollectionScreen = ({ navigation }) => {
                           const enteredAmount = parseFloat(digitsOnly);
                           const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
                           if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
-                            setCollectedAmount(String(balanceAmount));
+                            setCollectedAmount(formatAmountPlain(balanceAmount));
                             setPaymentErrors({
                               ...paymentErrors,
                               collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
@@ -1520,6 +1524,30 @@ const CollectionScreen = ({ navigation }) => {
                         }
                       }}
                     />
+                    <VoiceMicButton
+                      value={collectedAmount}
+                      onChangeText={(text) => {
+                        const digitsOnly = String(text).replace(/[^0-9]/g, '');
+                        if (selectedCollection && digitsOnly) {
+                          const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
+                          const enteredAmount = parseFloat(digitsOnly);
+                          const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
+                          if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                            setCollectedAmount(formatAmountPlain(balanceAmount));
+                            setPaymentErrors({
+                              ...paymentErrors,
+                              collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
+                            });
+                            return;
+                          }
+                        }
+                        setCollectedAmount(digitsOnly);
+                        if (paymentErrors.collectedAmount) {
+                          setPaymentErrors({ ...paymentErrors, collectedAmount: '' });
+                        }
+                      }}
+                    />
+                    </View>
                     {paymentErrors.collectedAmount && (
                       <Text style={styles.errorTextSmall}>{paymentErrors.collectedAmount}</Text>
                     )}
@@ -1532,9 +1560,10 @@ const CollectionScreen = ({ navigation }) => {
                     }}
                   >
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
+                    <View style={styles.voiceFieldRow}>
                     <TextInput
                       ref={remarksRef}
-                      style={[styles.inputField, styles.textArea]}
+                      style={[styles.inputField, styles.textArea, styles.voiceFieldInput]}
                       placeholder={t('collection.enterRemarks')}
                       placeholderTextColor={COLORS.text.tertiary}
                       value={remarks}
@@ -1553,6 +1582,8 @@ const CollectionScreen = ({ navigation }) => {
                         paymentScrollRef.current?.scrollToEnd?.({ animated: true });
                       }}
                     />
+                    <VoiceMicButton value={remarks} onChangeText={setRemarks} />
+                    </View>
                   </View>
                   <View style={styles.submitButtonInScroll}>
                     <TouchableOpacity
@@ -2083,6 +2114,13 @@ const styles = StyleSheet.create({
   },
   inputFieldContainer: {
     marginBottom: SIZES.margin,
+  },
+  voiceFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voiceFieldInput: {
+    flex: 1,
   },
   inputField: {
     borderWidth: 1,
