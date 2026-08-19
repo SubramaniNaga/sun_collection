@@ -19,7 +19,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Payment Collection Nearby njkj"
+            android:text="Payment Collection Nearby"
             android:textColor="#111827"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -186,9 +186,10 @@
         android:visibility="gone">
 
         <TextView
+            android:id="@+id/overlay_amount_hint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Enter collected amount"
+            android:text="Enter collected amount (up to balance)"
             android:textColor="#374151"
             android:textSize="14sp" />
 

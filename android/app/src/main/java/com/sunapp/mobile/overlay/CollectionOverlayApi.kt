@@ -278,3 +278,11 @@ data class OverlayConfig(
   val totalNearby: Int,
   val nearbyIndex: Int,
 )
+
+fun OverlayConfig.effectiveBalance(): Double {
+  return balanceAmountText.toDoubleOrNull()?.takeIf { it > 0 }
+    ?: balanceAmount.takeIf { it > 0 }
+    ?: 0.0
+}
+
+fun OverlayConfig.hasCollectibleBalance(): Boolean = effectiveBalance() > 0

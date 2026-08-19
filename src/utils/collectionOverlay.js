@@ -113,6 +113,10 @@ export function normalizeNearbyForOverlay(item = {}) {
   };
 }
 
+export function hasCollectibleBalance(item = {}) {
+  return normalizeNearbyForOverlay(item).balance_amount > 0;
+}
+
 export async function canDrawOverlays() {
   if (Platform.OS !== 'android' || !CollectionOverlay?.canDrawOverlays) {
     return false;
@@ -162,11 +166,15 @@ export async function showCollectionOverlay({
   const rawNearby = Array.isArray(nearby) ? nearby : [];
   const validNearby = rawNearby.filter((entry) => {
     const normalized = normalizeNearbyForOverlay(entry);
-    return normalized.loan_id > 0 || normalized.customer_id > 0 || normalized.collection_id > 0;
+    const hasIds =
+      normalized.loan_id > 0 ||
+      normalized.customer_id > 0 ||
+      normalized.collection_id > 0;
+    return hasIds && normalized.balance_amount > 0;
   });
 
   if (validNearby.length === 0) {
-    return { shown: false, reason: 'empty_nearby' };
+    return { shown: false, reason: 'no_collectible_balance' };
   }
 
   const granted = await canDrawOverlays();
@@ -246,5 +254,6 @@ export default {
   hideCollectionOverlay,
   handleDelayProximityFromLocationResponse,
   normalizeNearbyForOverlay,
+  hasCollectibleBalance,
   setupOverlayApiLogListener,
 };

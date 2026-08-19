@@ -68,16 +68,34 @@ class CollectionOverlayModule(reactContext: ReactApplicationContext) :
         return
       }
 
-      val items = ArrayList<OverlayConfig>(nearby.size())
+      val parsed = ArrayList<OverlayConfig>()
       for (index in 0 until nearby.size()) {
         val item = nearby.getMap(index) ?: continue
-        items.add(parseOverlayConfig(config, item, index, nearby.size()))
+        if (!OverlayMapReader.hasCollectibleBalance(item)) continue
+
+        val loanId =
+          OverlayMapReader.readInt(item, "loan_id", OverlayMapReader.readInt(OverlayMapReader.getMap(item, "loan"), "id", 0))
+        val customerId =
+          OverlayMapReader.readInt(
+            item,
+            "customer_id",
+            OverlayMapReader.readInt(OverlayMapReader.getMap(item, "customer"), "id", 0),
+          )
+        val collectionId = OverlayMapReader.readInt(item, "collection_id", 0)
+        if (loanId <= 0 && customerId <= 0 && collectionId <= 0) continue
+
+        parsed.add(parseOverlayConfig(config, item, 0, 1))
       }
 
-      if (items.isEmpty()) {
-        promise.reject("NO_DATA", "No nearby collection data")
+      if (parsed.isEmpty()) {
+        promise.reject("NO_DATA", "No nearby customers with balance amount greater than 0")
         return
       }
+
+      val items =
+        parsed.mapIndexed { index, item ->
+          item.copy(totalNearby = parsed.size, nearbyIndex = index)
+        }
 
       CollectionOverlayManager.show(reactApplicationContext, items)
       promise.resolve(true)

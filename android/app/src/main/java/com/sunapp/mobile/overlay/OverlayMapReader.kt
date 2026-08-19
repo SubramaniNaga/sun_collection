@@ -58,4 +58,8 @@ internal object OverlayMapReader {
     val text = readBalanceText(item)
     return text.toDoubleOrNull() ?: readDouble(item, "balance_amount", readDouble(getMap(item, "loan"), "balance_amount", 0.0))
   }
+
+  fun hasCollectibleBalance(item: ReadableMap): Boolean {
+    return readBalanceAmount(item) > 0
+  }
 }

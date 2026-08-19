@@ -9,7 +9,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.view.Gravity
+import android.text.InputFilter
+import android.text.method.DigitsKeyListener
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -120,6 +121,14 @@ object CollectionOverlayManager {
     val btnNotCollect = view.findViewById<Button>(R.id.overlay_btn_not_collect)
 
     val amountInput = view.findViewById<EditText>(R.id.overlay_amount_input)
+    amountInput.keyListener = DigitsKeyListener.getInstance("0123456789.")
+    amountInput.filters =
+      arrayOf(
+        InputFilter { source, _, _, _, _, _ ->
+          if (source.toString().contains("-")) "" else null
+        },
+      )
+    val amountHint = view.findViewById<TextView>(R.id.overlay_amount_hint)
     val paymentCash = view.findViewById<RadioButton>(R.id.overlay_payment_cash)
     val paymentOnline = view.findViewById<RadioButton>(R.id.overlay_payment_online)
     val amountBack = view.findViewById<Button>(R.id.overlay_amount_back)
@@ -147,7 +156,10 @@ object CollectionOverlayManager {
     fun setBusy(busy: Boolean) {
       if (!isActive()) return
       progress.visibility = if (busy) View.VISIBLE else View.GONE
-      btnCollect.isEnabled = !busy
+      val config = currentConfig()
+      val canCollect = !busy && config != null && effectiveBalance(config) > 0
+      btnCollect.isEnabled = canCollect
+      btnCollect.alpha = if (canCollect) 1f else 0.45f
       btnNotCollect.isEnabled = !busy
       btnPrev.isEnabled = !busy
       btnNext.isEnabled = !busy
@@ -162,9 +174,27 @@ object CollectionOverlayManager {
       status.visibility = View.VISIBLE
     }
 
+    fun effectiveBalance(config: OverlayConfig): Double = config.effectiveBalance()
+
+    fun validateCollectionAmount(amount: Double?, balance: Double): String? {
+      if (balance <= 0) {
+        return "Balance amount must be greater than 0"
+      }
+      if (amount == null) {
+        return "Enter a valid amount"
+      }
+      if (amount <= 0) {
+        return "Amount must be greater than 0"
+      }
+      if (amount > balance + 0.0001) {
+        return "Amount cannot exceed balance of ₹${formatAmount(balance)}"
+      }
+      return null
+    }
+
     fun renderCustomer() {
       val config = currentConfig() ?: return
-      title.text = "Payment Collection Nearbysss"
+      title.text = "Payment Collection Nearby"
       subtitle.text = "Customer within ${config.radiusMeters}m radius"
 
       if (config.totalNearby > 1) {
@@ -221,6 +251,11 @@ object CollectionOverlayManager {
       if (config.customerAddress.isNotBlank()) {
         distance.text = "${distance.text}\n${config.customerAddress}"
       }
+
+      val balance = effectiveBalance(config)
+      val canCollect = balance > 0
+      btnCollect.isEnabled = canCollect
+      btnCollect.alpha = if (canCollect) 1f else 0.45f
     }
 
     renderCustomer()
@@ -245,13 +280,15 @@ object CollectionOverlayManager {
 
     btnCollect.setOnClickListener {
       val config = currentConfig() ?: return@setOnClickListener
-      amountInput.setText(
-        when {
-          config.balanceAmountText.isNotBlank() -> config.balanceAmountText
-          config.balanceAmount > 0 -> formatAmount(config.balanceAmount)
-          else -> ""
-        },
-      )
+      val balance = effectiveBalance(config)
+      if (balance <= 0) {
+        showMessage("Balance amount must be greater than 0", true)
+        return@setOnClickListener
+      }
+
+      amountHint.text = "Enter amount up to ₹${formatAmount(balance)}"
+      amountInput.hint = "Max ₹${formatAmount(balance)}"
+      amountInput.setText(formatAmount(balance))
       paymentCash.isChecked = true
       showPanel("amount")
     }
@@ -267,10 +304,13 @@ object CollectionOverlayManager {
     amountSubmit.setOnClickListener {
       runCatching {
         val config = currentConfig() ?: return@setOnClickListener
+        val balance = effectiveBalance(config)
         val raw = amountInput.text?.toString()?.trim().orEmpty()
         val amount = raw.toDoubleOrNull()
-        if (amount == null || amount <= 0) {
-          showMessage("Enter a valid amount", true)
+
+        val validationError = validateCollectionAmount(amount, balance)
+        if (validationError != null || amount == null) {
+          showMessage(validationError ?: "Enter a valid amount", true)
           return@setOnClickListener
         }
 
