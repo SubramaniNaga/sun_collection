@@ -25,7 +25,7 @@ import { useLanguage } from '../../store/LanguageContext';
 import { showError, showSuccess } from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate } from '../../utils/dateFormatter';
 
 const API_BASE_URL = 'http://65.0.100.65:6005';
@@ -64,7 +64,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   const [formData, setFormData] = useState({
     nip_date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
     amount_paid: '',
-    balance_amount: loan?.balanceAmount || '0',
+    balance_amount: formatAmountPlain(loan?.balanceAmount) || '0',
     notes: '',
     payment_type: 'cash', // Default to cash
   });
@@ -85,7 +85,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
     if (loan?.balanceAmount) {
       setFormData(prev => ({
         ...prev,
-        balance_amount: loan.balanceAmount
+        balance_amount: formatAmountPlain(loan.balanceAmount) || '0',
       }));
     }
   }, [loan]);

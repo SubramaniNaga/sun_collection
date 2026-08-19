@@ -8,10 +8,10 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
-import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
-import { safeGoBack } from '../../utils/navigationHelpers';
-import { formatDateTimeDisplay } from '../../utils/dateFormatter';
 import { formatCurrency } from '../../utils/amountFormatters';
+import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
+import { formatDateTimeDisplay } from '../../utils/dateFormatter';
+import { safeGoBack } from '../../utils/navigationHelpers';
 
 
 const DetailRow = ({ label, value }) => (
@@ -59,8 +59,8 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
         const amountPaid = data.amount_paid ?? total;
         const balanceAmount = data.balance_amount;
         const collectionWeek = data.collection_week;
-        const paidStr = (amountPaid != null && amountPaid !== '') ? `₹${Number(amountPaid).toLocaleString('en-IN')}` : '—';
-        const balanceStr = (balanceAmount != null && balanceAmount !== '') ? `₹${Number(balanceAmount).toLocaleString('en-IN')}` : '—';
+        const paidStr = (amountPaid != null && amountPaid !== '') ? formatCurrency(amountPaid) : '—';
+        const balanceStr = (balanceAmount != null && balanceAmount !== '') ? formatCurrency(balanceAmount) : '—';
         const weekStr = collectionWeek != null ? String(collectionWeek) : '—';
         showSuccess(
           'Collection amount updated successfully',
@@ -192,7 +192,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
         <View style={styles.bottomContent}>
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{calculateTotal().toFixed(2)}</Text>
+            <Text style={styles.totalValue}>{formatCurrency(calculateTotal())}</Text>
           </View>
           <TouchableOpacity
             style={[styles.addButton, submitting && styles.addButtonDisabled]}

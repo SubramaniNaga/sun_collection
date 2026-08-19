@@ -33,7 +33,7 @@ import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebounced
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess } from '../../utils/alertService';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { getRegisterDayNameFromDate } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -521,9 +521,9 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       if (!agent.loanPeriod) {
         setLoanPeriod(collection?.loanPeriod != null ? String(collection.loanPeriod) : '');
       }
-      setLoanAmount(collection?.loanAmount != null ? String(collection.loanAmount) : '');
-      setAathayamAmount(collection?.processingFees != null ? String(collection.processingFees) : '');
-      setMagimaiAmount(collection?.intrestAmount != null ? String(collection.intrestAmount) : '');
+      setLoanAmount(collection?.loanAmount != null ? formatAmountPlain(collection.loanAmount) : '');
+      setAathayamAmount(collection?.processingFees != null ? formatAmountPlain(collection.processingFees) : '');
+      setMagimaiAmount(collection?.intrestAmount != null ? formatAmountPlain(collection.intrestAmount) : '');
       setRenewalDay(registerDayFilter || collection?.registerDay || '');
     } else {
       setLoanAmount('');

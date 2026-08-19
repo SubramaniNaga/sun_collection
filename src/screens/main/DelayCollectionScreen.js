@@ -6,8 +6,8 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Linking,
   Keyboard,
+  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -25,7 +25,7 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError } from '../../utils/alertService';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const PAGE_LIMIT = 20;
@@ -169,7 +169,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
         name: item?.customer_name ?? '',
         phone: item?.customer_phone ?? '',
         loanId: String(loanId),
-        initialAmount: item?.loan_amount ?? '',
+        initialAmount: formatAmountPlain(item?.loan_amount),
       },
     });
   };

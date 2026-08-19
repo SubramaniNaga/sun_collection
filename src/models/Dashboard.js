@@ -1,3 +1,5 @@
+import { formatCurrency } from '../utils/amountFormatters';
+
 /**
  * Dashboard Model
  * Represents today's dashboard statistics from the API
@@ -264,8 +266,7 @@ class Dashboard {
    * @returns {string}
    */
   getFormattedFrontcashAmount() {
-    const amount = parseFloat(this.frontcash.totalAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.frontcash.totalAmount);
   }
 
   /**
@@ -273,8 +274,7 @@ class Dashboard {
    * @returns {string}
    */
   getFormattedLoansGivenAmount() {
-    const amount = parseFloat(this.loansGiven.totalAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.loansGiven.totalAmount);
   }
 
   /**
@@ -282,8 +282,7 @@ class Dashboard {
    * @returns {string}
    */
   getFormattedCollectionsAmount() {
-    const amount = parseFloat(this.collections.totalAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.collections.totalAmount);
   }
 
   /**
@@ -291,8 +290,7 @@ class Dashboard {
    * @returns {string}
    */
   getFormattedProcessingFeesAmount() {
-    const amount = parseFloat(this.processingFees.totalAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.processingFees.totalAmount);
   }
 
   /**
@@ -300,8 +298,7 @@ class Dashboard {
    * @returns {string}
    */
   getFormattedExpensesAmount() {
-    const amount = parseFloat(this.expenses.totalAmount) || 0;
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return formatCurrency(this.expenses.totalAmount);
   }
 
   /**

@@ -28,7 +28,7 @@ import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebounced
 import { isHighPendingCount, isPendingBorder } from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError } from '../../utils/alertService';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate, getRegisterDayNameFromDate } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -55,10 +55,16 @@ const getImageUrl = (imagePath) => {
 
 const formatAmountOrDash = (value) => {
   if (value === null || value === undefined || value === '') return '—';
-  const n = Number(value);
+  const n = Number(String(value).replace(/,/g, '').trim());
   if (Number.isNaN(n)) return '—';
-  return formatCurrency(value);
+  return formatCurrency(n);
 };
+
+const getLoanListBalance = (item) =>
+  item?.balance_amount ??
+  item?.loanbalanceamount ??
+  item?.loan_balance_amount ??
+  item?.balanceAmount;
 
 const LoanCustomerListScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
@@ -245,7 +251,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
         name: loan?.customer_name ?? '',
         phone: loan?.customer_phone ?? '',
         loanId: String(loan?.id ?? ''),
-        initialAmount: loan?.loan_amount ?? '',
+        initialAmount: formatAmountPlain(loan?.loan_amount),
       },
     });
   };
@@ -486,7 +492,9 @@ const LoanCustomerListScreen = ({ navigation }) => {
         <View style={styles.loanCardRow}>
           <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
           <Text style={styles.loanCardLabel}>{t('loan.balanceAmount')}</Text>
-          <Text style={styles.loanCardValue} numberOfLines={1}>{item?.balance_amount ?? '—'}</Text>
+          <Text style={[styles.loanCardValue, styles.loanCardValueAmount]} numberOfLines={1}>
+            {formatAmountOrDash(getLoanListBalance(item))}
+          </Text>
         </View>
         <View style={styles.loanCardRow}>
           <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />

@@ -15,7 +15,7 @@ import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess, showWarning } from '../../utils/alertService';
-import { formatCurrency } from '../../utils/amountFormatters';
+import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, formatDisplayDate, formatDisplayDateWithDay, getCalendarDate, getCurrentDateString } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -30,7 +30,7 @@ const openIosAppSettings = async () => {
 
 const formatAmount = (val) => {
   const num = parseFloat(val);
-  return isNaN(num) ? '—' : `₹${num.toLocaleString('en-IN')}`;
+  return isNaN(num) ? '—' : formatCurrency(val);
 };
 
 const formatCurrencyOrDash = (val) => {
@@ -664,7 +664,7 @@ const CollectionScreen = ({ navigation }) => {
         name: collection.customerName ?? '',
         phone: collection.customerPhone ?? '',
         loanId: String(collection.loanId),
-        initialAmount: collection.loanAmount ?? '',
+        initialAmount: formatAmountPlain(collection.loanAmount),
       },
     });
   };
@@ -1506,7 +1506,7 @@ const CollectionScreen = ({ navigation }) => {
                           const enteredAmount = parseFloat(digitsOnly);
                           const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
                           if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
-                            setCollectedAmount(String(balanceAmount));
+                            setCollectedAmount(formatAmountPlain(balanceAmount));
                             setPaymentErrors({
                               ...paymentErrors,
                               collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
