@@ -5,6 +5,7 @@ import { Keyboard, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleShe
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
@@ -168,6 +169,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
             <View style={styles.amountInput}>
               <Text>₹</Text>
               <TextInput
+                style={styles.amountTextInput}
                 placeholder="Enter amount"
                 placeholderTextColor={COLORS.text.tertiary}
                 value={amountToPay}
@@ -176,6 +178,7 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
                 returnKeyType="done"
                 onSubmitEditing={Keyboard.dismiss}
               />
+              <VoiceMicButton value={amountToPay} onChangeText={setAmountToPay} />
             </View>
           </View>
 
@@ -304,6 +307,9 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body5,
     color: COLORS.white,
     fontWeight: '600',
+  },
+  amountTextInput: {
+    flex: 1,
   },
   amountInput: {
     flexDirection: 'row',

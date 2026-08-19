@@ -17,6 +17,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
+import VoiceMicButton from './VoiceMicButton';
 
 const FormPicker = ({
   label,
@@ -311,6 +312,7 @@ const FormPicker = ({
                   returnKeyType="search"
                   onSubmitEditing={Keyboard.dismiss}
                 />
+                <VoiceMicButton value={searchQuery} onChangeText={setSearchQuery} />
                 {searchQuery.length > 0 ? (
                   <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
                     <Ionicons name="close-circle" size={18} color={COLORS.text.secondary} />
@@ -393,6 +395,7 @@ const FormPicker = ({
               returnKeyType="search"
               onSubmitEditing={Keyboard.dismiss}
             />
+            <VoiceMicButton value={searchQuery} onChangeText={setSearchQuery} />
             {searchQuery.length > 0 ? (
               <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
                 <Ionicons name="close-circle" size={20} color={COLORS.text.secondary} />

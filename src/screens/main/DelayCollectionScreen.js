@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import { useLanguage } from '../../store/LanguageContext';
@@ -287,6 +288,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
                 returnKeyType="search"
                 onSubmitEditing={Keyboard.dismiss}
               />
+              <VoiceMicButton value={searchText} onChangeText={setSearchText} />
             </View>
             <Pressable style={styles.unitDropdown} onPress={() => setShowUnitDropdown(true)}>
               <Text style={styles.unitDropdownText} numberOfLines={1}>

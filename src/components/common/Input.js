@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { COLORS, SIZES } from '../../constants/theme';
+import VoiceMicButton from './VoiceMicButton';
 
 const Input = forwardRef(({
   label,
@@ -83,7 +84,15 @@ const Input = forwardRef(({
           numberOfLines={numberOfLines}
           {...props}
         />
-        
+
+        {!secureTextEntry && !disabled ? (
+          <VoiceMicButton
+            value={value}
+            onChangeText={onChangeText}
+            disabled={disabled}
+          />
+        ) : null}
+
         {rightIcon && (
           <View style={styles.rightIconContainer}>
             {rightIcon}

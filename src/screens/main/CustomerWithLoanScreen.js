@@ -16,6 +16,7 @@ import Header from '../../components/common/Header';
 import ImagePreviewModal from '../../components/common/ImagePreviewModal';
 import ImageProcessingLoader from '../../components/common/ImageProcessingLoader';
 import Input from '../../components/common/Input';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { applyCalendarTimezoneFromResponse } from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
@@ -1507,6 +1508,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                   returnKeyType="search"
                   blurOnSubmit={false}
                 />
+                <VoiceMicButton value={existingSearch} onChangeText={setExistingSearch} />
                 {searchLoading && <ActivityIndicator size="small" color={COLORS.primary} style={styles.searchLoader} />}
               </View>
               {searchError && <Text style={styles.searchErrorText}>{searchError}</Text>}
@@ -1713,9 +1715,10 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           <Pressable style={styles.addCityBackdrop} onPress={handleCloseAddCity} />
           <View style={styles.addCityCard}>
             <Text style={styles.addCityTitle}>{t('customer.addCity')}</Text>
+            <View style={styles.voiceFieldRow}>
             <TextInput
               ref={addCityInputRef}
-              style={styles.addCityInput}
+              style={[styles.addCityInput, styles.voiceFieldInput]}
               value={newCityName}
               onChangeText={(text) => {
                 setNewCityName(text);
@@ -1727,6 +1730,14 @@ const CustomerWithLoanScreen = ({ navigation }) => {
               blurOnSubmit={false}
               onSubmitEditing={handleAddCity}
             />
+            <VoiceMicButton
+              value={newCityName}
+              onChangeText={(text) => {
+                setNewCityName(text);
+                if (addCityError) setAddCityError('');
+              }}
+            />
+            </View>
             {addCityError ? <Text style={styles.addCityError}>{addCityError}</Text> : null}
             <View style={styles.addCityActions}>
               <TouchableOpacity
@@ -2050,6 +2061,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text.secondary,
     marginBottom: SIZES.padding,
+  },
+  voiceFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.padding,
+  },
+  voiceFieldInput: {
+    flex: 1,
+    marginBottom: 0,
   },
   addCityInput: {
     borderWidth: 1,

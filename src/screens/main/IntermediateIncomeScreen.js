@@ -28,6 +28,7 @@ import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
 import PaginationListFooter from '../../components/common/PaginationListFooter';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
@@ -910,6 +911,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
               returnKeyType="search"
               onSubmitEditing={() => Keyboard.dismiss()}
             />
+            <VoiceMicButton value={searchQuery} onChangeText={setSearchQuery} />
             {showSearchLoader ? (
               <ActivityIndicator size="small" color={COLORS.primary} style={styles.searchLoader} />
             ) : searchQuery.length > 0 ? (
@@ -1063,9 +1065,10 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                     }}
                   >
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
+                    <View style={styles.voiceFieldRow}>
                     <TextInput
                       ref={collectedAmountRef}
-                      style={[styles.inputField, paymentErrors.collectedAmount && styles.inputFieldError]}
+                      style={[styles.inputField, styles.voiceFieldInput, paymentErrors.collectedAmount && styles.inputFieldError]}
                       placeholder={t('collection.enterAmount')}
                       placeholderTextColor={COLORS.text.tertiary}
                       value={collectedAmount}
@@ -1100,6 +1103,31 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                         }
                       }}
                     />
+                    <VoiceMicButton
+                      value={collectedAmount}
+                      onChangeText={(text) => {
+                        const digitsOnly = String(text).replace(/[^0-9]/g, '');
+                        if (selectedCollection && digitsOnly) {
+                          const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
+                          const enteredAmount = parseFloat(digitsOnly);
+                          const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
+                          const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
+                          if (!isInitialZeroBalance && !Number.isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                            setCollectedAmount(String(Math.trunc(balanceAmount)));
+                            setPaymentErrors((prev) => ({
+                              ...prev,
+                              collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
+                            }));
+                            return;
+                          }
+                        }
+                        setCollectedAmount(digitsOnly);
+                        if (paymentErrors.collectedAmount) {
+                          setPaymentErrors((prev) => ({ ...prev, collectedAmount: '' }));
+                        }
+                      }}
+                    />
+                    </View>
                     {paymentErrors.collectedAmount ? (
                       <Text style={styles.errorTextSmall}>{paymentErrors.collectedAmount}</Text>
                     ) : null}
@@ -1111,9 +1139,10 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                     }}
                   >
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
+                    <View style={styles.voiceFieldRow}>
                     <TextInput
                       ref={remarksRef}
-                      style={[styles.inputField, styles.textArea]}
+                      style={[styles.inputField, styles.textArea, styles.voiceFieldInput]}
                       placeholder={t('collection.enterRemarks')}
                       placeholderTextColor={COLORS.text.tertiary}
                       value={remarks}
@@ -1132,6 +1161,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                         paymentScrollRef.current?.scrollToEnd?.({ animated: true });
                       }}
                     />
+                    <VoiceMicButton value={remarks} onChangeText={setRemarks} />
+                    </View>
                   </View>
                   <View style={styles.submitButtonInScroll}>
                     <TouchableOpacity
@@ -1465,6 +1496,13 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     color: COLORS.black,
     backgroundColor: COLORS.white,
+  },
+  voiceFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voiceFieldInput: {
+    flex: 1,
   },
   inputFieldError: {
     borderColor: COLORS.error || '#FF4444',

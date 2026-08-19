@@ -22,6 +22,7 @@ import FormPicker from '../../components/common/FormPicker';
 import Header from '../../components/common/Header';
 import LoanCollectionsModal from '../../components/common/LoanCollectionsModal';
 import PaginationListFooter from '../../components/common/PaginationListFooter';
+import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { applyCalendarTimezoneFromResponse } from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -626,6 +627,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
               adjustsFontSizeToFit={true}
               minimumFontScale={0.8}
             />
+            <VoiceMicButton value={searchQuery} onChangeText={setSearchQuery} />
             {searchQuery.length > 0 && (
               <TouchableOpacity
                 style={styles.clearButton}
