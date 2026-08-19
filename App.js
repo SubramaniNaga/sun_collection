@@ -17,6 +17,7 @@ import {
 } from './src/utils/notifications';
 // Register background location task at app entry (required for LocationTaskService)
 import './src/utils/locationTracker';
+import { setupOverlayApiLogListener } from './src/utils/collectionOverlay';
 
 // How notifications appear when app is in foreground
 setNotificationHandler();
@@ -40,6 +41,10 @@ const AppContent = () => {
 
     hideSplash();
   }, [loadingContext.globalLoading]);
+
+  useEffect(() => {
+    return setupOverlayApiLogListener();
+  }, []);
 
   useEffect(() => {
     return setupFirebaseNotificationListeners();

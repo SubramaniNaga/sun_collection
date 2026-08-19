@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { ATTENDANCE, isAttendanceCheckedIn, setLocalCheckInState } from '../config/appToggles';
 import { getServerDateTimeISO } from './dateFormatter';
 import { ensureLocationTrackingNotificationSetup } from './locationTrackingNotifications';
+import { requestOverlayPermission } from './collectionOverlay';
 import { hasActiveSession } from './sessionManager';
 
 export const LOCATION_TASK_NAME = 'ATTENDANCE_LOCATION_TASK';
@@ -348,6 +349,7 @@ export async function startLocationTracking({ intervalMinutes } = {}) {
 
     await ensureLocationTrackingNotificationSetup();
     await persistLocationTrackingFlags();
+    requestOverlayPermission().catch(() => {});
 
     if (already) {
       await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);

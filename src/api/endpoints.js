@@ -73,6 +73,8 @@ export const ENDPOINTS = {
   },
   LOCATION: {
     TRACK: "/attendance/location-tracking",
+    /** Decline nearby collection prompt (adjust if backend uses another route). */
+    PROXIMITY_DECLINE: "/attendance/delay-proximity/decline",
   },
 };
 export default ENDPOINTS;

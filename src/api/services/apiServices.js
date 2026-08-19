@@ -7,6 +7,7 @@ import {
 import { getServerDateTimeISO } from "../../utils/dateFormatter";
 import { getDeviceId } from "../../utils/deviceId";
 import { notifyLocationSendResult } from "../../utils/locationTrackingNotifications";
+import { handleDelayProximityFromLocationResponse } from "../../utils/collectionOverlay";
 import { registerForPushNotificationsAsync } from "../../utils/notifications";
 import { clearSession } from "../../utils/sessionManager";
 import apiClient from "../apiClient";
@@ -1330,28 +1331,37 @@ export const apiServices = {
 
     getRegisteredDayCollections: async (params = {}) => {
       try {
-        const {
-          registered_day = '',
-          customer_name = '',
-          page,
-          limit,
-        } = params;
-        const nameTrimmed = typeof customer_name === 'string' ? customer_name.trim() : '';
+        const { registered_day = "", customer_name = "", page, limit } = params;
+        const nameTrimmed =
+          typeof customer_name === "string" ? customer_name.trim() : "";
         const requestParams = {
           ...(registered_day && { registered_day }),
           ...(nameTrimmed && { customer_name: nameTrimmed }),
           ...(page != null && { page }),
           ...(limit != null && { limit }),
         };
-        console.log('📋 API: getRegisteredDayCollections - GET', ENDPOINTS.COLLECTION.REGISTERED_DAY, '| params:', requestParams);
-        const response = await apiClient.get(ENDPOINTS.COLLECTION.REGISTERED_DAY, {
-          params: requestParams,
-        });
-        const list = response.data?.response ?? response.data?.data ?? response.data;
-        console.log('📋 API: getRegisteredDayCollections - Response: data length:', Array.isArray(list) ? list.length : 'N/A');
+        console.log(
+          "📋 API: getRegisteredDayCollections - GET",
+          ENDPOINTS.COLLECTION.REGISTERED_DAY,
+          "| params:",
+          requestParams,
+        );
+        const response = await apiClient.get(
+          ENDPOINTS.COLLECTION.REGISTERED_DAY,
+          {
+            params: requestParams,
+          },
+        );
+        const list =
+          response.data?.response ?? response.data?.data ?? response.data;
+        console.log(
+          "📋 API: getRegisteredDayCollections - Response: data length:",
+          Array.isArray(list) ? list.length : "N/A",
+        );
         return response.data;
       } catch (error) {
-        if (__DEV__) console.warn('Get registered-day collections error:', error);
+        if (__DEV__)
+          console.warn("Get registered-day collections error:", error);
         throw error;
       }
     },
@@ -1900,7 +1910,7 @@ export const apiServices = {
         };
         if (__DEV__) {
           console.log(
-            `[location.track] POST /location-tracking @ ${payload.time} (capture_time=${ATTENDANCE.capture_time}m)`,
+            `[location.track] POST /location-tracking @ ${JSON.stringify(payload)} (capture_time=${ATTENDANCE.capture_time}m)`,
           );
         }
         const response = await apiClient.post(
@@ -1928,6 +1938,17 @@ export const apiServices = {
           success: data?.success !== false,
           message: successMessage,
         });
+
+        try {
+          await handleDelayProximityFromLocationResponse(data, {
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+          });
+        } catch (overlayErr) {
+          if (__DEV__) {
+            console.warn("[location.track] delay proximity overlay:", overlayErr?.message || overlayErr);
+          }
+        }
 
         const {
           syncLocationTracking,
