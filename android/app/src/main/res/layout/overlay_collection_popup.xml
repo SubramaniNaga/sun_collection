@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/overlay_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/overlay_card_bg"
+    android:elevation="12dp"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/overlay_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Payment Collection Nearby njkj"
+            android:textColor="#111827"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/overlay_close"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textColor="#6B7280"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/overlay_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="A customer is nearby for collection"
+        android:textColor="#6B7280"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/overlay_customer_index"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Customer 1 of 2"
+        android:textColor="#6B7280"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/overlay_customer_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Customer Name"
+        android:textColor="#111827"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/overlay_customer_phone"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Phone"
+            android:textColor="#374151"
+            android:textSize="14sp" />
+
+        <ImageButton
+            android:id="@+id/overlay_btn_call"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/overlay_call_btn_bg"
+            android:contentDescription="Call customer"
+            android:padding="8dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_overlay_call" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/overlay_loan_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="NIP · Weekly"
+        android:textColor="#374151"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/overlay_balance_amount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Balance Amount: ₹6600"
+        android:textColor="#1d7ee2"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/overlay_distance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Within 500m"
+        android:textColor="#6B7280"
+        android:textSize="13sp" />
+
+    <!-- Main action panel -->
+    <LinearLayout
+        android:id="@+id/overlay_panel_main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/overlay_btn_prev"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/overlay_btn_secondary"
+            android:text="Previous"
+            android:textAllCaps="false"
+            android:textColor="#374151"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/overlay_btn_not_collect"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/overlay_btn_secondary"
+            android:text="Not Collect"
+            android:textAllCaps="false"
+            android:textColor="#374151"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/overlay_btn_collect"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/overlay_btn_primary"
+            android:text="Collect"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/overlay_btn_next"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/overlay_btn_secondary"
+            android:text="Next"
+            android:textAllCaps="false"
+            android:textColor="#374151"
+            android:textSize="14sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Amount input panel -->
+    <LinearLayout
+        android:id="@+id/overlay_panel_amount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Enter collected amount"
+            android:textColor="#374151"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/overlay_amount_input"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/overlay_input_bg"
+            android:hint="Amount"
+            android:inputType="numberDecimal"
+            android:paddingHorizontal="12dp"
+            android:textColor="#111827"
+            android:textSize="15sp" />
+
+        <RadioGroup
+            android:id="@+id/overlay_payment_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/overlay_payment_cash"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="Cash"
+                android:textColor="#374151" />
+
+            <RadioButton
+                android:id="@+id/overlay_payment_online"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="Online"
+                android:textColor="#374151" />
+        </RadioGroup>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/overlay_amount_back"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/overlay_btn_secondary"
+                android:text="Back"
+                android:textAllCaps="false"
+                android:textColor="#374151" />
+
+            <Button
+                android:id="@+id/overlay_amount_submit"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/overlay_btn_primary"
+                android:text="Submit Payment"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Reason input panel -->
+    <LinearLayout
+        android:id="@+id/overlay_panel_reason"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Why was payment not collected?"
+            android:textColor="#374151"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/overlay_reason_input"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/overlay_input_bg"
+            android:gravity="top|start"
+            android:hint="Enter reason"
+            android:inputType="textMultiLine"
+            android:padding="12dp"
+            android:textColor="#111827"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/overlay_reason_back"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/overlay_btn_secondary"
+                android:text="Back"
+                android:textAllCaps="false"
+                android:textColor="#374151" />
+
+            <Button
+                android:id="@+id/overlay_reason_submit"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/overlay_btn_primary"
+                android:text="Submit Reason"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/overlay_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textColor="#DC2626"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <ProgressBar
+        android:id="@+id/overlay_progress"
+        style="?android:attr/progressBarStyleSmall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:visibility="gone" />
+
+</LinearLayout>
