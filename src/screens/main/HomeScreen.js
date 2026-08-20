@@ -697,11 +697,13 @@ const HomeScreen = ({ navigation }) => {
         key={cardKey}
         style={[
           styles.amountCard,
-          isOutlined ? styles.amountCardOutlined : { backgroundColor },
+          isOutlined ? styles.amountCardOutlined : styles.amountCardFilled,
+          !isOutlined && backgroundColor ? { backgroundColor } : null,
+          isDanger && styles.amountCardFilledDanger,
           hideDetails && styles.amountCardCentered,
         ]}
         onPress={onPress}
-        activeOpacity={0.85}
+        activeOpacity={0.88}
       >
         <View
           style={[
@@ -709,11 +711,19 @@ const HomeScreen = ({ navigation }) => {
             hideDetails && styles.amountCardHeaderCentered,
           ]}
         >
-          <Ionicons
-            name={iconName}
-            size={hideDetails ? 32 : 22}
-            color={iconColor}
-          />
+          <View
+            style={[
+              styles.amountCardIconWrap,
+              isOutlined && styles.amountCardIconWrapOutlined,
+              isDanger && styles.amountCardIconWrapDanger,
+            ]}
+          >
+            <Ionicons
+              name={iconName}
+              size={hideDetails ? 28 : 20}
+              color={iconColor}
+            />
+          </View>
           <Text
             style={[
               styles.amountCardHeaderText,
@@ -1144,11 +1154,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    paddingTop: SIZES.base / 2,
   },
   cashAccountCard: {
     marginTop: SIZES.base,
     backgroundColor: COLORS.white,
-    borderColor: COLORS.primary,
+    borderColor: "rgba(29, 126, 226, 0.2)",
     borderWidth: 1,
     borderRadius: SIZES.radius * 1.5,
     paddingVertical: SIZES.padding,
@@ -1156,6 +1167,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
   cashAccountCardText: {
     marginLeft: SIZES.base,
@@ -1167,20 +1189,85 @@ const styles = StyleSheet.create({
   amountCard: {
     width: "48%",
     minHeight: 132,
-    borderRadius: SIZES.radius * 1.5,
+    borderRadius: SIZES.radius * 1.75,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
     backgroundColor: COLORS.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  amountCardFilled: {
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
   amountCardOutlined: {
     backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: "rgba(29, 126, 226, 0.16)",
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  amountCardFilledDanger: {
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.error,
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.22,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  amountCardIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(29, 126, 226, 0.1)",
+  },
+  amountCardIconWrapOutlined: {
+    backgroundColor: "rgba(29, 126, 226, 0.08)",
+  },
+  amountCardIconWrapDanger: {
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
   },
   amountCardHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: SIZES.base,
+    gap: SIZES.base,
   },
   amountCardCentered: {
     justifyContent: "center",
@@ -1205,7 +1292,6 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body1,
     fontWeight: "600",
     color: COLORS.primary,
-    marginLeft: SIZES.base,
   },
   amountCardHeaderTextOutlined: {
     color: COLORS.primary,

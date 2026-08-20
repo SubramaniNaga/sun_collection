@@ -4,10 +4,10 @@ import {
   applyAttendanceFromResponse,
   isAttendanceCheckedIn,
 } from "../../config/appToggles";
+import { handleDelayProximityFromLocationResponse } from "../../utils/collectionOverlay";
 import { getServerDateTimeISO } from "../../utils/dateFormatter";
 import { getDeviceId } from "../../utils/deviceId";
 import { notifyLocationSendResult } from "../../utils/locationTrackingNotifications";
-import { handleDelayProximityFromLocationResponse } from "../../utils/collectionOverlay";
 import { registerForPushNotificationsAsync } from "../../utils/notifications";
 import { clearSession } from "../../utils/sessionManager";
 import apiClient from "../apiClient";
@@ -1866,7 +1866,7 @@ export const apiServices = {
         if (!authToken) {
           return { success: false, skipped: true, reason: "no_session" };
         }
-
+        console.log("user_id_authToken", authToken);
         // Headless / closed app: restore check-in flags from storage before gate.
         try {
           const pairs = await AsyncStorage.multiGet([
@@ -1946,7 +1946,10 @@ export const apiServices = {
           });
         } catch (overlayErr) {
           if (__DEV__) {
-            console.warn("[location.track] delay proximity overlay:", overlayErr?.message || overlayErr);
+            console.warn(
+              "[location.track] delay proximity overlay:",
+              overlayErr?.message || overlayErr,
+            );
           }
         }
 

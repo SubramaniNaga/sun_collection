@@ -12,9 +12,14 @@ import android.os.Looper
 import android.provider.Settings
 import android.text.InputFilter
 import android.text.method.DigitsKeyListener
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
@@ -27,9 +32,11 @@ import com.sunapp.mobile.R
 
 object CollectionOverlayManager {
   private var overlayView: View? = null
+  private var overlayLayoutParams: WindowManager.LayoutParams? = null
   private var windowManager: WindowManager? = null
   private var nearbyItems: List<OverlayConfig> = emptyList()
   private var currentIndex: Int = 0
+  private var overlayImeEnabled: Boolean = false
   private val mainHandler = Handler(Looper.getMainLooper())
 
   fun canDrawOverlays(context: Context): Boolean {
@@ -38,6 +45,7 @@ object CollectionOverlayManager {
 
   fun hide(context: Context) {
     mainHandler.post {
+      disableOverlayIme()
       val wm =
         windowManager
           ?: context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -45,8 +53,10 @@ object CollectionOverlayManager {
       runCatching { wm.removeView(view) }
       overlayView = null
       windowManager = null
+      overlayLayoutParams = null
       nearbyItems = emptyList()
       currentIndex = 0
+      overlayImeEnabled = false
     }
   }
 
@@ -68,6 +78,7 @@ object CollectionOverlayManager {
     overlayView = null
     nearbyItems = items
     currentIndex = 0
+    overlayImeEnabled = false
     windowManager = wm
 
     val inflater = LayoutInflater.from(appContext)
@@ -85,25 +96,136 @@ object CollectionOverlayManager {
       }
 
     val params =
-      WindowManager.LayoutParams(
-          WindowManager.LayoutParams.MATCH_PARENT,
-          WindowManager.LayoutParams.WRAP_CONTENT,
-          layoutType,
-          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-          PixelFormat.TRANSLUCENT,
-        )
-        .apply {
-          gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-          y = 48
-        }
+      WindowManager.LayoutParams().apply {
+        width = WindowManager.LayoutParams.MATCH_PARENT
+        height = WindowManager.LayoutParams.WRAP_CONTENT
+        type = layoutType
+        format = PixelFormat.TRANSLUCENT
+        gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        y = dpToPx(appContext, 48)
+        flags =
+          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        softInputMode =
+          WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN or
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+      }
 
+    overlayLayoutParams = params
     runCatching { wm.addView(view, params) }
+  }
+
+  private fun detachOverlayView() {
+    val wm = windowManager ?: return
+    val view = overlayView ?: return
+    if (view.parent == null) return
+    runCatching { wm.removeView(view) }
+  }
+
+  private fun attachOverlayView(context: Context) {
+    val view = overlayView ?: return
+    val params = overlayLayoutParams ?: return
+    if (view.parent != null) return
+
+    val wm =
+      windowManager
+        ?: context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    windowManager = wm
+    runCatching { wm.addView(view, params) }
+  }
+
+  /**
+   * Overlay starts as FLAG_NOT_FOCUSABLE so it does not steal keys from the app below.
+   * IME cannot attach until that flag is cleared, so we enable focus only while typing.
+   */
+  private fun setOverlayImeFocusable(focusable: Boolean) {
+    val view = overlayView ?: return
+    val params = overlayLayoutParams ?: return
+    val wm = windowManager ?: return
+    if (view.parent == null) return
+    if (overlayImeEnabled == focusable) return
+
+    overlayImeEnabled = focusable
+    if (focusable) {
+      params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+      params.softInputMode =
+        WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN or
+          WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+      runCatching {
+        wm.removeViewImmediate(view)
+        wm.addView(view, params)
+      }.onFailure {
+        runCatching { wm.updateViewLayout(view, params) }
+      }
+    } else {
+      params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+      params.softInputMode =
+        WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN or
+          WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+      runCatching { wm.updateViewLayout(view, params) }
+    }
+  }
+
+  private fun enableOverlayIme(editText: EditText) {
+    setOverlayImeFocusable(true)
+    editText.isFocusable = true
+    editText.isFocusableInTouchMode = true
+    editText.post {
+      if (overlayView == null) return@post
+      editText.requestFocus()
+      val imm =
+        editText.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        editText.windowInsetsController?.show(WindowInsets.Type.ime())
+      }
+      imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT)
+    }
+  }
+
+  private fun disableOverlayIme() {
+    val view = overlayView
+    if (view != null) {
+      val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+      imm.hideSoftInputFromWindow(view.windowToken, 0)
+      view.clearFocus()
+    }
+    setOverlayImeFocusable(false)
+  }
+
+  private fun wireOverlayEditText(editText: EditText) {
+    editText.isFocusable = true
+    editText.isFocusableInTouchMode = true
+    editText.showSoftInputOnFocus = true
+    editText.setOnTouchListener { v, event ->
+      if (event.action == MotionEvent.ACTION_DOWN) {
+        enableOverlayIme(v as EditText)
+      }
+      false
+    }
+  }
+
+  /** Remove overlay from screen before opening camera/dialer; run action after window is gone. */
+  private fun suspendOverlayForExternalUi(afterHidden: () -> Unit) {
+    mainHandler.post {
+      disableOverlayIme()
+      detachOverlayView()
+      mainHandler.post(afterHidden)
+    }
+  }
+
+  private fun dpToPx(context: Context, dp: Int): Int {
+    return TypedValue.applyDimension(
+      TypedValue.COMPLEX_UNIT_DIP,
+      dp.toFloat(),
+      context.resources.displayMetrics,
+    ).toInt()
   }
 
   private fun bindView(view: View, context: Context) {
     val title = view.findViewById<TextView>(R.id.overlay_title)
-    val subtitle = view.findViewById<TextView>(R.id.overlay_subtitle)
+    //val subtitle = view.findViewById<TextView>(R.id.overlay_subtitle)
     val customerIndex = view.findViewById<TextView>(R.id.overlay_customer_index)
     val customerName = view.findViewById<TextView>(R.id.overlay_customer_name)
     val customerPhone = view.findViewById<TextView>(R.id.overlay_customer_phone)
@@ -123,6 +245,7 @@ object CollectionOverlayManager {
     val btnNotCollect = view.findViewById<Button>(R.id.overlay_btn_not_collect)
 
     val amountInput = view.findViewById<EditText>(R.id.overlay_amount_input)
+    wireOverlayEditText(amountInput)
     amountInput.keyListener = DigitsKeyListener.getInstance("0123456789.")
     amountInput.filters =
       arrayOf(
@@ -137,6 +260,7 @@ object CollectionOverlayManager {
     val amountSubmit = view.findViewById<Button>(R.id.overlay_amount_submit)
 
     val reasonInput = view.findViewById<EditText>(R.id.overlay_reason_input)
+    wireOverlayEditText(reasonInput)
     val photoStatus = view.findViewById<TextView>(R.id.overlay_photo_status)
     val photoPreview = view.findViewById<ImageView>(R.id.overlay_photo_preview)
     val btnCapturePhoto = view.findViewById<Button>(R.id.overlay_btn_capture_photo)
@@ -147,6 +271,45 @@ object CollectionOverlayManager {
     val progress = view.findViewById<ProgressBar>(R.id.overlay_progress)
 
     var capturedPhotoPath: String? = null
+
+    fun isActive(): Boolean = overlayView === view
+
+    fun currentConfig(): OverlayConfig? = nearbyItems.getOrNull(currentIndex)
+
+    fun showPanel(target: String) {
+      if (!isActive()) return
+      panelMain.visibility = if (target == "main") View.VISIBLE else View.GONE
+      panelAmount.visibility = if (target == "amount") View.VISIBLE else View.GONE
+      panelReason.visibility = if (target == "reason") View.VISIBLE else View.GONE
+      status.visibility = View.GONE
+      if (target == "main") {
+        disableOverlayIme()
+      } else {
+        setOverlayImeFocusable(true)
+      }
+    }
+
+    fun showMessage(message: String, isError: Boolean) {
+      if (!isActive()) return
+      status.text = message
+      status.setTextColor(if (isError) Color.parseColor("#DC2626") else Color.parseColor("#059669"))
+      status.visibility = View.VISIBLE
+    }
+
+    fun setBusy(busy: Boolean) {
+      if (!isActive()) return
+      progress.visibility = if (busy) View.VISIBLE else View.GONE
+      val config = currentConfig()
+      val canCollect = !busy && config != null && config.effectiveBalance() > 0
+      btnCollect.isEnabled = canCollect
+      btnCollect.alpha = if (canCollect) 1f else 0.45f
+      btnNotCollect.isEnabled = !busy
+      btnPrev.isEnabled = !busy
+      btnNext.isEnabled = !busy
+      amountSubmit.isEnabled = !busy
+      reasonSubmit.isEnabled = !busy
+      btnCapturePhoto.isEnabled = !busy
+    }
 
     fun updatePhotoUi() {
       if (capturedPhotoPath.isNullOrBlank()) {
@@ -171,27 +334,37 @@ object CollectionOverlayManager {
 
     fun launchPhotoCapture(onDone: (Boolean) -> Unit) {
       OverlayCameraBridge.requestCapture { path ->
-        if (!isActive()) return@requestCapture
-        if (path.isNullOrBlank()) {
-          showMessage("Photo capture cancelled", true)
-          onDone(false)
-          return@requestCapture
+        mainHandler.post {
+          attachOverlayView(context)
+          if (!isActive()) {
+            onDone(false)
+            return@post
+          }
+          if (path.isNullOrBlank()) {
+            showMessage("Photo capture cancelled", true)
+            onDone(false)
+            return@post
+          }
+          capturedPhotoPath = path
+          updatePhotoUi()
+          onDone(true)
         }
-        capturedPhotoPath = path
-        updatePhotoUi()
-        onDone(true)
       }
 
       val intent =
         Intent(context, OverlayCaptureActivity::class.java).apply {
           addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-      runCatching { context.startActivity(intent) }
-        .onFailure {
-          OverlayCameraBridge.cancelPending()
-          showMessage("Unable to open camera", true)
-          onDone(false)
-        }
+
+      suspendOverlayForExternalUi {
+        runCatching { context.startActivity(intent) }
+          .onFailure {
+            OverlayCameraBridge.cancelPending()
+            attachOverlayView(context)
+            showMessage("Unable to open camera", true)
+            onDone(false)
+          }
+      }
     }
 
     fun submitDelayRemarkRequest(config: OverlayConfig, description: String, photoPath: String) {
@@ -218,42 +391,6 @@ object CollectionOverlayManager {
       )
     }
 
-    fun isActive(): Boolean = overlayView === view
-
-    fun currentConfig(): OverlayConfig? = nearbyItems.getOrNull(currentIndex)
-
-    fun showPanel(target: String) {
-      if (!isActive()) return
-      panelMain.visibility = if (target == "main") View.VISIBLE else View.GONE
-      panelAmount.visibility = if (target == "amount") View.VISIBLE else View.GONE
-      panelReason.visibility = if (target == "reason") View.VISIBLE else View.GONE
-      status.visibility = View.GONE
-    }
-
-    fun setBusy(busy: Boolean) {
-      if (!isActive()) return
-      progress.visibility = if (busy) View.VISIBLE else View.GONE
-      val config = currentConfig()
-      val canCollect = !busy && config != null && effectiveBalance(config) > 0
-      btnCollect.isEnabled = canCollect
-      btnCollect.alpha = if (canCollect) 1f else 0.45f
-      btnNotCollect.isEnabled = !busy
-      btnPrev.isEnabled = !busy
-      btnNext.isEnabled = !busy
-      amountSubmit.isEnabled = !busy
-      reasonSubmit.isEnabled = !busy
-      btnCapturePhoto.isEnabled = !busy
-    }
-
-    fun showMessage(message: String, isError: Boolean) {
-      if (!isActive()) return
-      status.text = message
-      status.setTextColor(if (isError) Color.parseColor("#DC2626") else Color.parseColor("#059669"))
-      status.visibility = View.VISIBLE
-    }
-
-    fun effectiveBalance(config: OverlayConfig): Double = config.effectiveBalance()
-
     fun validateCollectionAmount(amount: Double?, balance: Double): String? {
       if (balance <= 0) {
         return "Balance amount must be greater than 0"
@@ -273,7 +410,7 @@ object CollectionOverlayManager {
     fun renderCustomer() {
       val config = currentConfig() ?: return
       title.text = "Payment Collection Nearby"
-      subtitle.text = "Customer within ${config.radiusMeters}m radius"
+      //subtitle.text = "Customer within ${config.radiusMeters}m radius"
 
       if (config.totalNearby > 1) {
         customerIndex.visibility = View.VISIBLE
@@ -330,7 +467,7 @@ object CollectionOverlayManager {
         distance.text = "${distance.text}\n${config.customerAddress}"
       }
 
-      val balance = effectiveBalance(config)
+      val balance = config.effectiveBalance()
       val canCollect = balance > 0
       btnCollect.isEnabled = canCollect
       btnCollect.alpha = if (canCollect) 1f else 0.45f
@@ -358,7 +495,7 @@ object CollectionOverlayManager {
 
     btnCollect.setOnClickListener {
       val config = currentConfig() ?: return@setOnClickListener
-      val balance = effectiveBalance(config)
+      val balance = config.effectiveBalance()
       if (balance <= 0) {
         showMessage("Balance amount must be greater than 0", true)
         return@setOnClickListener
@@ -372,7 +509,7 @@ object CollectionOverlayManager {
     }
 
     btnNotCollect.setOnClickListener {
-      reasonInput.setText("")
+      //reasonInput.setText("")
       capturedPhotoPath = null
       updatePhotoUi()
       showPanel("reason")
@@ -384,7 +521,7 @@ object CollectionOverlayManager {
     amountSubmit.setOnClickListener {
       runCatching {
         val config = currentConfig() ?: return@setOnClickListener
-        val balance = effectiveBalance(config)
+        val balance = config.effectiveBalance()
         val raw = amountInput.text?.toString()?.trim().orEmpty()
         val amount = raw.toDoubleOrNull()
 
