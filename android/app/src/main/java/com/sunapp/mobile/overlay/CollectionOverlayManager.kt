@@ -17,6 +17,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
@@ -29,6 +30,7 @@ import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.TextView
 import com.sunapp.mobile.R
+import kotlin.math.abs
 
 object CollectionOverlayManager {
   private var overlayView: View? = null
@@ -37,7 +39,12 @@ object CollectionOverlayManager {
   private var nearbyItems: List<OverlayConfig> = emptyList()
   private var currentIndex: Int = 0
   private var overlayImeEnabled: Boolean = false
+  private var overlayCollapsed: Boolean = false
+  private var savedBubbleX: Int = 0
+  private var savedBubbleY: Int = 0
   private val mainHandler = Handler(Looper.getMainLooper())
+  private const val BUBBLE_SIZE_DP = 56
+  private const val EXPANDED_MARGIN_DP = 12
 
   fun canDrawOverlays(context: Context): Boolean {
     return Settings.canDrawOverlays(context.applicationContext)
@@ -57,6 +64,7 @@ object CollectionOverlayManager {
       nearbyItems = emptyList()
       currentIndex = 0
       overlayImeEnabled = false
+      overlayCollapsed = false
     }
   }
 
@@ -79,6 +87,7 @@ object CollectionOverlayManager {
     nearbyItems = items
     currentIndex = 0
     overlayImeEnabled = false
+    overlayCollapsed = false
     windowManager = wm
 
     val inflater = LayoutInflater.from(appContext)
@@ -95,13 +104,18 @@ object CollectionOverlayManager {
         WindowManager.LayoutParams.TYPE_PHONE
       }
 
+    val (screenWidth, screenHeight) = screenSize(appContext)
+    savedBubbleX = screenWidth - dpToPx(appContext, BUBBLE_SIZE_DP + EXPANDED_MARGIN_DP)
+    savedBubbleY = dpToPx(appContext, 120).coerceAtMost(screenHeight / 3)
+
     val params =
       WindowManager.LayoutParams().apply {
-        width = WindowManager.LayoutParams.MATCH_PARENT
+        width = expandedOverlayWidth(appContext)
         height = WindowManager.LayoutParams.WRAP_CONTENT
         type = layoutType
         format = PixelFormat.TRANSLUCENT
-        gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        gravity = Gravity.TOP or Gravity.START
+        x = dpToPx(appContext, EXPANDED_MARGIN_DP)
         y = dpToPx(appContext, 48)
         flags =
           WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -145,6 +159,7 @@ object CollectionOverlayManager {
     val params = overlayLayoutParams ?: return
     val wm = windowManager ?: return
     if (view.parent == null) return
+    if (focusable && overlayCollapsed) return
     if (overlayImeEnabled == focusable) return
 
     overlayImeEnabled = focusable
@@ -223,6 +238,150 @@ object CollectionOverlayManager {
     ).toInt()
   }
 
+  private fun screenSize(context: Context): Pair<Int, Int> {
+    val metrics = context.resources.displayMetrics
+    return metrics.widthPixels to metrics.heightPixels
+  }
+
+  private fun expandedOverlayWidth(context: Context): Int {
+    val (screenWidth, _) = screenSize(context)
+    return (screenWidth - dpToPx(context, EXPANDED_MARGIN_DP * 2)).coerceAtLeast(dpToPx(context, 280))
+  }
+
+  private fun clampOverlayPosition(context: Context, params: WindowManager.LayoutParams) {
+    val view = overlayView
+    val (screenWidth, screenHeight) = screenSize(context)
+    val viewWidth =
+      when {
+        view != null && view.width > 0 -> view.width
+        params.width > 0 -> params.width
+        overlayCollapsed -> dpToPx(context, BUBBLE_SIZE_DP)
+        else -> expandedOverlayWidth(context)
+      }
+    val viewHeight =
+      when {
+        view != null && view.height > 0 -> view.height
+        params.height > 0 -> params.height
+        overlayCollapsed -> dpToPx(context, BUBBLE_SIZE_DP)
+        else -> dpToPx(context, 200)
+      }
+    val maxX = (screenWidth - viewWidth).coerceAtLeast(0)
+    val maxY = (screenHeight - viewHeight).coerceAtLeast(0)
+    params.x = params.x.coerceIn(0, maxX)
+    params.y = params.y.coerceIn(0, maxY)
+  }
+
+  private fun snapBubbleToEdge(context: Context) {
+    val params = overlayLayoutParams ?: return
+    val view = overlayView ?: return
+    val wm = windowManager ?: return
+    val (screenWidth, _) = screenSize(context)
+    val bubbleWidth = if (view.width > 0) view.width else dpToPx(context, BUBBLE_SIZE_DP)
+    params.x = if (params.x + bubbleWidth / 2 < screenWidth / 2) {
+      dpToPx(context, EXPANDED_MARGIN_DP)
+    } else {
+      screenWidth - bubbleWidth - dpToPx(context, EXPANDED_MARGIN_DP)
+    }
+    clampOverlayPosition(context, params)
+    savedBubbleX = params.x
+    savedBubbleY = params.y
+    if (view.parent != null) {
+      runCatching { wm.updateViewLayout(view, params) }
+    }
+  }
+
+  private fun applyOverlayCollapsed(context: Context, collapsed: Boolean) {
+    val view = overlayView ?: return
+    val params = overlayLayoutParams ?: return
+    val wm = windowManager ?: return
+    val bubble = view.findViewById<View>(R.id.overlay_bubble) ?: return
+    val card = view.findViewById<View>(R.id.overlay_card) ?: return
+
+    overlayCollapsed = collapsed
+    if (collapsed) {
+      disableOverlayIme()
+      savedBubbleY = params.y
+      card.visibility = View.GONE
+      bubble.visibility = View.VISIBLE
+      val size = dpToPx(context, BUBBLE_SIZE_DP)
+      params.width = size
+      params.height = size
+      params.x = savedBubbleX
+      params.y = savedBubbleY
+      clampOverlayPosition(context, params)
+      savedBubbleX = params.x
+      savedBubbleY = params.y
+    } else {
+      bubble.visibility = View.GONE
+      card.visibility = View.VISIBLE
+      params.width = expandedOverlayWidth(context)
+      params.height = WindowManager.LayoutParams.WRAP_CONTENT
+      params.x = dpToPx(context, EXPANDED_MARGIN_DP)
+      params.y = savedBubbleY.coerceAtLeast(dpToPx(context, 24))
+      clampOverlayPosition(context, params)
+    }
+
+    if (view.parent != null) {
+      runCatching { wm.updateViewLayout(view, params) }
+    }
+  }
+
+  private fun attachMoveAndClick(target: View, onClick: (() -> Unit)? = null) {
+    val slop = ViewConfiguration.get(target.context).scaledTouchSlop
+    var startX = 0
+    var startY = 0
+    var downRawX = 0f
+    var downRawY = 0f
+    var dragging = false
+
+    target.setOnTouchListener { _, event ->
+      val params = overlayLayoutParams ?: return@setOnTouchListener false
+      val wm = windowManager ?: return@setOnTouchListener false
+      val overlay = overlayView ?: return@setOnTouchListener false
+
+      when (event.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          dragging = false
+          startX = params.x
+          startY = params.y
+          downRawX = event.rawX
+          downRawY = event.rawY
+          true
+        }
+        MotionEvent.ACTION_MOVE -> {
+          val dx = (event.rawX - downRawX).toInt()
+          val dy = (event.rawY - downRawY).toInt()
+          if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
+            dragging = true
+          }
+          if (dragging) {
+            params.x = startX + dx
+            params.y = startY + dy
+            clampOverlayPosition(target.context, params)
+            runCatching { wm.updateViewLayout(overlay, params) }
+          }
+          true
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+          if (dragging) {
+            if (overlayCollapsed) {
+              snapBubbleToEdge(target.context)
+            } else {
+              savedBubbleY = params.y
+            }
+            true
+          } else if (event.actionMasked == MotionEvent.ACTION_UP && onClick != null) {
+            onClick()
+            true
+          } else {
+            onClick != null
+          }
+        }
+        else -> false
+      }
+    }
+  }
+
   private fun bindView(view: View, context: Context) {
     val title = view.findViewById<TextView>(R.id.overlay_title)
     //val subtitle = view.findViewById<TextView>(R.id.overlay_subtitle)
@@ -234,6 +393,10 @@ object CollectionOverlayManager {
     val balanceAmount = view.findViewById<TextView>(R.id.overlay_balance_amount)
     val distance = view.findViewById<TextView>(R.id.overlay_distance)
     val close = view.findViewById<TextView>(R.id.overlay_close)
+    val collapse = view.findViewById<TextView>(R.id.overlay_btn_collapse)
+    val dragHandle = view.findViewById<View>(R.id.overlay_drag_handle)
+    val bubble = view.findViewById<View>(R.id.overlay_bubble)
+    val bubbleBadge = view.findViewById<TextView>(R.id.overlay_bubble_badge)
 
     val panelMain = view.findViewById<LinearLayout>(R.id.overlay_panel_main)
     val panelAmount = view.findViewById<LinearLayout>(R.id.overlay_panel_amount)
@@ -471,11 +634,18 @@ object CollectionOverlayManager {
       val canCollect = balance > 0
       btnCollect.isEnabled = canCollect
       btnCollect.alpha = if (canCollect) 1f else 0.45f
+
+      val nearbyCount = nearbyItems.size.coerceAtLeast(1)
+      bubbleBadge.text = if (nearbyCount > 9) "9+" else nearbyCount.toString()
+      bubbleBadge.visibility = View.VISIBLE
     }
 
     renderCustomer()
 
     close.setOnClickListener { hide(context) }
+    collapse.setOnClickListener { applyOverlayCollapsed(context, true) }
+    attachMoveAndClick(dragHandle)
+    attachMoveAndClick(bubble) { applyOverlayCollapsed(context, false) }
 
     btnPrev.setOnClickListener {
       if (currentIndex > 0) {
