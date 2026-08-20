@@ -85,6 +85,7 @@ const formatRupee = (value) => formatCurrency(value);
 
 const HomeScreen = ({ navigation }) => {
   const { t, language, changeLanguage } = useLanguage();
+  const taFont = (size) => (language === "ta" ? size - 2 : size);
   const { user, updateUser } = useAuthContext();
   const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
   const [langSaving, setLangSaving] = useState(false);
@@ -730,6 +731,7 @@ const HomeScreen = ({ navigation }) => {
               isOutlined && styles.amountCardHeaderTextOutlined,
               hideDetails && styles.amountCardHeaderTextLarge,
               isDanger && styles.amountCardHeaderTextDanger,
+              { fontSize: taFont(SIZES.body1) },
             ]}
             numberOfLines={2}
           >
@@ -742,6 +744,7 @@ const HomeScreen = ({ navigation }) => {
               style={[
                 styles.amountCardValue,
                 isOutlined && styles.amountCardValueOutlined,
+                { fontSize: taFont(SIZES.h2) },
               ]}
             >
               {amountText}
@@ -750,6 +753,7 @@ const HomeScreen = ({ navigation }) => {
               style={[
                 styles.amountCardSub,
                 isOutlined && styles.amountCardSubOutlined,
+                { fontSize: taFont(SIZES.body4) },
               ]}
               numberOfLines={2}
             >
@@ -832,7 +836,12 @@ const HomeScreen = ({ navigation }) => {
         >
           <View style={styles.dashboardSection}>
             <View style={styles.dashboardTitleRow}>
-              <Text style={styles.dashboardTitle}>
+              <Text
+                style={[
+                  styles.dashboardTitle,
+                  { fontSize: taFont(SIZES.h3) },
+                ]}
+              >
                 {t("home.todaysStatistics")}
               </Text>
               {showAttendance && (
@@ -956,7 +965,12 @@ const HomeScreen = ({ navigation }) => {
                     })
                   }
                 >
-                  <Text style={styles.delayedCollectionButtonText}>
+                  <Text
+                    style={[
+                      styles.delayedCollectionButtonText,
+                      { fontSize: taFont(SIZES.body1) },
+                    ]}
+                  >
                     {t("home.delayedCollectionWithCount", {
                       count: dashboardData?.delayedCollectionCount ?? 0,
                     })}
@@ -994,7 +1008,12 @@ const HomeScreen = ({ navigation }) => {
             {loadingDashboard ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.loadingText}>
+                <Text
+                  style={[
+                    styles.loadingText,
+                    { fontSize: taFont(SIZES.body3) },
+                  ]}
+                >
                   {t("home.loadingDashboard")}
                 </Text>
               </View>
@@ -1095,7 +1114,12 @@ const HomeScreen = ({ navigation }) => {
                     size={22}
                     color={COLORS.primary}
                   />
-                  <Text style={styles.cashAccountCardText}>
+                  <Text
+                    style={[
+                      styles.cashAccountCardText,
+                      { fontSize: taFont(SIZES.body1) },
+                    ]}
+                  >
                     {t("cashAccount.closeAccount")}
                   </Text>
                 </TouchableOpacity>

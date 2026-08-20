@@ -43,8 +43,8 @@ object CollectionOverlayManager {
   private var savedBubbleX: Int = 0
   private var savedBubbleY: Int = 0
   private val mainHandler = Handler(Looper.getMainLooper())
-  private const val BUBBLE_SIZE_DP = 56
-  private const val EXPANDED_MARGIN_DP = 12
+  private const val BUBBLE_SIZE_DP = 48
+  private const val EXPANDED_MARGIN_DP = 10
 
   fun canDrawOverlays(context: Context): Boolean {
     return Settings.canDrawOverlays(context.applicationContext)
@@ -245,7 +245,7 @@ object CollectionOverlayManager {
 
   private fun expandedOverlayWidth(context: Context): Int {
     val (screenWidth, _) = screenSize(context)
-    return (screenWidth - dpToPx(context, EXPANDED_MARGIN_DP * 2)).coerceAtLeast(dpToPx(context, 280))
+    return (screenWidth - dpToPx(context, EXPANDED_MARGIN_DP * 2)).coerceAtLeast(dpToPx(context, 240))
   }
 
   private fun clampOverlayPosition(context: Context, params: WindowManager.LayoutParams) {
@@ -326,6 +326,31 @@ object CollectionOverlayManager {
     }
   }
 
+  private fun attachCardDrag(card: OverlayDragLayout, context: Context) {
+    var startX = 0
+    var startY = 0
+    var gestureStarted = false
+    card.dragListener =
+      OverlayDragLayout.DragListener { rawX, rawY, downRawX, downRawY, ended ->
+        val params = overlayLayoutParams ?: return@DragListener
+        val wm = windowManager ?: return@DragListener
+        val overlay = overlayView ?: return@DragListener
+        if (!gestureStarted) {
+          gestureStarted = true
+          startX = params.x
+          startY = params.y
+        }
+        params.x = startX + (rawX - downRawX).toInt()
+        params.y = startY + (rawY - downRawY).toInt()
+        clampOverlayPosition(context, params)
+        runCatching { wm.updateViewLayout(overlay, params) }
+        if (ended) {
+          savedBubbleY = params.y
+          gestureStarted = false
+        }
+      }
+  }
+
   private fun attachMoveAndClick(target: View, onClick: (() -> Unit)? = null) {
     val slop = ViewConfiguration.get(target.context).scaledTouchSlop
     var startX = 0
@@ -387,14 +412,13 @@ object CollectionOverlayManager {
     //val subtitle = view.findViewById<TextView>(R.id.overlay_subtitle)
     val customerIndex = view.findViewById<TextView>(R.id.overlay_customer_index)
     val customerName = view.findViewById<TextView>(R.id.overlay_customer_name)
-    val customerPhone = view.findViewById<TextView>(R.id.overlay_customer_phone)
     val btnCall = view.findViewById<ImageButton>(R.id.overlay_btn_call)
     val loanInfo = view.findViewById<TextView>(R.id.overlay_loan_info)
     val balanceAmount = view.findViewById<TextView>(R.id.overlay_balance_amount)
     val distance = view.findViewById<TextView>(R.id.overlay_distance)
     val close = view.findViewById<TextView>(R.id.overlay_close)
     val collapse = view.findViewById<TextView>(R.id.overlay_btn_collapse)
-    val dragHandle = view.findViewById<View>(R.id.overlay_drag_handle)
+    val card = view.findViewById<OverlayDragLayout>(R.id.overlay_card)
     val bubble = view.findViewById<View>(R.id.overlay_bubble)
     val bubbleBadge = view.findViewById<TextView>(R.id.overlay_bubble_badge)
 
@@ -455,7 +479,7 @@ object CollectionOverlayManager {
     fun showMessage(message: String, isError: Boolean) {
       if (!isActive()) return
       status.text = message
-      status.setTextColor(if (isError) Color.parseColor("#DC2626") else Color.parseColor("#059669"))
+      status.setTextColor(if (isError) Color.parseColor("#FFD0D0") else Color.parseColor("#C8F5D4"))
       status.visibility = View.VISIBLE
     }
 
@@ -477,16 +501,16 @@ object CollectionOverlayManager {
     fun updatePhotoUi() {
       if (capturedPhotoPath.isNullOrBlank()) {
         photoPreview.visibility = View.GONE
-        photoStatus.text = "Visit photo required"
-        photoStatus.setTextColor(Color.parseColor("#6B7280"))
-        btnCapturePhoto.text = "Capture Photo"
+        photoStatus.text = "Photo required"
+        photoStatus.setTextColor(Color.parseColor("#D4E6F8"))
+        btnCapturePhoto.text = "Photo"
         return
       }
 
       photoPreview.visibility = View.VISIBLE
       photoStatus.text = "Photo captured"
-      photoStatus.setTextColor(Color.parseColor("#059669"))
-      btnCapturePhoto.text = "Retake Photo"
+      photoStatus.setTextColor(Color.parseColor("#C8F5D4"))
+      btnCapturePhoto.text = "Retake"
       runCatching {
         val bitmap = BitmapFactory.decodeFile(capturedPhotoPath)
         if (bitmap != null) {
@@ -572,12 +596,11 @@ object CollectionOverlayManager {
 
     fun renderCustomer() {
       val config = currentConfig() ?: return
-      title.text = "Payment Collection Nearby"
-      //subtitle.text = "Customer within ${config.radiusMeters}m radius"
+      title.text = "Nearby Collection"
 
       if (config.totalNearby > 1) {
         customerIndex.visibility = View.VISIBLE
-        customerIndex.text = "Customer ${currentIndex + 1} of ${config.totalNearby}"
+        customerIndex.text = "${currentIndex + 1}/${config.totalNearby}"
         btnPrev.visibility = View.VISIBLE
         btnNext.visibility = View.VISIBLE
       } else {
@@ -596,12 +619,6 @@ object CollectionOverlayManager {
           }
         }
       customerName.text = customerLabel
-      customerPhone.text =
-        if (config.customerPhone.isNotBlank()) {
-          config.customerPhone
-        } else {
-          "Phone not available"
-        }
 
       val hasPhone = config.customerPhone.isNotBlank()
       btnCall.isEnabled = hasPhone
@@ -644,7 +661,7 @@ object CollectionOverlayManager {
 
     close.setOnClickListener { hide(context) }
     collapse.setOnClickListener { applyOverlayCollapsed(context, true) }
-    attachMoveAndClick(dragHandle)
+    attachCardDrag(card, context)
     attachMoveAndClick(bubble) { applyOverlayCollapsed(context, false) }
 
     btnPrev.setOnClickListener {
@@ -671,7 +688,7 @@ object CollectionOverlayManager {
         return@setOnClickListener
       }
 
-      amountHint.text = "Enter amount up to ₹${formatAmount(balance)}"
+      amountHint.text = "Max ₹${formatAmount(balance)}"
       amountInput.hint = "Max ₹${formatAmount(balance)}"
       amountInput.setText(formatAmount(balance))
       paymentCash.isChecked = true
@@ -679,7 +696,7 @@ object CollectionOverlayManager {
     }
 
     btnNotCollect.setOnClickListener {
-      //reasonInput.setText("")
+      reasonInput.setText("")
       capturedPhotoPath = null
       updatePhotoUi()
       showPanel("reason")

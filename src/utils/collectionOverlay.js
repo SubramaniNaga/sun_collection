@@ -1,15 +1,15 @@
-import { NativeModules, Platform, NativeEventEmitter } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../api/apiClient';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NativeEventEmitter, NativeModules, Platform } from "react-native";
+import { API_BASE_URL } from "../api/apiClient";
 import {
   FEATURE_FLAGS,
   persistDelayProximityOverlayFlag,
   restoreFeatureFlagsFromStorage,
-} from '../config/appToggles';
+} from "../config/appToggles";
 
 const { CollectionOverlay } = NativeModules;
 const overlayEmitter =
-  Platform.OS === 'android' && CollectionOverlay
+  Platform.OS === "android" && CollectionOverlay
     ? new NativeEventEmitter(CollectionOverlay)
     : null;
 
@@ -17,35 +17,40 @@ let overlayLogListenerAttached = false;
 
 function logOverlayApiEvent(event = {}) {
   const { kind, method, url, body, status, responseBody } = event;
-  if (kind === 'request') {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  if (kind === "request") {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log(`📤 API REQUEST [OVERLAY][${method}]`, url);
-    if (body) console.log('📤 Request body:', body);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (body) console.log("📤 Request body:", body);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     return;
   }
-  if (kind === 'response') {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📥 API RESPONSE [OVERLAY][${method}]`, url, '| Status:', status);
-    if (responseBody) console.log('📥 Response data:', responseBody);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  if (kind === "response") {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log(
+      `📥 API RESPONSE [OVERLAY][${method}]`,
+      url,
+      "| Status:",
+      status,
+    );
+    if (responseBody) console.log("📥 Response data:", responseBody);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     return;
   }
-  if (kind === 'error') {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  if (kind === "error") {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log(
       `📥 API ERROR [OVERLAY][${method}]`,
       url,
-      '| Status:',
-      status ?? 'n/a',
-      '| Message:',
+      "| Status:",
+      status ?? "n/a",
+      "| Message:",
       body,
     );
-    if (responseBody) console.log('📥 Error response data:', responseBody);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (responseBody) console.log("📥 Error response data:", responseBody);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     return;
   }
-  if (kind === 'info' && body) {
+  if (kind === "info" && body) {
     console.log(body);
   }
 }
@@ -54,7 +59,7 @@ function logOverlayApiEvent(event = {}) {
 export function setupOverlayApiLogListener() {
   if (overlayLogListenerAttached || !overlayEmitter) return () => {};
   overlayLogListenerAttached = true;
-  const sub = overlayEmitter.addListener('OverlayApiLog', logOverlayApiEvent);
+  const sub = overlayEmitter.addListener("OverlayApiLog", logOverlayApiEvent);
   return () => {
     sub.remove();
     overlayLogListenerAttached = false;
@@ -67,7 +72,7 @@ function parseNumber(value, fallback = 0) {
 }
 
 function parseBalanceText(value) {
-  if (value == null || value === '') return '';
+  if (value == null || value === "") return "";
   return String(value).trim();
 }
 
@@ -76,42 +81,43 @@ function parseBalanceText(value) {
  * into a flat shape the native overlay understands.
  */
 export function normalizeNearbyForOverlay(item = {}) {
-  const customer = item.customer && typeof item.customer === 'object' ? item.customer : {};
-  const loan = item.loan && typeof item.loan === 'object' ? item.loan : {};
+  const customer =
+    item.customer && typeof item.customer === "object" ? item.customer : {};
+  const loan = item.loan && typeof item.loan === "object" ? item.loan : {};
 
   const loanId = parseNumber(item.loan_id ?? loan.id, 0);
   const customerId = parseNumber(item.customer_id ?? customer.id, 0);
-  const loanStatus = String(loan.loan_status ?? item.loan_status ?? '');
-  const loanStatusName = loan.loan_status_name ?? item.loan_status_name ?? '';
+  const loanStatus = String(loan.loan_status ?? item.loan_status ?? "");
+  const loanStatusName = loan.loan_status_name ?? item.loan_status_name ?? "";
   const isNip =
-    loanStatusName.toUpperCase() === 'NIP' ||
-    loanStatus === '7' ||
+    loanStatusName.toUpperCase() === "NIP" ||
+    loanStatus === "7" ||
     (loanId > 0 && parseNumber(item.collection_id, 0) <= 0);
 
-  let paymentKind = 'collection';
+  let paymentKind = "collection";
   if (isNip) {
-    paymentKind = 'nip';
+    paymentKind = "nip";
   } else if (parseNumber(item.collection_id, 0) > 0) {
-    paymentKind = 'collection';
+    paymentKind = "collection";
   }
 
-  const balanceRaw = loan.balance_amount ?? item.balance_amount ?? '';
+  const balanceRaw = loan.balance_amount ?? item.balance_amount ?? "";
   const balanceText = parseBalanceText(balanceRaw);
 
   return {
     loan_id: loanId,
     customer_id: customerId,
-    customer_name: item.customer_name ?? customer.customer_name ?? 'Customer',
-    customer_no: item.customer_no ?? customer.customer_no ?? '',
-    customer_phone: customer.customer_phone ?? item.customer_phone ?? '',
-    customer_address: customer.customer_address ?? item.customer_address ?? '',
+    customer_name: item.customer_name ?? customer.customer_name ?? "Customer",
+    customer_no: item.customer_no ?? customer.customer_no ?? "",
+    customer_phone: customer.customer_phone ?? item.customer_phone ?? "",
+    customer_address: customer.customer_address ?? item.customer_address ?? "",
     balance_amount: parseNumber(balanceRaw, 0),
     balance_amount_text: balanceText || String(parseNumber(balanceRaw, 0)),
     distance_meters: parseNumber(item.distance_meters, 0),
-    loan_type_name: loan.loan_type_name ?? item.loan_type_name ?? '',
+    loan_type_name: loan.loan_type_name ?? item.loan_type_name ?? "",
     loan_status_name: loanStatusName,
-    branch_name: loan.branch_name ?? item.branch_name ?? '',
-    line_name: loan.line_name ?? item.line_name ?? '',
+    branch_name: loan.branch_name ?? item.branch_name ?? "",
+    line_name: loan.line_name ?? item.line_name ?? "",
     payment_kind: paymentKind,
     collection_id: parseNumber(item.collection_id, 0),
     remark_id: item.remark_id != null ? parseNumber(item.remark_id, 0) : 0,
@@ -134,7 +140,7 @@ export function enrichNearbyWithRemarkIds(nearby = [], notifications = []) {
   return (Array.isArray(nearby) ? nearby : []).map((item) => {
     const loanId = parseNumber(item?.loan_id ?? item?.loan?.id, 0);
     const existingRemark = parseNumber(item?.remark_id, 0);
-    const mappedRemark = loanId > 0 ? remarkByLoan.get(loanId) ?? 0 : 0;
+    const mappedRemark = loanId > 0 ? (remarkByLoan.get(loanId) ?? 0) : 0;
     return {
       ...item,
       remark_id: existingRemark > 0 ? existingRemark : mappedRemark,
@@ -163,7 +169,7 @@ export async function setDelayProximityOverlayEnabled(enabled) {
 }
 
 export async function canDrawOverlays() {
-  if (Platform.OS !== 'android' || !CollectionOverlay?.canDrawOverlays) {
+  if (Platform.OS !== "android" || !CollectionOverlay?.canDrawOverlays) {
     return false;
   }
   try {
@@ -174,7 +180,10 @@ export async function canDrawOverlays() {
 }
 
 export async function requestOverlayPermission() {
-  if (Platform.OS !== 'android' || !CollectionOverlay?.requestOverlayPermission) {
+  if (
+    Platform.OS !== "android" ||
+    !CollectionOverlay?.requestOverlayPermission
+  ) {
     return;
   }
   const granted = await canDrawOverlays();
@@ -184,7 +193,7 @@ export async function requestOverlayPermission() {
 }
 
 export async function hideCollectionOverlay() {
-  if (Platform.OS !== 'android' || !CollectionOverlay?.hideOverlay) {
+  if (Platform.OS !== "android" || !CollectionOverlay?.hideOverlay) {
     return;
   }
   try {
@@ -205,11 +214,11 @@ export async function showCollectionOverlay({
   radiusMeters = 500,
 } = {}) {
   if (!isDelayProximityOverlayEnabled()) {
-    return { shown: false, reason: 'overlay_disabled' };
+    return { shown: false, reason: "overlay_disabled" };
   }
 
-  if (Platform.OS !== 'android' || !CollectionOverlay?.showOverlay) {
-    return { shown: false, reason: 'unsupported_platform' };
+  if (Platform.OS !== "android" || !CollectionOverlay?.showOverlay) {
+    return { shown: false, reason: "unsupported_platform" };
   }
 
   const rawNearby = Array.isArray(nearby) ? nearby : [];
@@ -223,25 +232,25 @@ export async function showCollectionOverlay({
   });
 
   if (validNearby.length === 0) {
-    return { shown: false, reason: 'no_collectible_balance' };
+    return { shown: false, reason: "no_collectible_balance" };
   }
 
   const granted = await canDrawOverlays();
   if (!granted) {
     if (__DEV__) {
-      console.warn('[collectionOverlay] overlay permission not granted');
+      console.warn("[collectionOverlay] overlay permission not granted");
     }
-    return { shown: false, reason: 'no_permission' };
+    return { shown: false, reason: "no_permission" };
   }
 
   const [authToken, userIdRaw] = await Promise.all([
-    AsyncStorage.getItem('authToken'),
-    AsyncStorage.getItem('userId'),
+    AsyncStorage.getItem("authToken"),
+    AsyncStorage.getItem("userId"),
   ]);
 
   const payload = {
     apiBaseUrl: API_BASE_URL,
-    authToken: authToken || '',
+    authToken: authToken || "",
     userId: userIdRaw != null ? Number(userIdRaw) : 0,
     latitude: latitude ?? 0,
     longitude: longitude ?? 0,
@@ -252,7 +261,7 @@ export async function showCollectionOverlay({
 
   if (__DEV__) {
     console.log(
-      '[collectionOverlay] showing overlay for nearby customers:',
+      "[collectionOverlay] showing overlay for nearby customers:",
       JSON.stringify(validNearby.map(normalizeNearbyForOverlay), null, 2),
     );
   }
@@ -262,23 +271,26 @@ export async function showCollectionOverlay({
     return { shown: true, count: validNearby.length };
   } catch (e) {
     if (__DEV__) {
-      console.warn('[collectionOverlay] show failed:', e?.message || e);
+      console.warn("[collectionOverlay] show failed:", e?.message || e);
     }
-    return { shown: false, reason: e?.message || 'show_failed' };
+    return { shown: false, reason: e?.message || "show_failed" };
   }
 }
 
 /**
  * Process delay_proximity from POST /attendance/location-tracking.
  */
-export async function handleDelayProximityFromLocationResponse(response, coords = {}) {
-  if (Platform.OS !== 'android') {
-    return { handled: false, reason: 'unsupported_platform' };
+export async function handleDelayProximityFromLocationResponse(
+  response,
+  coords = {},
+) {
+  if (Platform.OS !== "android") {
+    return { handled: false, reason: "unsupported_platform" };
   }
 
   await refreshDelayProximityOverlayFlag();
   if (!isDelayProximityOverlayEnabled()) {
-    return { handled: false, reason: 'overlay_disabled' };
+    return { handled: false, reason: "overlay_disabled" };
   }
 
   const delayProximity = response?.delay_proximity;
@@ -288,7 +300,7 @@ export async function handleDelayProximityFromLocationResponse(response, coords 
   );
 
   if (nearby.length === 0) {
-    return { handled: false, reason: 'empty_nearby' };
+    return { handled: false, reason: "empty_nearby" };
   }
 
   const latitude = coords.latitude ?? response?.data?.latitude;
