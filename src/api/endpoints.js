@@ -34,7 +34,8 @@ export const ENDPOINTS = {
     CLOSING_ACCOUNT: "/collection/closing-account",
   },
   LOAN: {
-    LIST: "/loan",
+    LIST: "/loan/mobile",
+    //LIST: "/loan",
     NIP: "/loan/nip",
     NIP_COLLECTION: "/nip-collection",
     GIVEN_UPDATE: (id) => `/loan/given/${id}`,
@@ -79,4 +80,3 @@ export const ENDPOINTS = {
   },
 };
 export default ENDPOINTS;
-

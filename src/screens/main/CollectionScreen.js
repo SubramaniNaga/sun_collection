@@ -234,6 +234,12 @@ const CollectionScreen = ({ navigation }) => {
     return completedCount === 0;
   };
 
+  const isInitialZeroBalancePayment = (collection) => {
+    const balanceAmount = parseFloat(collection?.balanceAmount) || 0;
+    const completedCount = parseInt(collection?.completedCount, 10) || 0;
+    return balanceAmount === 0 && completedCount === 0;
+  };
+
   const isAlreadyCollectedForSelectedDate = (collection) => {
     if (!collection.isPaid()) return false;
     const selected = formatDateForAPI(selectedDate);
@@ -680,10 +686,8 @@ const CollectionScreen = ({ navigation }) => {
       if (isNaN(amount) || amount <= 0) {
         errors.collectedAmount = t('collection.collectedAmountInvalid');
       } else if (selectedCollection) {
-        // Check if collected amount exceeds balance amount
         const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
-        const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
-        if (!allowExceedWhenInitialPayment && amount > balanceAmount) {
+        if (!isInitialZeroBalancePayment(selectedCollection) && amount > balanceAmount) {
           errors.collectedAmount = `${t('collection.collectedAmountExceed')} (${selectedCollection.getFormattedBalanceAmount()})`;
         }
       }
@@ -1508,8 +1512,7 @@ const CollectionScreen = ({ navigation }) => {
                         if (selectedCollection && digitsOnly) {
                           const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
                           const enteredAmount = parseFloat(digitsOnly);
-                          const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
-                          if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                          if (!isInitialZeroBalancePayment(selectedCollection) && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
                             setCollectedAmount(formatAmountPlain(balanceAmount));
                             setPaymentErrors({
                               ...paymentErrors,
@@ -1531,8 +1534,7 @@ const CollectionScreen = ({ navigation }) => {
                         if (selectedCollection && digitsOnly) {
                           const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
                           const enteredAmount = parseFloat(digitsOnly);
-                          const allowExceedWhenInitialPayment = shouldAllowPaymentWhenBalanceZero(selectedCollection);
-                          if (!allowExceedWhenInitialPayment && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                          if (!isInitialZeroBalancePayment(selectedCollection) && !isNaN(enteredAmount) && enteredAmount > balanceAmount) {
                             setCollectedAmount(formatAmountPlain(balanceAmount));
                             setPaymentErrors({
                               ...paymentErrors,

@@ -7,10 +7,10 @@
 let _show = null;
 
 export const ALERT_TYPES = {
-  SUCCESS: 'success',
-  ERROR: 'error',
-  WARNING: 'warning',
-  INFO: 'info',
+  SUCCESS: "success",
+  ERROR: "error",
+  WARNING: "warning",
+  INFO: "info",
 };
 
 /**
@@ -27,12 +27,15 @@ export function setAlertRenderer(fn) {
  * @param {string} [fallback] - Fallback message if none found
  * @returns {string}
  */
-export function getApiErrorMessage(error, fallback = 'Something went wrong. Please try again.') {
+export function getApiErrorMessage(
+  error,
+  fallback = "Something went wrong. Please try again.",
+) {
   if (!error) return fallback;
   const msg =
     error?.response?.data?.message ??
     error?.response?.data?.error ??
-    (typeof error?.response?.data === 'string' ? error.response.data : null) ??
+    (typeof error?.response?.data === "string" ? error.response.data : null) ??
     error?.message;
   return msg && String(msg).trim() ? String(msg) : fallback;
 }
@@ -46,23 +49,41 @@ export function getApiErrorMessage(error, fallback = 'Something went wrong. Plea
  * @param {Array<{text: string, onPress?: () => void, style?: 'cancel'|'default'}>} [config.buttons]
  */
 export function showAlert(config) {
-  if (typeof config === 'string') {
-    config = { type: ALERT_TYPES.INFO, title: '', message: config };
-  } else if (!config || typeof config !== 'object') {
+  if (typeof config === "string") {
+    config = { type: ALERT_TYPES.INFO, title: "", message: config };
+  } else if (!config || typeof config !== "object") {
     return;
   }
-  const { type = ALERT_TYPES.INFO, title = '', message = '', buttons } = config;
+  const { type = ALERT_TYPES.INFO, title = "", message = "", buttons } = config;
   if (_show) {
     _show({
-      type: type === 'success' ? ALERT_TYPES.SUCCESS : type === 'error' ? ALERT_TYPES.ERROR : type === 'warning' ? ALERT_TYPES.WARNING : ALERT_TYPES.INFO,
+      type:
+        type === "success"
+          ? ALERT_TYPES.SUCCESS
+          : type === "error"
+            ? ALERT_TYPES.ERROR
+            : type === "warning"
+              ? ALERT_TYPES.WARNING
+              : ALERT_TYPES.INFO,
       title: String(title),
-      message: message != null ? String(message) : '',
-      buttons: Array.isArray(buttons) ? buttons : [{ text: 'OK' }],
+      message: message != null ? String(message) : "",
+      buttons: Array.isArray(buttons) ? buttons : [{ text: "OK" }],
     });
   } else {
     // Fallback to React Native Alert if provider not mounted (e.g. in tests)
-    const { Alert } = require('react-native');
-    Alert.alert(title || (type === 'error' ? 'Error' : type === 'success' ? 'Success' : type === 'warning' ? 'Warning' : 'Notice'), message, buttons);
+    const { Alert } = require("react-native");
+    Alert.alert(
+      title ||
+        (type === "error"
+          ? "Error"
+          : type === "success"
+            ? "Success"
+            : type === "warning"
+              ? "Warning"
+              : "Notice"),
+      message,
+      buttons,
+    );
   }
 }
 
@@ -101,17 +122,17 @@ export function showInfo(title, message, buttons) {
 export function showSessionExpiredAlert(logoutCallback) {
   showAlert({
     type: ALERT_TYPES.WARNING,
-    title: 'Session Expired',
-    message: 'Your session has expired. Please login again.',
+    title: "Session Expired",
+    message: "Your session has expired. Please login again.",
     buttons: [
       {
-        text: 'OK',
+        text: "OK",
         onPress: async () => {
-          if (logoutCallback && typeof logoutCallback === 'function') {
+          if (logoutCallback && typeof logoutCallback === "function") {
             await logoutCallback();
           }
-        }
-      }
-    ]
+        },
+      },
+    ],
   });
 }
