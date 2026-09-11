@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,36 +15,42 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { apiServices } from '../../api/services/apiServices';
-import Header from '../../components/common/Header';
-import VoiceMicButton from '../../components/common/VoiceMicButton';
-import { COLORS, SIZES } from '../../constants/theme';
-import { useLanguage } from '../../store/LanguageContext';
-import { showError, showSuccess } from '../../utils/alertService';
-import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
-import { safeGoBack } from '../../utils/navigationHelpers';
-import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
-import { formatDisplayDate } from '../../utils/dateFormatter';
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { apiServices } from "../../api/services/apiServices";
+import Header from "../../components/common/Header";
+import VoiceMicButton from "../../components/common/VoiceMicButton";
+import { COLORS, SIZES } from "../../constants/theme";
+import { useLanguage } from "../../store/LanguageContext";
+import { showError, showSuccess } from "../../utils/alertService";
+import {
+  formatAmountPlain,
+  formatCurrency,
+} from "../../utils/amountFormatters";
+import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
+import { formatDisplayDate } from "../../utils/dateFormatter";
+import { safeGoBack } from "../../utils/navigationHelpers";
 
-const API_BASE_URL = 'http://65.0.100.65:6005';
+const API_BASE_URL = "https://sun-enterprises.co.in";
 
 /** Android edge-to-edge often reports 0 bottom inset — reserve space for 3-button nav bar */
 const ANDROID_NAV_BAR_HEIGHT = 56;
 
-const getBottomInset = (insets) => (
-  Platform.OS === 'android'
+const getBottomInset = (insets) =>
+  Platform.OS === "android"
     ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
-    : Math.max(insets.bottom, SIZES.base)
-);
+    : Math.max(insets.bottom, SIZES.base);
 
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
-  if (imagePath.startsWith('/api')) return `${API_BASE_URL}${imagePath}`;
-  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://"))
+    return imagePath;
+  if (imagePath.startsWith("/api")) return `${API_BASE_URL}${imagePath}`;
+  const cleanPath = imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
   return `${API_BASE_URL}/api/v1${cleanPath}`;
 };
 
@@ -63,11 +69,11 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
   // Form state
   const [formData, setFormData] = useState({
-    nip_date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
-    amount_paid: '',
-    balance_amount: formatAmountPlain(loan?.balanceAmount) || '0',
-    notes: '',
-    payment_type: 'cash', // Default to cash
+    nip_date: new Date().toISOString().split("T")[0], // Current date in YYYY-MM-DD format
+    amount_paid: "",
+    balance_amount: formatAmountPlain(loan?.balanceAmount) || "0",
+    notes: "",
+    payment_type: "cash", // Default to cash
   });
   const amountPaidRef = useRef(null);
   const notesRef = useRef(null);
@@ -77,16 +83,16 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   }, [loan]);
 
   const paymentTypes = [
-    { key: 'cash', label: t('nip.cash'), icon: 'cash-outline' },
-    { key: 'online', label: t('nip.online'), icon: 'globe-outline' },
+    { key: "cash", label: t("nip.cash"), icon: "cash-outline" },
+    { key: "online", label: t("nip.online"), icon: "globe-outline" },
   ];
 
   useEffect(() => {
     // Set initial balance amount from loan data
     if (loan?.balanceAmount) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        balance_amount: formatAmountPlain(loan.balanceAmount) || '0',
+        balance_amount: formatAmountPlain(loan.balanceAmount) || "0",
       }));
     }
   }, [loan]);
@@ -97,8 +103,11 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       // Request location permission
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(t('nip.permissionDenied'), t('nip.locationPermissionDenied'));
+      if (status !== "granted") {
+        Alert.alert(
+          t("nip.permissionDenied"),
+          t("nip.locationPermissionDenied"),
+        );
         return null;
       }
 
@@ -110,10 +119,13 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       const { latitude, longitude } = location.coords;
       setCurrentLocation({ latitude, longitude });
 
-      console.log('Current location captured:', { latitude, longitude });
+      console.log("Current location captured:", { latitude, longitude });
       return { latitude, longitude };
     } catch (error) {
-      showError('Location Error', 'Failed to capture current location. Please try again.');
+      showError(
+        "Location Error",
+        "Failed to capture current location. Please try again.",
+      );
       return null;
     } finally {
       setLocationLoading(false);
@@ -121,16 +133,16 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   };
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
   const handlePaymentTypeSelect = (type) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      payment_type: type
+      payment_type: type,
     }));
   };
 
@@ -154,12 +166,12 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
   const validateForm = () => {
     if (!formData.amount_paid || parseFloat(formData.amount_paid) <= 0) {
-      showError('Validation Error', 'Please enter a valid amount paid');
+      showError("Validation Error", "Please enter a valid amount paid");
       return false;
     }
 
     if (!formData.notes.trim()) {
-      showError('Validation Error', 'Please enter notes for this collection');
+      showError("Validation Error", "Please enter notes for this collection");
       return false;
     }
 
@@ -194,30 +206,36 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
         status: 1, // Default status
       };
 
-      console.log('Submitting NIP collection:', payload);
+      console.log("Submitting NIP collection:", payload);
 
       // Call API
       const response = await apiServices.loan.createNIPCollection(payload);
 
       if (response.success) {
-        showSuccess('Success', 'NIP collection created successfully');
+        showSuccess("Success", "NIP collection created successfully");
         safeGoBack(navigation);
       } else {
-        showError('Error', response.message || 'Failed to create NIP collection');
+        showError(
+          "Error",
+          response.message || "Failed to create NIP collection",
+        );
       }
     } catch (error) {
-      showError('Error', 'Failed to create NIP collection. Please try again.');
+      showError("Error", "Failed to create NIP collection. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-
   const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
+    if (!dateStr) return "—";
     try {
       const d = new Date(dateStr);
-      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
     } catch {
       return dateStr;
     }
@@ -236,27 +254,36 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       <View style={styles.customerHeader}>
         <TouchableOpacity
           style={styles.customerPhotoWrap}
-          onPress={() => openPhotoModal(loan?.customerPhoto ?? loan?.customer_photo)}
+          onPress={() =>
+            openPhotoModal(loan?.customerPhoto ?? loan?.customer_photo)
+          }
           activeOpacity={0.8}
         >
           {(loan?.customerPhoto ?? loan?.customer_photo) ? (
             <Image
-              source={{ uri: getImageUrl(loan?.customerPhoto ?? loan?.customer_photo) }}
+              source={{
+                uri: getImageUrl(loan?.customerPhoto ?? loan?.customer_photo),
+              }}
               style={styles.customerPhoto}
               resizeMode="cover"
             />
           ) : (
             <View style={styles.customerPhotoPlaceholder}>
-              <Ionicons name="person-outline" size={24} color={COLORS.text.tertiary} />
+              <Ionicons
+                name="person-outline"
+                size={24}
+                color={COLORS.text.tertiary}
+              />
             </View>
           )}
         </TouchableOpacity>
         <View style={styles.customerDetails}>
           <Text style={styles.customerName}>
-            {loan?.customerName ?? loan?.customer_name ?? 'Unknown Customer'}
+            {loan?.customerName ?? loan?.customer_name ?? "Unknown Customer"}
           </Text>
           <Text style={styles.customerId}>
-            ID: {loan?.customerId ?? loan?.customer_no ?? loan?.customer_id ?? '—'}
+            ID:{" "}
+            {loan?.customerId ?? loan?.customer_no ?? loan?.customer_id ?? "—"}
           </Text>
           {loan?.customerPhone && (
             <Text style={styles.customerPhone}>{loan.customerPhone}</Text>
@@ -268,119 +295,140 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
   const renderLoanInfo = () => (
     <View style={styles.loanInfoCard}>
-      <Text style={styles.cardTitle}>{t('nip.loanDetails')}</Text>
+      <Text style={styles.cardTitle}>{t("nip.loanDetails")}</Text>
 
       <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>{t('loan.loanAmount')}</Text>
+        <Text style={styles.infoLabel}>{t("loan.loanAmount")}</Text>
         <Text style={styles.infoValue}>{formatCurrency(loan?.loanAmount)}</Text>
       </View>
 
       {loan?.approvedAmount && (
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t('loan.approvedAmount')}</Text>
-          <Text style={styles.infoValue}>{formatCurrency(loan?.approvedAmount)}</Text>
+          <Text style={styles.infoLabel}>{t("loan.approvedAmount")}</Text>
+          <Text style={styles.infoValue}>
+            {formatCurrency(loan?.approvedAmount)}
+          </Text>
         </View>
       )}
 
       <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>{t('loan.balanceAmount')}</Text>
-        <Text style={styles.infoValueAmount}>{formatCurrency(loan?.balanceAmount)}</Text>
+        <Text style={styles.infoLabel}>{t("loan.balanceAmount")}</Text>
+        <Text style={styles.infoValueAmount}>
+          {formatCurrency(loan?.balanceAmount)}
+        </Text>
       </View>
 
       <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>{t('nip.nipPaidTotal')}</Text>
+        <Text style={styles.infoLabel}>{t("nip.nipPaidTotal")}</Text>
         <Text style={styles.infoValueAmount}>
           {formatCurrency(loan?.nipPaidTotal ?? loan?.nip_paid_total ?? 0)}
         </Text>
       </View>
 
       <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>{t('loan.loanPeriod')}</Text>
+        <Text style={styles.infoLabel}>{t("loan.loanPeriod")}</Text>
         <Text style={styles.infoValue}>
-          {loan?.loanPeriod ?? loan?.loan_period ?? '—'} {loan?.loanTypeName ?? loan?.loan_type_name ?? t('loan.months')}
+          {loan?.loanPeriod ?? loan?.loan_period ?? "—"}{" "}
+          {loan?.loanTypeName ?? loan?.loan_type_name ?? t("loan.months")}
         </Text>
       </View>
 
       <View style={styles.infoRow}>
-        <Text style={styles.infoLabel}>{t('loan.branch')}</Text>
-        <Text style={styles.infoValue}>{loan?.branchName || loan?.branch || '—'}</Text>
+        <Text style={styles.infoLabel}>{t("loan.branch")}</Text>
+        <Text style={styles.infoValue}>
+          {loan?.branchName || loan?.branch || "—"}
+        </Text>
       </View>
 
       <View style={[styles.infoRow, styles.infoRowLast]}>
-        <Text style={styles.infoLabel}>{t('loan.requestedDate')}</Text>
-        <Text style={styles.infoValue}>{formatDisplayDate(loan?.requestedDate ?? loan?.requested_date)}</Text>
+        <Text style={styles.infoLabel}>{t("loan.requestedDate")}</Text>
+        <Text style={styles.infoValue}>
+          {formatDisplayDate(loan?.requestedDate ?? loan?.requested_date)}
+        </Text>
       </View>
     </View>
   );
 
   const renderCollectionForm = () => (
     <View style={styles.formCard}>
-      <Text style={styles.cardTitle}>{t('nip.collectionDetails')}</Text>
+      <Text style={styles.cardTitle}>{t("nip.collectionDetails")}</Text>
 
       {/* NIP Date */}
       <View style={styles.formRow}>
-        {renderRequiredLabel(t('nip.nipDate'))}
+        {renderRequiredLabel(t("nip.nipDate"))}
         <View style={styles.dateInput}>
-          <Ionicons name="calendar-outline" size={16} color={COLORS.text.tertiary} />
+          <Ionicons
+            name="calendar-outline"
+            size={16}
+            color={COLORS.text.tertiary}
+          />
           <Text style={styles.dateText}>{formatDate(formData.nip_date)}</Text>
         </View>
       </View>
 
       {/* Amount Paid */}
       <View style={styles.formRow}>
-        {renderRequiredLabel(t('nip.amountPaid'))}
+        {renderRequiredLabel(t("nip.amountPaid"))}
         <View style={styles.voiceFieldRow}>
-        <TextInput
-          ref={amountPaidRef}
-          style={[styles.textInput, styles.voiceFieldInput]}
-          placeholder={t('nip.enterAmountPaid')}
-          placeholderTextColor={COLORS.text.tertiary}
-          value={formData.amount_paid}
-          onChangeText={(value) => handleInputChange('amount_paid', value)}
-          keyboardType="numeric"
-          returnKeyType="next"
-          blurOnSubmit={false}
-          submitBehavior="submit"
-          onSubmitEditing={() => notesRef.current?.focus()}
-        />
-        <VoiceMicButton
-          value={formData.amount_paid}
-          onChangeText={(value) => handleInputChange('amount_paid', value)}
-        />
+          <TextInput
+            ref={amountPaidRef}
+            style={[styles.textInput, styles.voiceFieldInput]}
+            placeholder={t("nip.enterAmountPaid")}
+            placeholderTextColor={COLORS.text.tertiary}
+            value={formData.amount_paid}
+            onChangeText={(value) => handleInputChange("amount_paid", value)}
+            keyboardType="numeric"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={() => notesRef.current?.focus()}
+          />
+          <VoiceMicButton
+            value={formData.amount_paid}
+            onChangeText={(value) => handleInputChange("amount_paid", value)}
+          />
         </View>
       </View>
 
       {/* Balance Amount */}
       <View style={styles.formRow}>
-        <Text style={styles.formLabel}>{t('nip.balanceAmount')}</Text>
+        <Text style={styles.formLabel}>{t("nip.balanceAmount")}</Text>
         <View style={styles.balanceInput}>
           <Ionicons name="wallet-outline" size={16} color={COLORS.error} />
-          <Text style={styles.balanceText}>{formatCurrency(formData.balance_amount)}</Text>
+          <Text style={styles.balanceText}>
+            {formatCurrency(formData.balance_amount)}
+          </Text>
         </View>
       </View>
 
       {/* Payment Type */}
       <View style={styles.formRow}>
-        {renderRequiredLabel(t('nip.paymentType'))}
+        {renderRequiredLabel(t("nip.paymentType"))}
         <View style={styles.paymentTypesContainer}>
           {paymentTypes.map((type) => (
             <TouchableOpacity
               key={type.key}
               style={[
                 styles.paymentTypeButton,
-                formData.payment_type === type.key && styles.paymentTypeButtonSelected,
+                formData.payment_type === type.key &&
+                  styles.paymentTypeButtonSelected,
               ]}
               onPress={() => handlePaymentTypeSelect(type.key)}
             >
               <Ionicons
                 name={type.icon}
                 size={16}
-                color={formData.payment_type === type.key ? COLORS.white : COLORS.text.secondary}
+                color={
+                  formData.payment_type === type.key
+                    ? COLORS.white
+                    : COLORS.text.secondary
+                }
               />
               <Text
                 style={[
                   styles.paymentTypeText,
-                  formData.payment_type === type.key && styles.paymentTypeTextSelected,
+                  formData.payment_type === type.key &&
+                    styles.paymentTypeTextSelected,
                 ]}
               >
                 {type.label}
@@ -392,26 +440,30 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       {/* Notes */}
       <View style={styles.formRow}>
-        {renderRequiredLabel(t('nip.notes'))}
+        {renderRequiredLabel(t("nip.notes"))}
         <View style={styles.voiceFieldRow}>
-        <TextInput
-          ref={notesRef}
-          style={[styles.textInput, styles.notesInput, styles.voiceFieldInput]}
-          placeholder={t('nip.enterNotes')}
-          placeholderTextColor={COLORS.text.tertiary}
-          value={formData.notes}
-          onChangeText={(value) => handleInputChange('notes', value)}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-          returnKeyType="done"
-          blurOnSubmit
-          onSubmitEditing={Keyboard.dismiss}
-        />
-        <VoiceMicButton
-          value={formData.notes}
-          onChangeText={(value) => handleInputChange('notes', value)}
-        />
+          <TextInput
+            ref={notesRef}
+            style={[
+              styles.textInput,
+              styles.notesInput,
+              styles.voiceFieldInput,
+            ]}
+            placeholder={t("nip.enterNotes")}
+            placeholderTextColor={COLORS.text.tertiary}
+            value={formData.notes}
+            onChangeText={(value) => handleInputChange("notes", value)}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            returnKeyType="done"
+            blurOnSubmit
+            onSubmitEditing={Keyboard.dismiss}
+          />
+          <VoiceMicButton
+            value={formData.notes}
+            onChangeText={(value) => handleInputChange("notes", value)}
+          />
         </View>
       </View>
 
@@ -440,13 +492,13 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" backgroundColor={COLORS.statusBar} />
         <Header
-          title={t('nip.collectionTitle')}
+          title={t("nip.collectionTitle")}
           showBackButton={true}
           onBackPress={() => safeGoBack(navigation)}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>{t('nip.loadingLoanDetails')}</Text>
+          <Text style={styles.loadingText}>{t("nip.loadingLoanDetails")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -457,13 +509,13 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
       <Header
-        title={t('nip.collectionTitle')}
+        title={t("nip.collectionTitle")}
         showBackButton={true}
         onBackPress={() => safeGoBack(navigation)}
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardContainer}
       >
         <ScrollView
@@ -484,9 +536,14 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       </KeyboardAvoidingView>
 
       {isFormComplete ? (
-        <View style={[styles.fixedBottomContainer, { paddingBottom: bottomInset }]}>
+        <View
+          style={[styles.fixedBottomContainer, { paddingBottom: bottomInset }]}
+        >
           <TouchableOpacity
-            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+            style={[
+              styles.submitButton,
+              submitting && styles.submitButtonDisabled,
+            ]}
             onPress={handleSubmit}
             disabled={submitting}
           >
@@ -494,8 +551,14 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
               <ActivityIndicator size="small" color={COLORS.white} />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
-                <Text style={styles.submitButtonText}>{t('nip.submitCollection')}</Text>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={18}
+                  color={COLORS.white}
+                />
+                <Text style={styles.submitButtonText}>
+                  {t("nip.submitCollection")}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -554,8 +617,8 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
     marginTop: SIZES.margin,
@@ -577,33 +640,33 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   customerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   customerPhotoWrap: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginRight: SIZES.base,
   },
   customerPhoto: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   customerPhotoPlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     backgroundColor: COLORS.lightGray,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   customerDetails: {
     flex: 1,
   },
   customerName: {
     fontSize: SIZES.body1,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.text.primary,
     marginBottom: 2,
   },
@@ -644,14 +707,14 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: SIZES.body1,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.black,
     marginBottom: SIZES.base * 1.5,
   },
   infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 6,
   },
   infoRowLast: {
@@ -664,34 +727,34 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     fontSize: SIZES.body4,
-    fontWeight: '500',
+    fontWeight: "500",
     color: COLORS.text.secondary,
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   infoValueAmount: {
     fontSize: SIZES.body3,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.error,
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   formRow: {
     marginBottom: SIZES.base * 1.25,
   },
   formLabel: {
     fontSize: SIZES.body3,
-    fontWeight: '500',
+    fontWeight: "500",
     color: COLORS.black,
     marginBottom: 6,
   },
   requiredMark: {
     color: COLORS.error,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   voiceFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   voiceFieldInput: {
     flex: 1,
@@ -710,8 +773,8 @@ const styles = StyleSheet.create({
     height: 80,
   },
   dateInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: SIZES.radius,
@@ -725,8 +788,8 @@ const styles = StyleSheet.create({
     color: COLORS.black,
   },
   balanceInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: SIZES.radius,
@@ -737,16 +800,16 @@ const styles = StyleSheet.create({
   balanceText: {
     marginLeft: SIZES.base * 0.75,
     fontSize: SIZES.body3,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.error,
   },
   paymentTypesContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: SIZES.base,
   },
   paymentTypeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: SIZES.radius,
@@ -754,7 +817,7 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.base,
     backgroundColor: COLORS.white,
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   paymentTypeButtonSelected: {
     backgroundColor: COLORS.primary,
@@ -769,16 +832,16 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   locationStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   locationCaptured: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   locationPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   locationText: {
     marginLeft: SIZES.base * 0.5,
@@ -786,7 +849,7 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
   },
   fixedBottomContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -799,9 +862,9 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: COLORS.primary,
     borderRadius: SIZES.radius,
     paddingVertical: SIZES.base,
@@ -814,30 +877,30 @@ const styles = StyleSheet.create({
   submitButtonText: {
     marginLeft: SIZES.base * 0.5,
     fontSize: SIZES.body2,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.white,
   },
   photoModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   photoModalContent: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
   photoModalClose: {
-    position: 'absolute',
+    position: "absolute",
     top: 50,
     right: 20,
     zIndex: 1,
   },
   photoModalImage: {
-    width: '100%',
-    height: '80%',
+    width: "100%",
+    height: "80%",
   },
 });
 

@@ -640,12 +640,12 @@ export const apiServices = {
           params: requestParams,
         });
         const list = response.data?.data ?? response.data;
-        console.log(
-          "💰 API: getLoanList - Response: data length:",
-          Array.isArray(list) ? list.length : "N/A",
-          "| pagination:",
-          JSON.stringify(response.data?.pagination ?? {}),
-        );
+        // console.log(
+        //   "💰 API: getLoanList - Response: data length:",
+        //   Array.isArray(list) ? list.length : "N/A",
+        //   "| pagination:",
+        //   JSON.stringify(response.data?.pagination ?? {}),
+        // );
         return response.data;
       } catch (error) {
         if (__DEV__) console.warn("Get loan list error:", error);
@@ -671,22 +671,22 @@ export const apiServices = {
           limit,
           ...(nip_type != null && nip_type !== "" ? { nip_type } : {}),
         };
-        console.log(
-          "🔗 API: getNIPList - GET",
-          ENDPOINTS.LOAN.NIP,
-          "| params:",
-          JSON.stringify(requestParams, null, 2),
-        );
+        // console.log(
+        //   "🔗 API: getNIPList - GET",
+        //   ENDPOINTS.LOAN.NIP,
+        //   "| params:",
+        //   JSON.stringify(requestParams, null, 2),
+        // );
         const response = await apiClient.get(ENDPOINTS.LOAN.NIP, {
           params: requestParams,
         });
         const list = response.data?.data ?? response.data;
-        console.log(
-          "🔗 API: getNIPList - Response: data length:",
-          Array.isArray(list) ? list.length : "N/A",
-          "| pagination:",
-          JSON.stringify(response.data?.pagination ?? {}),
-        );
+        // console.log(
+        //   "🔗 API: getNIPList - Response: data length:",
+        //   Array.isArray(list) ? list.length : "N/A",
+        //   "| pagination:",
+        //   JSON.stringify(response.data?.pagination ?? {}),
+        // );
         return response.data;
       } catch (error) {
         if (__DEV__) console.warn("Get NIP list error:", error);
@@ -1489,24 +1489,24 @@ export const apiServices = {
           limit,
           ...(searchTrimmed && { search: searchTrimmed }),
         };
-        console.log(
-          "📋 API: getDelayedCollections - GET",
-          ENDPOINTS.COLLECTION.DELAY_LIST,
-          "| params:",
-          requestParams,
-        );
+        // console.log(
+        //   "📋 API: getDelayedCollections - GET",
+        //   ENDPOINTS.COLLECTION.DELAY_LIST,
+        //   "| params:",
+        //   requestParams,
+        // );
         const response = await apiClient.get(ENDPOINTS.COLLECTION.DELAY_LIST, {
           params: requestParams,
         });
         const collections =
           response.data?.data?.collections ?? response.data?.data ?? [];
         const list = Array.isArray(collections) ? collections : [];
-        console.log(
-          "📋 API: getDelayedCollections - count:",
-          list.length,
-          "| pagination:",
-          JSON.stringify(response.data?.pagination ?? {}),
-        );
+        // console.log(
+        //   "📋 API: getDelayedCollections - count:",
+        //   list.length,
+        //   "| pagination:",
+        //   JSON.stringify(response.data?.pagination ?? {}),
+        // );
         return response.data;
       } catch (error) {
         if (__DEV__) console.warn("Get delayed collections error:", error);

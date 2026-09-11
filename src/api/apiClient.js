@@ -176,7 +176,7 @@ apiClient.interceptors.request.use(
           (config.params && Object.keys(config.params).length
             ? "?" + new URLSearchParams(config.params).toString()
             : "");
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ $token: ", token);
         console.log(`📤 API REQUEST [${method}]`, fullUrl);
         if (config.params && Object.keys(config.params).length > 0) {
           console.log(
@@ -191,10 +191,10 @@ apiClient.interceptors.request.use(
           ) {
             const keys = [];
             config.data.forEach((_, key) => keys.push(key));
-            console.log(
-              "📤 Request body: FormData (multipart), keys:",
-              keys.join(", "),
-            );
+            // console.log(
+            //   "📤 Request body: FormData (multipart), keys:",
+            //   keys.join(", "),
+            // );
             try {
               config.data.forEach((value, key) => {
                 if (
@@ -203,21 +203,21 @@ apiClient.interceptors.request.use(
                   "uri" in value &&
                   "name" in value
                 ) {
-                  console.log(
-                    `📤   ${key}: [FILE] name=${value.name}, type=${value.type || "n/a"}, uri=${typeof value.uri === "string" ? value.uri.substring(0, 70) + "..." : value.uri}`,
-                  );
+                  // console.log(
+                  //   `📤   ${key}: [FILE] name=${value.name}, type=${value.type || "n/a"}, uri=${typeof value.uri === "string" ? value.uri.substring(0, 70) + "..." : value.uri}`,
+                  // );
                 } else {
                   console.log(`📤   ${key}:`, value);
                 }
               });
             } catch (e) {
-              console.log("📤   (FormData values not logged:", e?.message, ")");
+              // console.log("📤   (FormData values not logged:", e?.message, ")");
             }
           } else {
-            console.log(
-              "📤 Request body:",
-              JSON.stringify(config.data, null, 2),
-            );
+            // console.log(
+            //   "📤 Request body:",
+            //   JSON.stringify(config.data, null, 2),
+            // );
           }
         }
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -269,7 +269,7 @@ apiClient.interceptors.response.use(
         "| Status:",
         response.status,
       );
-      console.log("📥 Response data:", JSON.stringify(response.data, null, 2));
+      //console.log("📥 Response data:", JSON.stringify(response.data, null, 2));
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 

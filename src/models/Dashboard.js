@@ -1,4 +1,4 @@
-import { formatCurrency } from '../utils/amountFormatters';
+import { formatCurrency } from "../utils/amountFormatters";
 
 /**
  * Dashboard Model
@@ -7,7 +7,8 @@ import { formatCurrency } from '../utils/amountFormatters';
 
 function dashBucketAmount(b) {
   if (b == null) return 0;
-  if (typeof b === 'object') return parseFloat(b.total_amount ?? b.totalAmount ?? 0) || 0;
+  if (typeof b === "object")
+    return parseFloat(b.total_amount ?? b.totalAmount ?? 0) || 0;
   return parseFloat(b) || 0;
 }
 
@@ -15,12 +16,12 @@ function dashBucketAmount(b) {
  * `by_payment_type`-style buckets: cash = hard cash; everything else (online, UPI, …) grouped as online.
  */
 function normalizePaymentTypeBuckets(by) {
-  if (!by || typeof by !== 'object') return null;
+  if (!by || typeof by !== "object") return null;
   let cash = dashBucketAmount(by.cash);
   let online = dashBucketAmount(by.online) + dashBucketAmount(by.non_cash);
   for (const [key, val] of Object.entries(by)) {
     const k = String(key).toLowerCase();
-    if (k === 'cash' || k === 'online' || k === 'non_cash') continue;
+    if (k === "cash" || k === "online" || k === "non_cash") continue;
     online += dashBucketAmount(val);
   }
   return { cash, online };
@@ -34,7 +35,7 @@ class Dashboard {
     /** `closing_status` from GET /frontcash/dashboard/today: 0 = can close, 1 = already closed */
     const cs = data.closing_status;
     this.closingStatus =
-      cs != null && cs !== '' && !Number.isNaN(Number(cs)) ? Number(cs) : null;
+      cs != null && cs !== "" && !Number.isNaN(Number(cs)) ? Number(cs) : null;
 
     // Frontcash statistics
     const fc = data.frontcash;
@@ -44,7 +45,7 @@ class Dashboard {
     };
     const fcBt = fc?.by_type;
     this.frontcashByType =
-      fcBt && typeof fcBt === 'object'
+      fcBt && typeof fcBt === "object"
         ? {
             cash: dashBucketAmount(fcBt.cash),
             upi: dashBucketAmount(fcBt.upi),
@@ -58,14 +59,18 @@ class Dashboard {
       totalAmount: data.loans_given?.total_amount || 0,
       count: data.loans_given?.count || 0,
     };
-    this.loansGivenByPaymentType = normalizePaymentTypeBuckets(data.loans_given?.by_payment_type);
+    this.loansGivenByPaymentType = normalizePaymentTypeBuckets(
+      data.loans_given?.by_payment_type,
+    );
 
     // Collections statistics
     this.collections = {
       totalAmount: data.collections?.total_amount || 0,
       count: data.collections?.count || 0,
     };
-    this.collectionsByPaymentType = normalizePaymentTypeBuckets(data.collections?.by_payment_type);
+    this.collectionsByPaymentType = normalizePaymentTypeBuckets(
+      data.collections?.by_payment_type,
+    );
 
     // Processing fees (GET /frontcash/dashboard/today — flat or nested)
     const pfBlock = data.processing_fees ?? data.processing_fee;
@@ -77,8 +82,9 @@ class Dashboard {
     let processingCount = 0;
     const applyPf = (raw) => {
       if (raw == null) return;
-      if (typeof raw === 'object') {
-        processingTotal = raw.total_amount ?? raw.totalAmount ?? processingTotal;
+      if (typeof raw === "object") {
+        processingTotal =
+          raw.total_amount ?? raw.totalAmount ?? processingTotal;
         processingCount = raw.count ?? processingCount;
       } else {
         processingTotal = raw;
@@ -93,7 +99,7 @@ class Dashboard {
       count: parseInt(processingCount, 10) || 0,
     };
     this.processingFeesByPaymentType =
-      pfBlock && typeof pfBlock === 'object'
+      pfBlock && typeof pfBlock === "object"
         ? normalizePaymentTypeBuckets(pfBlock.by_payment_type)
         : null;
 
@@ -102,7 +108,9 @@ class Dashboard {
       totalAmount: data.expenses?.total_amount || 0,
       count: data.expenses?.count || 0,
     };
-    this.expensesByPaymentType = normalizePaymentTypeBuckets(data.expenses?.by_payment_type);
+    this.expensesByPaymentType = normalizePaymentTypeBuckets(
+      data.expenses?.by_payment_type,
+    );
 
     // Tracking statistics
     this.tracking = {
@@ -111,7 +119,8 @@ class Dashboard {
       isTracking: data.tracking?.isTracking || false,
     };
 
-    this.delayedCollectionCount = parseInt(data.delayed_collection_count, 10) || 0;
+    this.delayedCollectionCount =
+      parseInt(data.delayed_collection_count, 10) || 0;
   }
 
   /**
@@ -147,7 +156,10 @@ class Dashboard {
     let frontOnline = 0;
     if (this.frontcashByType) {
       frontCash = this.frontcashByType.cash;
-      frontOnline = this.frontcashByType.upi + this.frontcashByType.bank + this.frontcashByType.other;
+      frontOnline =
+        this.frontcashByType.upi +
+        this.frontcashByType.bank +
+        this.frontcashByType.other;
     }
 
     let collectionCash = 0;
@@ -178,23 +190,24 @@ class Dashboard {
     const expenseTotal = parseFloat(this.expenses?.totalAmount) || 0;
     let expenseCash = 0;
     let expenseOnline = 0;
-    let expenseAllocation = 'none';
+    let expenseAllocation = "none";
 
     if (
       this.expensesByPaymentType &&
-      (this.expensesByPaymentType.cash > 0 || this.expensesByPaymentType.online > 0)
+      (this.expensesByPaymentType.cash > 0 ||
+        this.expensesByPaymentType.online > 0)
     ) {
       expenseCash = this.expensesByPaymentType.cash;
       expenseOnline = this.expensesByPaymentType.online;
-      expenseAllocation = 'by_payment_type';
+      expenseAllocation = "by_payment_type";
     } else if (expenseTotal > 0) {
       if (inflowsCash + inflowsOnline > 0) {
         expenseCash = expenseTotal;
-        expenseAllocation = 'implicit_cash';
+        expenseAllocation = "implicit_cash";
       } else {
         expenseCash = Math.floor(expenseTotal / 2) + (expenseTotal % 2);
         expenseOnline = expenseTotal - expenseCash;
-        expenseAllocation = 'split_half';
+        expenseAllocation = "split_half";
       }
     }
 
@@ -246,7 +259,10 @@ class Dashboard {
 
     if (this.frontcashByType) {
       hard += this.frontcashByType.cash;
-      online += this.frontcashByType.upi + this.frontcashByType.bank + this.frontcashByType.other;
+      online +=
+        this.frontcashByType.upi +
+        this.frontcashByType.bank +
+        this.frontcashByType.other;
     }
 
     const add = (b) => {
@@ -309,7 +325,7 @@ class Dashboard {
     const totalSeconds = parseInt(this.tracking.time) || 0;
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
     }

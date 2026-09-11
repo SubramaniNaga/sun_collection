@@ -1,95 +1,78 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from "@expo/vector-icons";
 
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from "@react-navigation/native";
 
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar } from "expo-status-bar";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
-
   FlatList,
-
   Image,
-
   Keyboard,
-
   Linking,
-
   Modal,
-
   Platform,
-
   RefreshControl,
-
   StyleSheet,
-
   Text,
-
   TextInput,
-
   TouchableOpacity,
-
   View,
-} from 'react-native';
+} from "react-native";
 
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { apiServices } from '../../api/services/apiServices';
+import { apiServices } from "../../api/services/apiServices";
 
-import Header from '../../components/common/Header';
+import Header from "../../components/common/Header";
 
-import ListSkeleton from '../../components/common/ListSkeleton';
+import ListSkeleton from "../../components/common/ListSkeleton";
 
-import VoiceMicButton from '../../components/common/VoiceMicButton';
+import VoiceMicButton from "../../components/common/VoiceMicButton";
 
-import { COLORS, SIZES } from '../../constants/theme';
-import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { COLORS, SIZES } from "../../constants/theme";
+import {
+  DEBOUNCE_MS_DEFAULT,
+  useDebouncedValue,
+} from "../../hooks/useDebouncedValue";
 
-import NIPLoan from '../../models/NIPLoan';
+import NIPLoan from "../../models/NIPLoan";
 
-import { useLanguage } from '../../store/LanguageContext';
+import { useLanguage } from "../../store/LanguageContext";
 
-import { getApiErrorMessage, showError } from '../../utils/alertService';
-import { safeGoBack } from '../../utils/navigationHelpers';
+import { getApiErrorMessage, showError } from "../../utils/alertService";
+import { safeGoBack } from "../../utils/navigationHelpers";
 
-import { formatCurrency } from '../../utils/amountFormatters';
-
-import { formatDisplayDate } from '../../utils/dateFormatter';
-
-
+import { formatCurrency } from "../../utils/amountFormatters";
+import { formatDisplayDate } from "../../utils/dateFormatter";
 
 const LIMIT = 20;
 
-const API_BASE_URL = 'http://65.0.100.65:6005';
-
-
+const API_BASE_URL = "https://sun-enterprises.co.in";
 
 const getImageUrl = (imagePath) => {
-
   if (!imagePath) return null;
 
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://"))
+    return imagePath;
 
-  if (imagePath.startsWith('/api')) return `${API_BASE_URL}${imagePath}`;
+  if (imagePath.startsWith("/api")) return `${API_BASE_URL}${imagePath}`;
 
-  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  const cleanPath = imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
 
   return `${API_BASE_URL}/api/v1${cleanPath}`;
-
 };
 
 const formatAmountOrDash = (value) => {
-
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === "") return "—";
 
   const n = Number(value);
 
-  if (Number.isNaN(n)) return '—';
+  if (Number.isNaN(n)) return "—";
 
   return formatCurrency(value);
-
 };
 
 /** Ordered steps for “one level” font size changes on NIP screen */
@@ -106,19 +89,21 @@ const NIP_FONT_LADDER = [
 function shiftNipFontSize(baseSize, language) {
   const idx = NIP_FONT_LADDER.indexOf(baseSize);
   if (idx === -1) return baseSize;
-  const delta = language === 'ta' ? -1 : 1;
+  const delta = language === "ta" ? -1 : 1;
   const next = Math.max(0, Math.min(NIP_FONT_LADDER.length - 1, idx + delta));
   return NIP_FONT_LADDER[next];
 }
 
 const NIPScreen = ({ navigation }) => {
-
   const { t, language } = useLanguage();
 
   const styles = useMemo(() => createNipScreenStyles(language), [language]);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearchQuery = useDebouncedValue(searchQuery, DEBOUNCE_MS_DEFAULT);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(
+    searchQuery,
+    DEBOUNCE_MS_DEFAULT,
+  );
 
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
 
@@ -135,13 +120,11 @@ const NIPScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
 
   const [pagination, setPagination] = useState({
-
     currentPage: 1,
 
     hasNextPage: false,
 
     totalPages: 1,
-
   });
 
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
@@ -157,28 +140,31 @@ const NIPScreen = ({ navigation }) => {
   const countNipRowsForTab = useCallback((list, nipTypeForApi) => {
     if (!Array.isArray(list)) return 0;
     return list.filter(
-      (row) => String(row.nip_type ?? '').toLowerCase() === nipTypeForApi,
+      (row) => String(row.nip_type ?? "").toLowerCase() === nipTypeForApi,
     ).length;
   }, []);
 
-  const fetchNipTabCounts = useCallback(async (search = debouncedSearchQuery) => {
-    try {
-      const trimmedSearch = search.trim();
-      const response = await apiServices.loan.getNIPList({
-        search: trimmedSearch,
-        page: 1,
-        limit: 500,
-      });
+  const fetchNipTabCounts = useCallback(
+    async (search = debouncedSearchQuery) => {
+      try {
+        const trimmedSearch = search.trim();
+        const response = await apiServices.loan.getNIPList({
+          search: trimmedSearch,
+          page: 1,
+          limit: 500,
+        });
 
-      const list = Array.isArray(response?.data) ? response.data : [];
-      setNipTabCounts({
-        nip1: countNipRowsForTab(list, 'nip1'),
-        nip2: countNipRowsForTab(list, 'nip2'),
-      });
-    } catch {
-      // Keep existing counts if the count request fails.
-    }
-  }, [debouncedSearchQuery, countNipRowsForTab]);
+        const list = Array.isArray(response?.data) ? response.data : [];
+        setNipTabCounts({
+          nip1: countNipRowsForTab(list, "nip1"),
+          nip2: countNipRowsForTab(list, "nip2"),
+        });
+      } catch {
+        // Keep existing counts if the count request fails.
+      }
+    },
+    [debouncedSearchQuery, countNipRowsForTab],
+  );
 
   useEffect(() => {
     if (!headerSearchOpen) return undefined;
@@ -190,117 +176,95 @@ const NIPScreen = ({ navigation }) => {
 
   const closeHeaderSearch = useCallback(() => {
     Keyboard.dismiss();
-    setSearchQuery('');
+    setSearchQuery("");
     setHeaderSearchOpen(false);
   }, []);
 
-  const handleNipTabChange = useCallback((tab) => {
-    if (tab === nipTypeTab) return;
-    setNipList([]);
-    setLoading(true);
-    setNipTypeTab(tab);
-  }, [nipTypeTab]);
+  const handleNipTabChange = useCallback(
+    (tab) => {
+      if (tab === nipTypeTab) return;
+      setNipList([]);
+      setLoading(true);
+      setNipTypeTab(tab);
+    },
+    [nipTypeTab],
+  );
 
-  const fetchNIPLoans = useCallback(async (page = 1, append = false, options = {}) => {
+  const fetchNIPLoans = useCallback(
+    async (page = 1, append = false, options = {}) => {
+      const { skipFullScreenLoader = false } = options;
 
-    const { skipFullScreenLoader = false } = options;
+      const nipTypeForApi = nipTypeTab === 2 ? "nip2" : "nip1";
 
-    const nipTypeForApi = nipTypeTab === 2 ? 'nip2' : 'nip1';
+      try {
+        if (page === 1 && !append && !skipFullScreenLoader) {
+          setLoading(true);
 
-    try {
+          setError(null);
+        } else if (page === 1 && !append && skipFullScreenLoader) {
+          setError(null);
+        } else {
+          setLoadingMore(true);
+        }
 
-      if (page === 1 && !append && !skipFullScreenLoader) {
+        const response = await apiServices.loan.getNIPList({
+          search: debouncedSearchQuery.trim(),
 
-        setLoading(true);
+          page,
 
-        setError(null);
+          limit: LIMIT,
 
-      } else if (page === 1 && !append && skipFullScreenLoader) {
+          nip_type: nipTypeForApi,
+        });
 
-        setError(null);
+        const list = Array.isArray(response?.data) ? response.data : [];
 
-      } else {
+        const listForTab = list.filter(
+          (row) => String(row.nip_type ?? "").toLowerCase() === nipTypeForApi,
+        );
 
-        setLoadingMore(true);
+        const pag = response?.pagination || {};
 
+        const nipLoans = NIPLoan.fromApiResponseArray(listForTab);
+
+        setNipList((prev) => (append ? [...prev, ...nipLoans] : nipLoans));
+
+        setPagination({
+          currentPage: pag.currentPage ?? page,
+
+          hasNextPage: Boolean(pag.hasNextPage),
+
+          totalPages: pag.totalPages ?? 1,
+        });
+      } catch (err) {
+        if (page === 1) {
+          setNipList([]);
+          setError(null);
+          showError(
+            t("common.error"),
+            getApiErrorMessage(err, t("nip.failedToLoad")),
+          );
+        }
+      } finally {
+        setLoading(false);
+
+        setLoadingMore(false);
       }
-
-
-
-      const response = await apiServices.loan.getNIPList({
-
-        search: debouncedSearchQuery.trim(),
-
-        page,
-
-        limit: LIMIT,
-
-        nip_type: nipTypeForApi,
-
-      });
-
-
-
-      const list = Array.isArray(response?.data) ? response.data : [];
-
-      const listForTab = list.filter(
-        (row) => String(row.nip_type ?? '').toLowerCase() === nipTypeForApi,
-      );
-
-      const pag = response?.pagination || {};
-
-      const nipLoans = NIPLoan.fromApiResponseArray(listForTab);
-
-      setNipList((prev) => (append ? [...prev, ...nipLoans] : nipLoans));
-
-      setPagination({
-
-        currentPage: pag.currentPage ?? page,
-
-        hasNextPage: Boolean(pag.hasNextPage),
-
-        totalPages: pag.totalPages ?? 1,
-
-      });
-
-    } catch (err) {
-
-
-      if (page === 1) {
-        setNipList([]);
-        setError(null);
-        showError(t('common.error'), getApiErrorMessage(err, t('nip.failedToLoad')));
-      }
-
-    } finally {
-
-      setLoading(false);
-
-      setLoadingMore(false);
-
-    }
-
-  }, [debouncedSearchQuery, nipTypeTab, t]);
-
-
+    },
+    [debouncedSearchQuery, nipTypeTab, t],
+  );
 
   const onRefresh = useCallback(async () => {
-
     setRefreshing(true);
 
     try {
-
       await Promise.all([
         fetchNIPLoans(1, false, { skipFullScreenLoader: true }),
         fetchNipTabCounts(debouncedSearchQuery),
       ]);
-
     } finally {
-
       setRefreshing(false);
-
     }
-
   }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]);
 
   useFocusEffect(
@@ -313,525 +277,427 @@ const NIPScreen = ({ navigation }) => {
   );
 
   const loadMore = useCallback(() => {
-
     if (loadingMore || !pagination.hasNextPage) return;
 
     const nextPage = pagination.currentPage + 1;
 
     fetchNIPLoans(nextPage, true);
-
-  }, [loadingMore, pagination.hasNextPage, pagination.currentPage, fetchNIPLoans]);
+  }, [
+    loadingMore,
+    pagination.hasNextPage,
+    pagination.currentPage,
+    fetchNIPLoans,
+  ]);
 
   const handleCustomerSelect = (loan) => {
-
-    navigation.navigate('NIPCollectionDetails', { loan });
-
+    navigation.navigate("NIPCollectionDetails", { loan });
   };
 
-
-
   const handlePhonePress = (phoneNumber) => {
-
     const phoneUrl = `tel:${phoneNumber}`;
 
     Linking.openURL(phoneUrl)
 
       .then((supported) => {
-
         if (!supported) {
-
-          showError(t('common.error'), t('collection.call'));
-
+          showError(t("common.error"), t("collection.call"));
         }
-
       })
 
       .catch((err) => {
-
-
-        showError(t('common.error'), t('collection.call'));
-
+        showError(t("common.error"), t("collection.call"));
       });
-
   };
 
-
-
   const handleMapPress = (latitude, longitude) => {
-
     if (!latitude || !longitude) {
-
-      showError(t('common.error'), t('collection.map'));
+      showError(t("common.error"), t("collection.map"));
 
       return;
-
     }
-
-
 
     const lat = parseFloat(latitude);
 
     const lng = parseFloat(longitude);
 
-
-
     if (isNaN(lat) || isNaN(lng)) {
-
-      showError(t('common.error'), t('collection.map'));
+      showError(t("common.error"), t("collection.map"));
 
       return;
-
     }
-
-
 
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
     const googleMapsAppUrl = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}`;
 
-
-
     Linking.canOpenURL(googleMapsAppUrl)
 
       .then((supported) => {
-
         if (supported) {
-
           return Linking.openURL(googleMapsAppUrl);
-
         } else {
-
           return Linking.openURL(googleMapsUrl);
-
         }
-
       })
 
       .catch((err) => {
-
-
         Linking.openURL(googleMapsUrl).catch((fallbackErr) => {
-
-
-          showError(t('common.error'), t('collection.map'));
-
+          showError(t("common.error"), t("collection.map"));
         });
-
       });
-
   };
-
-
 
   const getStatusLabel = (loan) => {
-
     return loan.getStatusLabel();
-
   };
-
-
 
   const formatDate = (dateStr) => {
-
-    if (!dateStr) return '—';
+    if (!dateStr) return "—";
 
     try {
-
       const d = new Date(dateStr);
 
-      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
     } catch {
-
       return dateStr;
-
     }
-
   };
 
-
-
-
-
   const openPhotoModal = (imagePath) => {
-
     const uri = getImageUrl(imagePath);
 
     if (uri) {
-
       setPhotoModalUri(uri);
 
       setPhotoModalVisible(true);
-
     }
-
   };
-
-
 
   const renderNIPItem = ({ item }) => {
-    const customerName = String(item?.customerName ?? item?.customer_name ?? '').trim();
+    const customerName = String(
+      item?.customerName ?? item?.customer_name ?? "",
+    ).trim();
     const isLongCustomerName = customerName.length > 10;
     return (
+      <TouchableOpacity
+        style={styles.nipCard}
+        onPress={() => handleCustomerSelect(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.nipCardHeader}>
+          <TouchableOpacity
+            style={styles.nipCardPhotoWrap}
+            onPress={(e) => {
+              e.stopPropagation();
 
-    <TouchableOpacity
+              openPhotoModal(item?.customerPhoto ?? item?.customer_photo);
+            }}
+            activeOpacity={0.8}
+          >
+            {(item?.customerPhoto ?? item?.customer_photo) ? (
+              <Image
+                source={{
+                  uri: getImageUrl(item?.customerPhoto ?? item?.customer_photo),
+                }}
+                style={styles.nipCardPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={require("../../../assets/images/favicon.png")}
+                style={styles.nipCardPhoto}
+                resizeMode="cover"
+              />
+            )}
+          </TouchableOpacity>
 
-      style={styles.nipCard}
-
-      onPress={() => handleCustomerSelect(item)}
-
-      activeOpacity={0.7}
-
-    >
-
-      <View style={styles.nipCardHeader}>
-
-        <TouchableOpacity
-
-          style={styles.nipCardPhotoWrap}
-
-          onPress={(e) => {
-
-            e.stopPropagation();
-
-            openPhotoModal(item?.customerPhoto ?? item?.customer_photo);
-
-          }}
-
-          activeOpacity={0.8}
-
-        >
-
-          {(item?.customerPhoto ?? item?.customer_photo) ? (
-
-            <Image
-
-              source={{ uri: getImageUrl(item?.customerPhoto ?? item?.customer_photo) }}
-
-              style={styles.nipCardPhoto}
-
-              resizeMode="cover"
-
-            />
-
-          ) : (
-
-            <Image
-
-              source={require('../../../assets/images/favicon.png')}
-
-              style={styles.nipCardPhoto}
-
-              resizeMode="cover"
-
-            />
-
-          )}
-
-        </TouchableOpacity>
-
-        <View style={styles.nipCardHeaderBody}>
-
-          {isLongCustomerName ? (
-            <>
-              <Text style={styles.nipCardNameLine} numberOfLines={2}>
-                {(item?.customerNo ?? item?.customer_no ?? '—')}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
-              </Text>
-              <View style={[styles.statusBadge, styles.statusBadgeBelowName, { backgroundColor: '#FEE2E2' }]}>
-                <Text style={[styles.statusText, styles.statusTextRed]}>{getStatusLabel(item)}</Text>
+          <View style={styles.nipCardHeaderBody}>
+            {isLongCustomerName ? (
+              <>
+                <Text style={styles.nipCardNameLine} numberOfLines={2}>
+                  {item?.customerNo ?? item?.customer_no ?? "—"}
+                  {" - "}
+                  {item?.customerName ?? item?.customer_name ?? "—"}
+                </Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    styles.statusBadgeBelowName,
+                    { backgroundColor: "#FEE2E2" },
+                  ]}
+                >
+                  <Text style={[styles.statusText, styles.statusTextRed]}>
+                    {getStatusLabel(item)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.nipCardNameRow}>
+                <Text
+                  style={[styles.nipCardNameLine, styles.nipCardNameLineInline]}
+                  numberOfLines={1}
+                >
+                  {item?.customerNo ?? item?.customer_no ?? "—"}
+                  {" - "}
+                  {item?.customerName ?? item?.customer_name ?? "—"}
+                </Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    styles.statusBadgeInline,
+                    { backgroundColor: "#FEE2E2" },
+                  ]}
+                >
+                  <Text style={[styles.statusText, styles.statusTextRed]}>
+                    {getStatusLabel(item)}
+                  </Text>
+                </View>
               </View>
-            </>
-          ) : (
-            <View style={styles.nipCardNameRow}>
-              <Text style={[styles.nipCardNameLine, styles.nipCardNameLineInline]} numberOfLines={1}>
-                {(item?.customerNo ?? item?.customer_no ?? '—')}{' - '}{(item?.customerName ?? item?.customer_name ?? '—')}
-              </Text>
-              <View style={[styles.statusBadge, styles.statusBadgeInline, { backgroundColor: '#FEE2E2' }]}>
-                <Text style={[styles.statusText, styles.statusTextRed]}>{getStatusLabel(item)}</Text>
-              </View>
-            </View>
-          )}
-
+            )}
+          </View>
         </View>
 
-      </View>
-
-      <View style={styles.nipCardDivider} />
-
-      <View style={styles.nipCardRow}>
-
-        <Ionicons name="cash-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('loan.loanAmount')}</Text>
-
-        <Text style={styles.nipCardValueAmount}>{formatCurrency(item?.loanAmount)}</Text>
-
-      </View>
-
-      <View style={styles.nipCardRow}>
-
-        <Ionicons name="pricetag-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('loan.interestAmount')}</Text>
-
-        <Text style={styles.nipCardValue} numberOfLines={1}>
-
-          {formatAmountOrDash(item?.intrestAmount ?? item?.intrest_amount)}
-
-        </Text>
-
-      </View>
-
-      <View style={styles.nipCardRow}>
-
-        <Ionicons name="trending-up-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('loan.processingFees')}</Text>
-
-        <Text style={styles.nipCardValue} numberOfLines={1}>
-
-          {formatAmountOrDash(item?.processingFees ?? item?.processing_fees)}
-
-        </Text>
-
-      </View>
-
-
-
-      {item?.balanceAmount != null && item?.balanceAmount !== '' && (
+        <View style={styles.nipCardDivider} />
 
         <View style={styles.nipCardRow}>
+          <Ionicons
+            name="cash-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
 
-          <Ionicons name="wallet-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
+          <Text style={styles.nipCardLabel}>{t("loan.loanAmount")}</Text>
 
-          <Text style={styles.nipCardLabel}>{t('loan.balance')}</Text>
-
-          <Text style={styles.nipCardValue}>{formatCurrency(item?.balanceAmount)}</Text>
-
+          <Text style={styles.nipCardValueAmount}>
+            {formatCurrency(item?.loanAmount)}
+          </Text>
         </View>
 
-      )}
+        <View style={styles.nipCardRow}>
+          <Ionicons
+            name="pricetag-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
 
-      <View style={styles.nipCardRow}>
+          <Text style={styles.nipCardLabel}>{t("loan.interestAmount")}</Text>
 
-        <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('loan.loanPeriod')}</Text>
-
-        <Text style={styles.nipCardValue} numberOfLines={1}>
-
-          {item?.loanPeriod ?? item?.loan_period ?? '—'}/{item?.loanTypeName ?? item?.loan_type_name ?? '—'}
-
-        </Text>
-
-      </View>
-
-      <View style={styles.nipCardRow}>
-
-        <Ionicons name="pie-chart-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('loan.loanDueStatus')}</Text>
-
-        <Text style={styles.nipCardValue}>
-
-          {item?.completed_count ?? 0}({item?.pending_count ?? 0})/{(item?.completed_count ?? 0) + (item?.pending_count ?? 0)}
-
-        </Text>
-
-      </View>
-
-
-
-      <View style={styles.nipCardRow}>
-
-        <Ionicons name="business-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('loan.branch')}</Text>
-
-        <Text style={styles.nipCardValue} numberOfLines={1}>{item?.branchName ?? '—'}</Text>
-
-      </View>
-
-      <View style={styles.nipCardRow}>
-
-        <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text?.tertiary || '#666'} />
-
-        <Text style={styles.nipCardLabel}>{t('nip.nipPaidTotal')}</Text>
-
-        <Text style={styles.nipCardValuePaidTotal}>
-
-          {formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total)}
-
-        </Text>
-
-      </View>
-
-
-
-      <View style={styles.nipCardFooter}>
-
-        <Text style={styles.nipCardDate}>{t('loan.requested')} {formatDisplayDate(item?.requestedDate)}</Text>
-
-        <View style={styles.nipCardFooterIcons}>
-
-          {item?.addressLatitude && item?.addressLongitude && (
-
-            <TouchableOpacity
-
-              style={styles.nipCardIconButton}
-
-              onPress={(e) => {
-
-                e.stopPropagation();
-
-                handleMapPress(item.addressLatitude, item.addressLongitude);
-
-              }}
-
-            >
-
-              <Ionicons name="map-outline" size={18} color={COLORS.error} />
-
-            </TouchableOpacity>
-
-          )}
-
-          {item?.customerPhone && (
-
-            <TouchableOpacity
-
-              style={styles.nipCardIconButton}
-
-              onPress={(e) => {
-
-                e.stopPropagation();
-
-                handlePhonePress(item.customerPhone);
-
-              }}
-
-            >
-
-              <Ionicons name="call" size={18} color={COLORS.error} />
-
-            </TouchableOpacity>
-
-          )}
-
-          <Ionicons name="chevron-forward" size={18} color={COLORS.error} />
-
+          <Text style={styles.nipCardValue} numberOfLines={1}>
+            {formatAmountOrDash(item?.intrestAmount ?? item?.intrest_amount)}
+          </Text>
         </View>
 
-      </View>
+        <View style={styles.nipCardRow}>
+          <Ionicons
+            name="trending-up-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
 
-    </TouchableOpacity>
+          <Text style={styles.nipCardLabel}>{t("loan.processingFees")}</Text>
 
-  );
+          <Text style={styles.nipCardValue} numberOfLines={1}>
+            {formatAmountOrDash(item?.processingFees ?? item?.processing_fees)}
+          </Text>
+        </View>
+
+        {item?.balanceAmount != null && item?.balanceAmount !== "" && (
+          <View style={styles.nipCardRow}>
+            <Ionicons
+              name="wallet-outline"
+              size={16}
+              color={COLORS.text?.tertiary || "#666"}
+            />
+
+            <Text style={styles.nipCardLabel}>{t("loan.balance")}</Text>
+
+            <Text style={styles.nipCardValue}>
+              {formatCurrency(item?.balanceAmount)}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.nipCardRow}>
+          <Ionicons
+            name="business-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
+
+          <Text style={styles.nipCardLabel}>{t("loan.loanPeriod")}</Text>
+
+          <Text style={styles.nipCardValue} numberOfLines={1}>
+            {item?.loanPeriod ?? item?.loan_period ?? "—"}/
+            {item?.loanTypeName ?? item?.loan_type_name ?? "—"}
+          </Text>
+        </View>
+
+        <View style={styles.nipCardRow}>
+          <Ionicons
+            name="pie-chart-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
+
+          <Text style={styles.nipCardLabel}>{t("loan.loanDueStatus")}</Text>
+
+          <Text style={styles.nipCardValue}>
+            {item?.completed_count ?? 0}({item?.pending_count ?? 0})/
+            {(item?.completed_count ?? 0) + (item?.pending_count ?? 0)}
+          </Text>
+        </View>
+
+        <View style={styles.nipCardRow}>
+          <Ionicons
+            name="business-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
+
+          <Text style={styles.nipCardLabel}>{t("loan.branch")}</Text>
+
+          <Text style={styles.nipCardValue} numberOfLines={1}>
+            {item?.branchName ?? "—"}
+          </Text>
+        </View>
+
+        <View style={styles.nipCardRow}>
+          <Ionicons
+            name="checkmark-circle-outline"
+            size={16}
+            color={COLORS.text?.tertiary || "#666"}
+          />
+
+          <Text style={styles.nipCardLabel}>{t("nip.nipPaidTotal")}</Text>
+
+          <Text style={styles.nipCardValuePaidTotal}>
+            {formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total)}
+          </Text>
+        </View>
+
+        <View style={styles.nipCardFooter}>
+          <Text style={styles.nipCardDate}>
+            {t("loan.requested")} {formatDisplayDate(item?.requestedDate)}
+          </Text>
+
+          <View style={styles.nipCardFooterIcons}>
+            {item?.addressLatitude && item?.addressLongitude && (
+              <TouchableOpacity
+                style={styles.nipCardIconButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+
+                  handleMapPress(item.addressLatitude, item.addressLongitude);
+                }}
+              >
+                <Ionicons name="map-outline" size={18} color={COLORS.error} />
+              </TouchableOpacity>
+            )}
+
+            {item?.customerPhone && (
+              <TouchableOpacity
+                style={styles.nipCardIconButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+
+                  handlePhonePress(item.customerPhone);
+                }}
+              >
+                <Ionicons name="call" size={18} color={COLORS.error} />
+              </TouchableOpacity>
+            )}
+
+            <Ionicons name="chevron-forward" size={18} color={COLORS.error} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
-
-
   const renderFooter = () => {
-
     if (!loadingMore) return null;
 
     return (
-
       <View style={styles.footerLoader}>
-
         <ListSkeleton count={2} />
-
       </View>
-
     );
-
   };
 
-
-
   const renderEmpty = () => {
-
     // Initial load only: show spinner (never skeleton). Pagination = skeleton in footer only.
 
     if (loading) {
-
       return (
-
         <View style={styles.centerWrap}>
-
           <ActivityIndicator size="large" color={COLORS.primary} />
 
-          <Text style={styles.loadingText}>{t('nip.loadingNIP')}</Text>
-
+          <Text style={styles.loadingText}>{t("nip.loadingNIP")}</Text>
         </View>
-
       );
-
     }
 
     if (debouncedSearchQuery.trim() && nipList.length === 0) {
-
       return (
-
         <View style={styles.emptyState}>
+          <Ionicons
+            name="search-outline"
+            size={48}
+            color={COLORS.text.tertiary}
+          />
 
-          <Ionicons name="search-outline" size={48} color={COLORS.text.tertiary} />
+          <Text style={styles.emptyStateText}>{t("nip.noSearchMatches")}</Text>
 
-          <Text style={styles.emptyStateText}>{t('nip.noSearchMatches')}</Text>
-
-          <Text style={styles.emptyStateSubText}>{t('common.search')}</Text>
-
+          <Text style={styles.emptyStateSubText}>{t("common.search")}</Text>
         </View>
-
       );
-
     }
 
     return (
-
       <View style={styles.emptyState}>
+        <Ionicons
+          name="document-text-outline"
+          size={48}
+          color={COLORS.text.tertiary}
+        />
 
-        <Ionicons name="document-text-outline" size={48} color={COLORS.text.tertiary} />
+        <Text style={styles.emptyStateText}>{t("nip.noNIPLoans")}</Text>
 
-        <Text style={styles.emptyStateText}>{t('nip.noNIPLoans')}</Text>
-
-        <Text style={styles.emptyStateSubText}>{t('nip.noNIPLoansHint')}</Text>
-
+        <Text style={styles.emptyStateSubText}>{t("nip.noNIPLoansHint")}</Text>
       </View>
-
     );
-
   };
 
-
-
   return (
-
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-
+    <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
 
-
-
       <Header
-
-        title={t('nip.title')}
-
+        title={t("nip.title")}
         showBackButton={true}
-
         onBackPress={() => safeGoBack(navigation)}
-
         searchExpanded={headerSearchOpen}
-
         searchExpandedContent={
           headerSearchOpen ? (
             <View style={styles.headerSearchRow}>
-              <Ionicons name="search" size={18} color={COLORS.primary} style={styles.headerSearchIcon} />
+              <Ionicons
+                name="search"
+                size={18}
+                color={COLORS.primary}
+                style={styles.headerSearchIcon}
+              />
               <View style={styles.headerSearchInputWrap}>
                 <TextInput
                   ref={headerSearchInputRef}
-                style={[styles.headerSearchInput, styles.headerSearchInputSized]}
-                  placeholder={t('nip.searchPlaceholder')}
+                  style={[
+                    styles.headerSearchInput,
+                    styles.headerSearchInputSized,
+                  ]}
+                  placeholder={t("nip.searchPlaceholder")}
                   placeholderTextColor={COLORS.text.tertiary}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -843,811 +709,637 @@ const NIPScreen = ({ navigation }) => {
                   underlineColorAndroid="transparent"
                 />
               </View>
-              <VoiceMicButton value={searchQuery} onChangeText={setSearchQuery} />
+              <VoiceMicButton
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
               <TouchableOpacity
                 style={styles.headerSearchCloseBtn}
                 onPress={closeHeaderSearch}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 accessibilityRole="button"
-                accessibilityLabel={t('common.close')}
+                accessibilityLabel={t("common.close")}
               >
-                <Ionicons name="close" size={22} color={COLORS.text.secondary} />
+                <Ionicons
+                  name="close"
+                  size={22}
+                  color={COLORS.text.secondary}
+                />
               </TouchableOpacity>
             </View>
           ) : null
         }
-
-        rightComponent={(
+        rightComponent={
           <TouchableOpacity
             style={styles.headerSearchIconButton}
             onPress={() => setHeaderSearchOpen(true)}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={t('common.search')}
+            accessibilityLabel={t("common.search")}
           >
             <Ionicons name="search-outline" size={24} color={COLORS.white} />
           </TouchableOpacity>
-        )}
+        }
       />
 
       <View style={styles.topSection}>
-
         <View style={styles.nipTabsRow}>
-
           <TouchableOpacity
-
             style={[styles.nipTab, nipTypeTab === 1 && styles.nipTabActive]}
-
             onPress={() => handleNipTabChange(1)}
-
             activeOpacity={0.7}
-
           >
-
             <Text
-              style={[styles.nipTabText, nipTypeTab === 1 && styles.nipTabTextActive]}
+              style={[
+                styles.nipTabText,
+                nipTypeTab === 1 && styles.nipTabTextActive,
+              ]}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.85}
             >
-
-              {t('nip.tabNIP1')} ({nipTabCounts.nip1})
-
+              {t("nip.tabNIP1")} ({nipTabCounts.nip1})
             </Text>
-
           </TouchableOpacity>
 
           <TouchableOpacity
-
             style={[styles.nipTab, nipTypeTab === 2 && styles.nipTabActive]}
-
             onPress={() => handleNipTabChange(2)}
-
             activeOpacity={0.7}
-
           >
-
             <Text
-              style={[styles.nipTabText, nipTypeTab === 2 && styles.nipTabTextActive]}
+              style={[
+                styles.nipTabText,
+                nipTypeTab === 2 && styles.nipTabTextActive,
+              ]}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.85}
             >
-
-              {t('nip.tabNIP2')} ({nipTabCounts.nip2})
-
+              {t("nip.tabNIP2")} ({nipTabCounts.nip2})
             </Text>
-
           </TouchableOpacity>
-
         </View>
-
       </View>
 
-
-
       <FlatList
-
         data={nipList}
-
         keyExtractor={(item) => String(item?.id ?? Math.random())}
-
         renderItem={renderNIPItem}
-
         contentContainerStyle={
-
           nipList.length === 0
-
             ? styles.nipListContainerEmpty
-
             : styles.nipListContainer
-
         }
-
         showsVerticalScrollIndicator={false}
-
         onEndReached={loadMore}
-
         onEndReachedThreshold={0.3}
-
         ListEmptyComponent={renderEmpty}
-
         ListFooterComponent={nipList.length > 0 ? renderFooter : null}
-
         refreshControl={
-
           <RefreshControl
-
             refreshing={refreshing}
-
             onRefresh={onRefresh}
-
             colors={[COLORS.primary]}
-
             tintColor={COLORS.primary}
-
           />
-
         }
-
       />
 
-
-
       <Modal
-
         visible={photoModalVisible}
-
         transparent
-
         animationType="fade"
-
         onRequestClose={() => setPhotoModalVisible(false)}
-
       >
-
         <TouchableOpacity
-
           style={styles.photoModalBackdrop}
-
           activeOpacity={1}
-
           onPress={() => setPhotoModalVisible(false)}
-
         >
-
           <View style={styles.photoModalContent}>
-
             <TouchableOpacity
-
               style={styles.photoModalClose}
-
               onPress={() => setPhotoModalVisible(false)}
-
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-
             >
-
               <Ionicons name="close-circle" size={36} color={COLORS.white} />
-
             </TouchableOpacity>
 
             {photoModalUri ? (
-
               <Image
-
                 source={{ uri: photoModalUri }}
-
                 style={styles.photoModalImage}
-
                 resizeMode="contain"
-
               />
-
             ) : null}
-
           </View>
-
         </TouchableOpacity>
-
       </Modal>
-
     </SafeAreaView>
-
   );
-
 };
-
-
 
 function createNipScreenStyles(language) {
   const font = (base) => shiftNipFontSize(base, language);
 
   return StyleSheet.create({
+    container: {
+      flex: 1,
 
-  container: {
+      backgroundColor: COLORS.background,
+    },
 
-    flex: 1,
+    topSection: {
+      backgroundColor: COLORS.white,
 
-    backgroundColor: COLORS.background,
+      borderBottomWidth: 1,
 
-  },
+      borderBottomColor: COLORS.border,
+    },
 
-  topSection: {
+    headerSearchRow: {
+      flexDirection: "row",
 
-    backgroundColor: COLORS.white,
+      flexWrap: "nowrap",
 
-    borderBottomWidth: 1,
+      alignItems: "center",
 
-    borderBottomColor: COLORS.border,
+      backgroundColor: COLORS.white,
 
-  },
+      borderRadius: SIZES.radius * 1.25,
 
-  headerSearchRow: {
+      paddingHorizontal: SIZES.base,
 
-    flexDirection: 'row',
+      paddingVertical: Platform.OS === "android" ? 2 : 4,
 
-    flexWrap: 'nowrap',
+      borderWidth: 1,
 
-    alignItems: 'center',
+      borderColor: "rgba(255,255,255,0.35)",
 
-    backgroundColor: COLORS.white,
+      minHeight: 36,
+    },
 
-    borderRadius: SIZES.radius * 1.25,
+    headerSearchIcon: {
+      marginRight: SIZES.base / 2,
 
-    paddingHorizontal: SIZES.base,
+      flexShrink: 0,
+    },
 
-    paddingVertical: Platform.OS === 'android' ? 2 : 4,
+    headerSearchInputWrap: {
+      flex: 1,
 
-    borderWidth: 1,
+      minWidth: 0,
 
-    borderColor: 'rgba(255,255,255,0.35)',
+      justifyContent: "center",
+    },
 
-    minHeight: 36,
+    headerSearchInput: {
+      flexGrow: 1,
 
-  },
+      width: "100%",
 
-  headerSearchIcon: {
+      minWidth: 0,
 
-    marginRight: SIZES.base / 2,
+      paddingVertical: Platform.OS === "android" ? 4 : 6,
 
-    flexShrink: 0,
+      paddingHorizontal: 0,
 
-  },
+      margin: 0,
 
-  headerSearchInputWrap: {
+      color: COLORS.black,
 
-    flex: 1,
+      ...(Platform.OS === "android"
+        ? { textAlignVertical: "center", includeFontPadding: false }
+        : {}),
+    },
 
-    minWidth: 0,
+    headerSearchInputSized: {
+      fontSize: font(SIZES.body3),
 
-    justifyContent: 'center',
+      lineHeight: Math.ceil(font(SIZES.body3) * 1.2),
 
-  },
+      maxHeight:
+        Platform.OS === "android"
+          ? Math.max(28, Math.round(font(SIZES.body3) * 2.55))
+          : Math.max(32, Math.round(font(SIZES.body3) * 2.75)),
+    },
 
-  headerSearchInput: {
+    headerSearchIconButton: {
+      width: 40,
 
-    flexGrow: 1,
+      height: 40,
 
-    width: '100%',
+      justifyContent: "center",
 
-    minWidth: 0,
+      alignItems: "center",
+    },
 
-    paddingVertical: Platform.OS === 'android' ? 4 : 6,
+    headerSearchCloseBtn: {
+      flexShrink: 0,
 
-    paddingHorizontal: 0,
+      justifyContent: "center",
 
-    margin: 0,
+      alignItems: "center",
 
-    color: COLORS.black,
+      paddingLeft: SIZES.base / 2,
 
-    ...(Platform.OS === 'android'
+      marginLeft: SIZES.base / 2,
+    },
 
-      ? { textAlignVertical: 'center', includeFontPadding: false }
+    nipTabsRow: {
+      flexDirection: "row",
 
-      : {}),
+      paddingHorizontal: SIZES.padding,
 
-  },
+      paddingTop: SIZES.base,
 
-  headerSearchInputSized: {
+      paddingBottom: SIZES.base,
 
-    fontSize: font(SIZES.body3),
+      gap: SIZES.base / 2,
+    },
 
-    lineHeight: Math.ceil(font(SIZES.body3) * 1.2),
+    nipTab: {
+      flex: 1,
 
-    maxHeight:
-      Platform.OS === 'android'
-        ? Math.max(28, Math.round(font(SIZES.body3) * 2.55))
-        : Math.max(32, Math.round(font(SIZES.body3) * 2.75)),
+      alignItems: "center",
 
-  },
+      justifyContent: "center",
 
-  headerSearchIconButton: {
+      paddingVertical: SIZES.base,
 
-    width: 40,
+      paddingHorizontal: SIZES.base,
 
-    height: 40,
+      borderRadius: SIZES.radius * 0.75,
 
-    justifyContent: 'center',
+      backgroundColor: COLORS.lightGray,
 
-    alignItems: 'center',
+      borderWidth: 1,
 
-  },
+      borderColor: COLORS.border,
+    },
 
-  headerSearchCloseBtn: {
+    nipTabActive: {
+      backgroundColor: COLORS.primary,
 
-    flexShrink: 0,
+      borderColor: COLORS.primary,
+    },
 
-    justifyContent: 'center',
+    nipTabText: {
+      fontSize: font(SIZES.body3),
 
-    alignItems: 'center',
+      fontWeight: "600",
 
-    paddingLeft: SIZES.base / 2,
+      color: COLORS.text.secondary,
+    },
 
-    marginLeft: SIZES.base / 2,
+    nipTabTextActive: {
+      color: COLORS.white,
+    },
 
-  },
+    skeletonContainer: {
+      flex: 1,
 
-  nipTabsRow: {
+      padding: SIZES.padding,
+    },
 
-    flexDirection: 'row',
+    skeletonWrap: {
+      flex: 1,
+    },
 
-    paddingHorizontal: SIZES.padding,
+    nipListContainer: {
+      padding: SIZES.padding,
+    },
 
-    paddingTop: SIZES.base,
+    nipListContainerEmpty: {
+      flex: 1,
+    },
 
-    paddingBottom: SIZES.base,
+    nipCard: {
+      backgroundColor: COLORS.white,
 
-    gap: SIZES.base / 2,
+      borderRadius: SIZES.radius,
 
-  },
+      padding: SIZES.padding,
 
-  nipTab: {
+      marginBottom: SIZES.margin,
 
-    flex: 1,
+      borderWidth: 1,
 
-    alignItems: 'center',
+      borderColor: COLORS.error,
 
-    justifyContent: 'center',
+      shadowColor: COLORS.black,
 
-    paddingVertical: SIZES.base,
+      shadowOffset: { width: 0, height: 2 },
 
-    paddingHorizontal: SIZES.base,
+      shadowOpacity: 0.05,
 
-    borderRadius: SIZES.radius * 0.75,
+      shadowRadius: 3.84,
 
-    backgroundColor: COLORS.lightGray,
+      elevation: 3,
+    },
 
-    borderWidth: 1,
+    nipCardHeader: {
+      flexDirection: "row",
 
-    borderColor: COLORS.border,
+      alignItems: "center",
+    },
 
-  },
+    nipCardHeaderBody: {
+      flex: 1,
 
-  nipTabActive: {
+      flexDirection: "column",
 
-    backgroundColor: COLORS.primary,
+      justifyContent: "center",
 
-    borderColor: COLORS.primary,
+      paddingRight: SIZES.base * 0.25,
+    },
 
-  },
+    nipCardDivider: {
+      height: StyleSheet.hairlineWidth,
 
-  nipTabText: {
+      backgroundColor: COLORS.gray,
 
-    fontSize: font(SIZES.body3),
+      marginVertical: SIZES.base * 0.75,
+    },
 
-    fontWeight: '600',
+    nipCardNameLine: {
+      fontSize: font(SIZES.body2),
 
-    color: COLORS.text.secondary,
+      fontWeight: "700",
 
-  },
+      color: COLORS.error,
 
-  nipTabTextActive: {
+      marginBottom: SIZES.base * 0.375,
 
-    color: COLORS.white,
+      lineHeight: Math.round(font(SIZES.body2) * 1.25),
+    },
+    nipCardNameLineInline: {
+      marginBottom: 0,
+      flex: 1,
+      marginRight: SIZES.base * 0.75,
+    },
+    nipCardNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
 
-  },
+    nipCardPhotoWrap: {
+      width: 40,
 
-  skeletonContainer: {
+      height: 40,
 
-    flex: 1,
+      borderRadius: 20,
 
-    padding: SIZES.padding,
+      overflow: "hidden",
 
-  },
+      marginRight: SIZES.base * 0.75,
+    },
 
-  skeletonWrap: {
+    nipCardPhoto: {
+      width: "100%",
 
-    flex: 1,
+      height: "100%",
+    },
 
-  },
+    nipCardPhotoPlaceholder: {
+      width: "100%",
 
-  nipListContainer: {
+      height: "100%",
 
-    padding: SIZES.padding,
+      backgroundColor: COLORS.lightGray,
 
-  },
+      alignItems: "center",
 
-  nipListContainerEmpty: {
+      justifyContent: "center",
+    },
 
-    flex: 1,
+    statusBadge: {
+      paddingHorizontal: SIZES.base * 0.75,
 
-  },
+      paddingVertical: 2,
 
-  nipCard: {
+      borderRadius: 4,
+    },
 
-    backgroundColor: COLORS.white,
+    statusBadgeBelowName: {
+      alignSelf: "flex-start",
+    },
+    statusBadgeInline: {
+      alignSelf: "center",
+    },
 
-    borderRadius: SIZES.radius,
+    statusText: {
+      fontSize: font(SIZES.body4),
 
-    padding: SIZES.padding,
+      fontWeight: "600",
 
-    marginBottom: SIZES.margin,
+      color: COLORS.white,
+    },
 
-    borderWidth: 1,
+    statusTextRed: {
+      color: COLORS.error,
+    },
 
-    borderColor: COLORS.error,
+    nipCardRow: {
+      flexDirection: "row",
 
-    shadowColor: COLORS.black,
+      alignItems: "center",
 
-    shadowOffset: { width: 0, height: 2 },
+      marginBottom: SIZES.base * 0.5,
 
-    shadowOpacity: 0.05,
+      gap: SIZES.base * 0.5,
+    },
 
-    shadowRadius: 3.84,
+    nipCardLabel: {
+      fontSize: font(SIZES.body3),
 
-    elevation: 3,
+      color: COLORS.text.tertiary,
 
-  },
+      flex: 1,
+    },
 
-  nipCardHeader: {
+    nipCardValue: {
+      fontSize: font(SIZES.body3),
 
-    flexDirection: 'row',
+      fontWeight: "500",
 
-    alignItems: 'center',
+      color: COLORS.text.secondary,
 
-  },
+      flex: 1,
 
-  nipCardHeaderBody: {
+      textAlign: "right",
+    },
 
-    flex: 1,
+    nipCardValueAmount: {
+      fontSize: font(SIZES.body2),
 
-    flexDirection: 'column',
+      fontWeight: "600",
 
-    justifyContent: 'center',
+      color: COLORS.error,
 
-    paddingRight: SIZES.base * 0.25,
+      flex: 1,
 
-  },
+      textAlign: "right",
+    },
 
-  nipCardDivider: {
+    nipCardValuePaidTotal: {
+      fontSize: font(SIZES.body2),
 
-    height: StyleSheet.hairlineWidth,
+      fontWeight: "600",
 
-    backgroundColor: COLORS.gray,
+      color: COLORS.primary,
 
-    marginVertical: SIZES.base * 0.75,
+      flex: 1,
 
-  },
+      textAlign: "right",
+    },
 
-  nipCardNameLine: {
+    nipCardFooter: {
+      flexDirection: "row",
 
-    fontSize: font(SIZES.body2),
+      justifyContent: "space-between",
 
-    fontWeight: '700',
+      alignItems: "center",
 
-    color: COLORS.error,
+      marginTop: SIZES.margin * 0.5,
 
-    marginBottom: SIZES.base * 0.375,
+      paddingTop: SIZES.margin * 0.5,
 
-    lineHeight: Math.round(font(SIZES.body2) * 1.25),
+      borderTopWidth: StyleSheet.hairlineWidth,
 
-  },
-  nipCardNameLineInline: {
-    marginBottom: 0,
-    flex: 1,
-    marginRight: SIZES.base * 0.75,
-  },
-  nipCardNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+      borderTopColor: COLORS.border,
+    },
 
-  nipCardPhotoWrap: {
+    nipCardDate: {
+      fontSize: font(SIZES.body4),
 
-    width: 40,
+      color: COLORS.text.tertiary,
+    },
 
-    height: 40,
+    nipCardFooterIcons: {
+      flexDirection: "row",
 
-    borderRadius: 20,
+      alignItems: "center",
 
-    overflow: 'hidden',
+      gap: SIZES.base,
+    },
 
-    marginRight: SIZES.base * 0.75,
+    nipCardIconButton: {
+      padding: SIZES.base * 0.5,
+    },
 
-  },
+    footerLoader: {
+      paddingVertical: SIZES.margin,
+    },
 
-  nipCardPhoto: {
+    centerWrap: {
+      flex: 1,
 
-    width: '100%',
+      justifyContent: "center",
 
-    height: '100%',
+      alignItems: "center",
 
-  },
+      padding: SIZES.padding * 2,
+    },
 
-  nipCardPhotoPlaceholder: {
+    loadingText: {
+      marginTop: SIZES.margin,
 
-    width: '100%',
+      fontSize: font(SIZES.body2),
 
-    height: '100%',
+      color: COLORS.text.secondary,
+    },
 
-    backgroundColor: COLORS.lightGray,
+    emptyState: {
+      flex: 1,
 
-    alignItems: 'center',
+      justifyContent: "center",
 
-    justifyContent: 'center',
+      alignItems: "center",
 
-  },
+      padding: SIZES.padding * 2,
+    },
 
-  statusBadge: {
+    emptyStateText: {
+      fontSize: font(SIZES.body1),
 
-    paddingHorizontal: SIZES.base * 0.75,
+      fontWeight: "600",
 
-    paddingVertical: 2,
+      color: COLORS.text.secondary,
 
-    borderRadius: 4,
+      marginTop: SIZES.margin,
 
-  },
+      textAlign: "center",
+    },
 
-  statusBadgeBelowName: {
+    emptyStateSubText: {
+      fontSize: font(SIZES.body3),
 
-    alignSelf: 'flex-start',
+      color: COLORS.text.tertiary,
 
-  },
-  statusBadgeInline: {
-    alignSelf: 'center',
-  },
+      marginTop: SIZES.base,
 
-  statusText: {
+      textAlign: "center",
+    },
 
-    fontSize: font(SIZES.body4),
+    retryButton: {
+      marginTop: SIZES.margin,
 
-    fontWeight: '600',
+      paddingHorizontal: SIZES.padding * 1.5,
 
-    color: COLORS.white,
+      paddingVertical: SIZES.base,
 
-  },
+      backgroundColor: COLORS.primary,
 
-  statusTextRed: {
+      borderRadius: SIZES.radius,
+    },
 
-    color: COLORS.error,
+    retryButtonText: {
+      color: COLORS.white,
 
-  },
+      fontSize: font(SIZES.body2),
 
-  nipCardRow: {
+      fontWeight: "600",
+    },
 
-    flexDirection: 'row',
+    photoModalBackdrop: {
+      flex: 1,
 
-    alignItems: 'center',
+      backgroundColor: "rgba(0,0,0,0.85)",
 
-    marginBottom: SIZES.base * 0.5,
+      justifyContent: "center",
 
-    gap: SIZES.base * 0.5,
+      alignItems: "center",
+    },
 
-  },
+    photoModalContent: {
+      width: "100%",
 
-  nipCardLabel: {
+      height: "100%",
 
-    fontSize: font(SIZES.body3),
+      justifyContent: "center",
 
-    color: COLORS.text.tertiary,
+      alignItems: "center",
+    },
 
-    flex: 1,
+    photoModalClose: {
+      position: "absolute",
 
-  },
+      top: 50,
 
-  nipCardValue: {
+      right: 20,
 
-    fontSize: font(SIZES.body3),
+      zIndex: 1,
+    },
 
-    fontWeight: '500',
+    photoModalImage: {
+      width: "100%",
 
-    color: COLORS.text.secondary,
-
-    flex: 1,
-
-    textAlign: 'right',
-
-  },
-
-  nipCardValueAmount: {
-
-    fontSize: font(SIZES.body2),
-
-    fontWeight: '600',
-
-    color: COLORS.error,
-
-    flex: 1,
-
-    textAlign: 'right',
-
-  },
-
-  nipCardValuePaidTotal: {
-
-    fontSize: font(SIZES.body2),
-
-    fontWeight: '600',
-
-    color: COLORS.primary,
-
-    flex: 1,
-
-    textAlign: 'right',
-
-  },
-
-  nipCardFooter: {
-
-    flexDirection: 'row',
-
-    justifyContent: 'space-between',
-
-    alignItems: 'center',
-
-    marginTop: SIZES.margin * 0.5,
-
-    paddingTop: SIZES.margin * 0.5,
-
-    borderTopWidth: StyleSheet.hairlineWidth,
-
-    borderTopColor: COLORS.border,
-
-  },
-
-  nipCardDate: {
-
-    fontSize: font(SIZES.body4),
-
-    color: COLORS.text.tertiary,
-
-  },
-
-  nipCardFooterIcons: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: SIZES.base,
-
-  },
-
-  nipCardIconButton: {
-
-    padding: SIZES.base * 0.5,
-
-  },
-
-  footerLoader: {
-
-    paddingVertical: SIZES.margin,
-
-  },
-
-  centerWrap: {
-
-    flex: 1,
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-    padding: SIZES.padding * 2,
-
-  },
-
-  loadingText: {
-
-    marginTop: SIZES.margin,
-
-    fontSize: font(SIZES.body2),
-
-    color: COLORS.text.secondary,
-
-  },
-
-  emptyState: {
-
-    flex: 1,
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-    padding: SIZES.padding * 2,
-
-  },
-
-  emptyStateText: {
-
-    fontSize: font(SIZES.body1),
-
-    fontWeight: '600',
-
-    color: COLORS.text.secondary,
-
-    marginTop: SIZES.margin,
-
-    textAlign: 'center',
-
-  },
-
-  emptyStateSubText: {
-
-    fontSize: font(SIZES.body3),
-
-    color: COLORS.text.tertiary,
-
-    marginTop: SIZES.base,
-
-    textAlign: 'center',
-
-  },
-
-  retryButton: {
-
-    marginTop: SIZES.margin,
-
-    paddingHorizontal: SIZES.padding * 1.5,
-
-    paddingVertical: SIZES.base,
-
-    backgroundColor: COLORS.primary,
-
-    borderRadius: SIZES.radius,
-
-  },
-
-  retryButtonText: {
-
-    color: COLORS.white,
-
-    fontSize: font(SIZES.body2),
-
-    fontWeight: '600',
-
-  },
-
-  photoModalBackdrop: {
-
-    flex: 1,
-
-    backgroundColor: 'rgba(0,0,0,0.85)',
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-  },
-
-  photoModalContent: {
-
-    width: '100%',
-
-    height: '100%',
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-  },
-
-  photoModalClose: {
-
-    position: 'absolute',
-
-    top: 50,
-
-    right: 20,
-
-    zIndex: 1,
-
-  },
-
-  photoModalImage: {
-
-    width: '100%',
-
-    height: '80%',
-
-  },
-
+      height: "80%",
+    },
   });
-
 }
 
 export default NIPScreen;
-

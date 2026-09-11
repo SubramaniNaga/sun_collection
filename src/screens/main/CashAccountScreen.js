@@ -448,12 +448,15 @@ const CashAccountScreen = ({ navigation }) => {
         upfrontByCash + upfrontByOnline
       : Number(openingSummary?.total_frontcash ?? 0) ||
         upfrontByCash + upfrontByOnline;
+  // const loanGiven =
+  //   todayDashboard != null
+  //     ? Number(todayDashboard.loansGiven?.totalAmount ?? 0) || 0
+  //     : Number(
+  //         stats?.loan_given_amount ?? openingSummary?.total_loangiven ?? 0,
+  //       ) || 0;
+
   const loanGiven =
-    todayDashboard != null
-      ? Number(todayDashboard.loansGiven?.totalAmount ?? 0) || 0
-      : Number(
-          stats?.loan_given_amount ?? openingSummary?.total_loangiven ?? 0,
-        ) || 0;
+    stats != null ? Number(stats.loan_given_amount ?? 0) || 0 : 0;
   const expenses =
     todayDashboard != null
       ? Number(todayDashboard.expenses?.totalAmount ?? 0) || 0
