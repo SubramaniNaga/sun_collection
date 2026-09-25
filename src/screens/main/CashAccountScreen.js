@@ -20,7 +20,7 @@ import { apiServices } from "../../api/services/apiServices";
 import DatePicker from "../../components/common/DatePicker";
 import Header from "../../components/common/Header";
 import { COLORS, SIZES } from "../../constants/theme";
-import Collection from "../../models/Collection";
+// import Collection from "../../models/Collection";
 import Dashboard from "../../models/Dashboard";
 import { useLanguage } from "../../store/LanguageContext";
 import {
@@ -223,7 +223,7 @@ const CashAccountScreen = ({ navigation }) => {
   const [stats, setStats] = useState(null); // from /collection/history
   const [openingSummary, setOpeningSummary] = useState(null); // from /frontcash/openingbalance
   const [processingFeeTotal, setProcessingFeeTotal] = useState(0);
-  /** Today's GET /frontcash/dashboard/today parsed model — drives upfront, fees, expenses for single-day today */
+  /** Today's GET /frontcash/dashboard/today — close-account channel split / upfront (table uses openingbalance) */
   const [todayDashboard, setTodayDashboard] = useState(null);
   /** Cash vs online: today's dashboard {@link Dashboard#getCashPositionSplit}, else collection history. */
   const [collectionPaymentSplit, setCollectionPaymentSplit] = useState({
@@ -304,7 +304,8 @@ const CashAccountScreen = ({ navigation }) => {
       const raw = dashboardDataFromTodayApi(todayDashRes);
       const dash = Dashboard.fromApiResponse(raw);
       setTodayDashboard(dash);
-      setProcessingFeeTotal(Number(dash.processingFees?.totalAmount ?? 0) || 0);
+      // Processing fee now comes from /frontcash/openingbalance `processing_fee`
+      // setProcessingFeeTotal(Number(dash.processingFees?.totalAmount ?? 0) || 0);
       setCollectionPaymentSplit(dash.getCashPositionSplit());
     } catch (err) {
       console.warn("CashAccountScreen: applyTodayDashboardResponse", err);
@@ -353,7 +354,10 @@ const CashAccountScreen = ({ navigation }) => {
         : Array.isArray(openingRes)
           ? openingRes
           : [];
-      setOpeningSummary(openingList?.[0] ?? null);
+      const openingRow = openingList?.[0] ?? null;
+      setOpeningSummary(openingRow);
+      // Magimai / processing fee from GET /frontcash/openingbalance
+      setProcessingFeeTotal(Number(openingRow?.processing_fee ?? 0) || 0);
 
       if (useTodayDashboardForFees && todayDashRes != null) {
         applyTodayDashboardResponse(todayDashRes);
@@ -366,38 +370,39 @@ const CashAccountScreen = ({ navigation }) => {
           (p) => apiServices.collection.getCollectionHistory(p),
         );
         setCollectionPaymentSplit(paySplit);
-        // Processing fee for non-today ranges: sum daily collection lists when range is small.
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(0, 0, 0, 0);
-        const days =
-          Math.floor(
-            (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
-          ) + 1;
-        if (days >= 1 && days <= 31) {
-          let sumProcessing = 0;
-          for (let i = 0; i < days; i += 1) {
-            const d = new Date(start);
-            d.setDate(start.getDate() + i);
-            const dateStr = formatDateForAPI(d);
-            const collectionsRes =
-              await apiServices.collection.getCollectionList({
-                collection_date: dateStr,
-              });
-            const colRaw =
-              collectionsRes?.response ?? collectionsRes?.data ?? [];
-            const colArr = Array.isArray(colRaw) ? colRaw : [];
-            const collections = Collection.fromApiResponseArray(colArr);
-            sumProcessing += collections.reduce(
-              (sum, c) => sum + (parseFloat(c.processingFees) || 0),
-              0,
-            );
-          }
-          setProcessingFeeTotal(sumProcessing);
-        } else {
-          setProcessingFeeTotal(0);
-        }
+        // Processing fee for non-today ranges was summed from daily collection lists.
+        // Now taken from openingbalance.processing_fee above.
+        // const start = new Date(startDate);
+        // const end = new Date(endDate);
+        // start.setHours(0, 0, 0, 0);
+        // end.setHours(0, 0, 0, 0);
+        // const days =
+        //   Math.floor(
+        //     (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+        //   ) + 1;
+        // if (days >= 1 && days <= 31) {
+        //   let sumProcessing = 0;
+        //   for (let i = 0; i < days; i += 1) {
+        //     const d = new Date(start);
+        //     d.setDate(start.getDate() + i);
+        //     const dateStr = formatDateForAPI(d);
+        //     const collectionsRes =
+        //       await apiServices.collection.getCollectionList({
+        //         collection_date: dateStr,
+        //       });
+        //     const colRaw =
+        //       collectionsRes?.response ?? collectionsRes?.data ?? [];
+        //     const colArr = Array.isArray(colRaw) ? colRaw : [];
+        //     const collections = Collection.fromApiResponseArray(colArr);
+        //     sumProcessing += collections.reduce(
+        //       (sum, c) => sum + (parseFloat(c.processingFees) || 0),
+        //       0,
+        //     );
+        //   }
+        //   setProcessingFeeTotal(sumProcessing);
+        // } else {
+        //   setProcessingFeeTotal(0);
+        // }
       }
     } catch (err) {
       showError(
@@ -448,27 +453,10 @@ const CashAccountScreen = ({ navigation }) => {
         upfrontByCash + upfrontByOnline
       : Number(openingSummary?.total_frontcash ?? 0) ||
         upfrontByCash + upfrontByOnline;
-  // const loanGiven =
-  //   todayDashboard != null
-  //     ? Number(todayDashboard.loansGiven?.totalAmount ?? 0) || 0
-  //     : Number(
-  //         stats?.loan_given_amount ?? openingSummary?.total_loangiven ?? 0,
-  //       ) || 0;
-
-  const loanGiven =
-    stats != null ? Number(stats.loan_given_amount ?? 0) || 0 : 0;
-  const expenses =
-    todayDashboard != null
-      ? Number(todayDashboard.expenses?.totalAmount ?? 0) || 0
-      : Number(stats?.expenses_spent ?? openingSummary?.total_expeses ?? 0) ||
-        0;
-  const collectionCompleted =
-    todayDashboard != null
-      ? Number(todayDashboard.collections?.totalAmount ?? 0) || 0
-      : Number(
-          stats?.collected_amount ?? openingSummary?.total_collection ?? 0,
-        ) || 0;
-
+  // Table rows: GET /frontcash/openingbalance only (not dashboard / collection history).
+  const loanGiven = Number(openingSummary?.total_loangiven ?? 0) || 0;
+  const expenses = Number(openingSummary?.total_expeses ?? 0) || 0;
+  const collectionCompleted = Number(openingSummary?.total_collection ?? 0) || 0;
   const previousBalance =
     Number(
       openingSummary?.opening_balance ?? openingSummary?.previous_balance ?? 0,
