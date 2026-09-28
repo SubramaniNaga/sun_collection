@@ -112,6 +112,183 @@ function roundMoney2(value) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/** Number or null (rejects '', null, undefined, NaN, Infinity). */
+function toNumOrNull(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * First finite number found at any dot path in `source`.
+ * A path that lands on an object reads its `total_amount` / `total` / `amount` /
+ * `balance` / `closing_balance` child.
+ */
+function pickNum(source, paths) {
+  if (!source || typeof source !== "object") return null;
+  for (const path of paths) {
+    const keys = path.split(".");
+    let cur = source;
+    let found = true;
+    for (const k of keys) {
+      if (cur == null || typeof cur !== "object" || !(k in cur)) {
+        found = false;
+        break;
+      }
+      cur = cur[k];
+    }
+    if (!found) continue;
+    if (cur != null && typeof cur === "object") {
+      const n = toNumOrNull(
+        cur.total_amount ??
+          cur.total ??
+          cur.amount ??
+          cur.balance ??
+          cur.closing_balance,
+      );
+      if (n !== null) return n;
+      continue;
+    }
+    const n = toNumOrNull(cur);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+/** GET /close-account-view → in-hand (hard cash) closing balance. */
+const VIEW_CASH_PATHS = [
+  "closing_balance_by_cash",
+  "closing_balance.cash",
+  "closing_balance.in_hand",
+  "closing_balance.cash_amount",
+  "closing.cash",
+  "cash_closing_balance",
+  "channel_closing_balance.cash",
+  "channel_balance.cash",
+  "by_channel.cash",
+  "by_payment_type.cash",
+  "totals.cash",
+  "totals.cash_closing_balance",
+  "amounts.cash",
+  "cash.closing_balance",
+  "cash.total_amount",
+  "cash.total",
+];
+
+/** GET /close-account-view → account (online / non-cash) closing balance. */
+const VIEW_ACCOUNT_PATHS = [
+  "closing_balance_by_account",
+  "closing_balance.account",
+  "closing_balance.online",
+  "closing.account",
+  "account_closing_balance",
+  "online_closing_balance",
+  "channel_closing_balance.account",
+  "channel_closing_balance.online",
+  "channel_balance.account",
+  "channel_balance.online",
+  "by_channel.account",
+  "by_channel.online",
+  "by_payment_type.account",
+  "by_payment_type.online",
+  "totals.account",
+  "totals.online",
+  "amounts.account",
+  "amounts.online",
+  "account.closing_balance",
+  "account.total_amount",
+  "account.total",
+  "online.closing_balance",
+  "online.total_amount",
+  "online.total",
+];
+
+/** First finite number among an object's own values (one level, non-recursive). */
+function firstNumericLeaf(obj) {
+  if (!obj || typeof obj !== "object") return null;
+  for (const k of [
+    "total_amount",
+    "total",
+    "amount",
+    "balance",
+    "closing_balance",
+    "value",
+  ]) {
+    const n = toNumOrNull(obj[k]);
+    if (n !== null) return n;
+  }
+  for (const v of Object.values(obj)) {
+    const n = toNumOrNull(v);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+/**
+ * Depth-first search for `key` anywhere in a JSON response, so the value is
+ * found no matter how deeply the backend nests it.
+ * @returns {{ value: number, path: string } | null}
+ */
+function deepFindNum(source, key, maxDepth = 6, trail = "") {
+  if (!source || typeof source !== "object" || maxDepth < 0) return null;
+  if (Object.prototype.hasOwnProperty.call(source, key)) {
+    const direct = toNumOrNull(source[key]);
+    if (direct !== null) return { value: direct, path: `${trail}${key}` };
+    const nested =
+      source[key] && typeof source[key] === "object"
+        ? firstNumericLeaf(source[key])
+        : null;
+    if (nested !== null)
+      return { value: nested, path: `${trail}${key}.<total>` };
+  }
+  for (const k of Object.keys(source)) {
+    const v = source[k];
+    if (v && typeof v === "object") {
+      const found = deepFindNum(v, key, maxDepth - 1, `${trail}${k}.`);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Read the two channel closing balances straight out of GET /close-account-view.
+ * Prefers the exact keys `closing_balance_by_cash` / `closing_balance_by_account`
+ * at any nesting depth, then falls back to the known field-name variants.
+ * @returns {{ cash: number|null, account: number|null, cashPath: string|null, accountPath: string|null }}
+ */
+function deriveClosingBalancesFromView(view) {
+  const cashHit = deepFindNum(view, "closing_balance_by_cash");
+  const accountHit = deepFindNum(view, "closing_balance_by_account");
+
+  let cash = cashHit ? cashHit.value : null;
+  let cashPath = cashHit ? `deep:${cashHit.path}` : null;
+  let account = accountHit ? accountHit.value : null;
+  let accountPath = accountHit ? `deep:${accountHit.path}` : null;
+
+  if (cash === null) {
+    for (const p of VIEW_CASH_PATHS) {
+      const n = pickNum(view, [p]);
+      if (n !== null) {
+        cash = n;
+        cashPath = p;
+        break;
+      }
+    }
+  }
+  if (account === null) {
+    for (const p of VIEW_ACCOUNT_PATHS) {
+      const n = pickNum(view, [p]);
+      if (n !== null) {
+        account = n;
+        accountPath = p;
+        break;
+      }
+    }
+  }
+  return { cash, account, cashPath, accountPath };
+}
+
 /** Whole rupees only; `cash + online` equals `totalInt` (Hamilton / largest remainder, two-way). */
 function splitBalanceIntoChannelInts(totalInt, weightCash, weightOnline) {
   const t = Math.round(Number(totalInt));
@@ -531,11 +708,17 @@ const CashAccountScreen = ({ navigation }) => {
               let closing_balance_by_cash;
               let channelSource;
 
-              if (todayDashboard != null) {
+              /** Primary: channel balances straight from GET /close-account-view. */
+              const viewBalances = deriveClosingBalancesFromView(closeAccountView);
+
+              if (viewBalances.cash !== null && viewBalances.account !== null) {
+                closing_balance_by_cash = roundMoney2(viewBalances.cash);
+                closing_balance_by_account = roundMoney2(viewBalances.account);
+                channelSource = `GET /close-account-view (cash ← ${viewBalances.cashPath}, account ← ${viewBalances.accountPath})`;
+              } else if (todayDashboard != null) {
                 channelBreakdown =
                   todayDashboard.getCloseAccountChannelBreakdown();
-                channelSource =
-                  "GET /frontcash/dashboard/today (parsed Dashboard)";
+                channelSource = `GET /frontcash/dashboard/today (parsed Dashboard) — close-account-view had no channel balances (cash=${viewBalances.cash}, account=${viewBalances.account})`;
                 closing_balance_by_cash = roundMoney2(
                   channelBreakdown.cash.net,
                 );
@@ -544,7 +727,7 @@ const CashAccountScreen = ({ navigation }) => {
                 );
               } else {
                 channelSource =
-                  "fallback: totalBalance × collection cash/online mix (today dashboard missing)";
+                  "fallback: totalBalance × collection cash/online mix (close-account-view had no channel balances and today dashboard missing)";
                 const c = Number(collectionPaymentSplit.cash) || 0;
                 const o = Number(collectionPaymentSplit.online) || 0;
                 const mix = c + o;
@@ -558,6 +741,15 @@ const CashAccountScreen = ({ navigation }) => {
                   closing_balance_by_cash = half;
                   closing_balance_by_account = tbInt - half;
                 }
+              }
+
+              if (viewBalances.cash === null || viewBalances.account === null) {
+                console.warn(
+                  "[CloseAccount] close-account-view did not expose both channel balances. Available top-level keys:",
+                  closeAccountView && typeof closeAccountView === "object"
+                    ? Object.keys(closeAccountView)
+                    : closeAccountView,
+                );
               }
 
               console.log(
@@ -574,6 +766,25 @@ const CashAccountScreen = ({ navigation }) => {
                 "[CloseAccount] channel calculation source:",
                 channelSource,
               );
+
+              if (!channelBreakdown) {
+                console.log(
+                  "[CloseAccount] closing_balance_by_cash ← view:",
+                  viewBalances.cash,
+                  "(",
+                  viewBalances.cashPath ?? "no match",
+                  ") →",
+                  closing_balance_by_cash,
+                );
+                console.log(
+                  "[CloseAccount] closing_balance_by_account ← view:",
+                  viewBalances.account,
+                  "(",
+                  viewBalances.accountPath ?? "no match",
+                  ") →",
+                  closing_balance_by_account,
+                );
+              }
 
               if (channelBreakdown) {
                 const ch = channelBreakdown.cash;
@@ -661,6 +872,21 @@ const CashAccountScreen = ({ navigation }) => {
                   "[CloseAccount] closing_balance_by_account (estimated):",
                   closing_balance_by_account,
                 );
+              }
+
+              if (
+                !Number.isFinite(closing_balance_by_cash) ||
+                !Number.isFinite(closing_balance_by_account)
+              ) {
+                console.error(
+                  "[CloseAccount] Aborting: channel balances are not finite",
+                  { closing_balance_by_cash, closing_balance_by_account },
+                );
+                showError(
+                  t("common.error"),
+                  t("errors.somethingWentWrong"),
+                );
+                return;
               }
 
               const closePayload = {

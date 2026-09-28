@@ -41,21 +41,37 @@ export const ErrorHandler = {
       return error;
     }
 
-    // Network errors
-    if (!error.response && error.code === 'NETWORK_ERROR') {
+    // Timeout errors — must be checked BEFORE the network branch, because a
+    // timed-out request also has no `error.response`.
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       return new APIError(
-        ERROR_MESSAGES.NETWORK_ERROR,
-        ERROR_TYPES.NETWORK_ERROR,
+        ERROR_MESSAGES.TIMEOUT_ERROR,
+        ERROR_TYPES.TIMEOUT_ERROR,
         null,
         error
       );
     }
 
-    // Timeout errors
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+    // Network errors — no response was received (DNS, refused, reset, CORS,
+    // unreachable host). Axios 1.x sets code 'ERR_NETWORK'; React Native's
+    // XHR adapter often sets no code and only says "Network Error".
+    const NETWORK_CODES = [
+      'ERR_NETWORK',
+      'NETWORK_ERROR',
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+    ];
+    if (
+      !error.response &&
+      (NETWORK_CODES.includes(error.code) || error.message === 'Network Error')
+    ) {
       return new APIError(
-        ERROR_MESSAGES.TIMEOUT_ERROR,
-        ERROR_TYPES.TIMEOUT_ERROR,
+        ERROR_MESSAGES.NETWORK_ERROR,
+        ERROR_TYPES.NETWORK_ERROR,
         null,
         error
       );

@@ -290,6 +290,8 @@ apiClient.interceptors.response.use(
         url,
         "| Status:",
         error.response?.status,
+        "| Code:",
+        error.code,
         "| Message:",
         error.message,
       );

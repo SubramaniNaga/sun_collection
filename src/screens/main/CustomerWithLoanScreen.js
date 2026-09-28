@@ -1473,7 +1473,6 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                       items={loanDayOptions}
                       placeholder={t('customer.selectRegisterDay')}
                       error={errors.registerDay}
-                      editable={false}
                       style={styles.existingPickerCompact}
                       visible={registerDayPickerOpen}
                       onVisibleChange={(open) => {
