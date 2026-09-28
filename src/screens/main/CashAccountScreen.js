@@ -38,20 +38,6 @@ import {
 } from "../../utils/dateFormatter";
 import { safeGoBack } from "../../utils/navigationHelpers";
 
-/**
- * `stats.closingbalance` (or `closing_balance`) from GET /collection/history:
- * when boolean/1 flag (not a currency total), period is closed — hide Close Account UI.
- */
-function isClosingBalanceDone(statsLike) {
-  if (!statsLike || typeof statsLike !== "object") return false;
-  const v = statsLike.closingbalance ?? statsLike.closing_balance;
-  if (v === true) return true;
-  if (v === 1 || v === "1") return true;
-  if (typeof v === "string" && v.toLowerCase() === "true") return true;
-  // Numeric closing balances from the API are monetary totals, not "closed" flags.
-  return false;
-}
-
 /** Normalize GET /frontcash/dashboard/today response for {@link Dashboard.fromApiResponse} */
 function dashboardDataFromTodayApi(res) {
   if (!res || typeof res !== "object") return {};
@@ -80,54 +66,6 @@ function dashboardDataFromTodayApi(res) {
     return res;
   }
   return {};
-}
-
-const HISTORY_PAGE_SIZE = 100;
-const HISTORY_MAX_PAGES = 50;
-
-/**
- * Sum collection receipt amounts by payment_type from /collection/history pages.
- */
-async function sumPaymentSplitAcrossPages(
-  fromDate,
-  toDate,
-  firstPageRes,
-  fetchHistoryFn,
-) {
-  let cash = 0;
-  let online = 0;
-  const addCollections = (cols) => {
-    if (!Array.isArray(cols)) return;
-    for (const row of cols) {
-      const amt = parseFloat(row.amount_paid ?? 0) || 0;
-      const pt = String(row.payment_type ?? "")
-        .toLowerCase()
-        .trim();
-      if (pt === "cash") {
-        cash += amt;
-      } else {
-        online += amt;
-      }
-    }
-  };
-
-  addCollections(firstPageRes?.data?.collections);
-
-  let page = 2;
-  let pag = firstPageRes?.pagination ?? {};
-  while (Boolean(pag.hasNextPage) && page <= HISTORY_MAX_PAGES) {
-    const res = await fetchHistoryFn({
-      from_date: fromDate,
-      to_date: toDate,
-      page,
-      limit: HISTORY_PAGE_SIZE,
-    });
-    addCollections(res?.data?.collections);
-    pag = res?.pagination ?? {};
-    page += 1;
-  }
-
-  return { cash, online };
 }
 
 /** YYYY-MM-DD keys after POST closeaccount returns `data.inserted === true` (one close per day). */
@@ -212,6 +150,51 @@ function splitBalanceIntoChannelInts(totalInt, weightCash, weightOnline) {
   return { cashNet, onlineNet };
 }
 
+/** Pick weekly_plan row by key; fall back to amounts.{key}. */
+function planRowAmount(view, key, side = "credit") {
+  const rows = view?.weekly_plan?.rows;
+  if (Array.isArray(rows)) {
+    const row = rows.find((r) => r?.key === key);
+    if (row) {
+      return {
+        credit: Number(row.credit ?? 0) || 0,
+        debit: Number(row.debit ?? 0) || 0,
+        label: row.label != null ? String(row.label) : null,
+      };
+    }
+  }
+  const amt = Number(view?.amounts?.[key] ?? 0) || 0;
+  if (side === "debit") {
+    return { credit: 0, debit: amt, label: null };
+  }
+  return { credit: amt, debit: 0, label: null };
+}
+
+/**
+ * Credit-side line (opening, collection, nip, magimai, aathayam):
+ * always use credit; fall back to amounts / debit if API only filled those.
+ */
+function creditSideValue(view, key) {
+  const row = planRowAmount(view, key, "credit");
+  const fromAmounts = Number(view?.amounts?.[key] ?? 0) || 0;
+  return (Number(row.credit) || 0) || fromAmounts || (Number(row.debit) || 0);
+}
+
+/**
+ * Debit-side line (loan, expenses):
+ * always use debit; fall back to amounts / credit if API only filled those.
+ */
+function debitSideValue(view, key) {
+  const row = planRowAmount(view, key, "debit");
+  const fromAmounts = Number(view?.amounts?.[key] ?? 0) || 0;
+  return (Number(row.debit) || 0) || fromAmounts || (Number(row.credit) || 0);
+}
+
+/** Format amount for a table cell. */
+function formatCellAmount(n) {
+  return formatCurrency(String(Number(n) || 0));
+}
+
 const CashAccountScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
@@ -220,12 +203,10 @@ const CashAccountScreen = ({ navigation }) => {
   const [errors, setErrors] = useState({});
   const [startDate, setStartDate] = useState(getCalendarDateISO());
   const [endDate, setEndDate] = useState(getCalendarDateISO());
-  const [stats, setStats] = useState(null); // from /collection/history
-  const [openingSummary, setOpeningSummary] = useState(null); // from /frontcash/openingbalance
-  const [processingFeeTotal, setProcessingFeeTotal] = useState(0);
-  /** Today's GET /frontcash/dashboard/today — close-account channel split / upfront (table uses openingbalance) */
+  /** GET /close-account-view `data` */
+  const [closeAccountView, setCloseAccountView] = useState(null);
+  /** Today's GET /frontcash/dashboard/today — channel split + closing_status for Close Account */
   const [todayDashboard, setTodayDashboard] = useState(null);
-  /** Cash vs online: today's dashboard {@link Dashboard#getCashPositionSplit}, else collection history. */
   const [collectionPaymentSplit, setCollectionPaymentSplit] = useState({
     cash: 0,
     online: 0,
@@ -235,13 +216,9 @@ const CashAccountScreen = ({ navigation }) => {
   const [expenseDetailsVisible, setExpenseDetailsVisible] = useState(false);
 
   const expenseDetailRows = useMemo(() => {
-    const list =
-      (Array.isArray(openingSummary?.expenses_list) &&
-        openingSummary.expenses_list) ||
-      (Array.isArray(openingSummary?.expense_list) &&
-        openingSummary.expense_list) ||
-      (Array.isArray(stats?.expenses_list) && stats.expenses_list) ||
-      [];
+    const list = Array.isArray(closeAccountView?.expenses?.list)
+      ? closeAccountView.expenses.list
+      : [];
     return list.map((item, index) => ({
       id: item?.id != null ? String(item.id) : `expense-${index}`,
       label:
@@ -249,7 +226,16 @@ const CashAccountScreen = ({ navigation }) => {
         t("cashAccount.expenses"),
       amount: Number(item?.amount ?? 0) || 0,
     }));
-  }, [openingSummary, stats, t]);
+  }, [closeAccountView, t]);
+
+  const showExpensesRow = useMemo(() => {
+    const exp = closeAccountView?.expenses;
+    if (!exp) return false;
+    const total = Number(exp.total ?? 0) || 0;
+    const count = Number(exp.count ?? 0) || 0;
+    const listLen = Array.isArray(exp.list) ? exp.list.length : 0;
+    return total > 0 || count > 0 || listLen > 0;
+  }, [closeAccountView]);
 
   useFocusEffect(
     useCallback(() => {
@@ -304,8 +290,6 @@ const CashAccountScreen = ({ navigation }) => {
       const raw = dashboardDataFromTodayApi(todayDashRes);
       const dash = Dashboard.fromApiResponse(raw);
       setTodayDashboard(dash);
-      // Processing fee now comes from /frontcash/openingbalance `processing_fee`
-      // setProcessingFeeTotal(Number(dash.processingFees?.totalAmount ?? 0) || 0);
       setCollectionPaymentSplit(dash.getCashPositionSplit());
     } catch (err) {
       console.warn("CashAccountScreen: applyTodayDashboardResponse", err);
@@ -319,105 +303,47 @@ const CashAccountScreen = ({ navigation }) => {
       const fromDate = formatDateForAPI(startDate);
       const toDate = formatDateForAPI(endDate);
       const todayStr = getCurrentDateString();
-      const useTodayDashboardForFees =
-        fromDate === toDate && fromDate === todayStr;
+      const isTodayRange = fromDate === toDate && fromDate === todayStr;
 
-      const [openingRes, historyRes, todayDashRes] = await Promise.all([
-        apiServices.upfrontCash.getOpeningBalance({
+      const [viewRes, todayDashRes] = await Promise.all([
+        apiServices.upfrontCash.getCloseAccountView({
           from_date: fromDate,
           to_date: toDate,
-          page: 1,
-          limit: 1,
         }),
-        apiServices.collection.getCollectionHistory({
-          from_date: fromDate,
-          to_date: toDate,
-          page: 1,
-          limit: HISTORY_PAGE_SIZE,
-        }),
-        useTodayDashboardForFees
+        isTodayRange
           ? apiServices.dashboard.getTodayStats().catch((err) => {
-              console.warn(
-                "CashAccountScreen: dashboard today (processing fee):",
-                err,
-              );
+              console.warn("CashAccountScreen: dashboard today:", err);
               return null;
             })
           : Promise.resolve(null),
       ]);
 
-      const historyStats = historyRes?.data?.stats ?? null;
-      setStats(historyStats);
+      const viewData =
+        viewRes?.data && typeof viewRes.data === "object"
+          ? viewRes.data
+          : viewRes && typeof viewRes === "object" && viewRes.amounts
+            ? viewRes
+            : null;
+      setCloseAccountView(viewData);
 
-      const openingList = Array.isArray(openingRes?.data)
-        ? openingRes.data
-        : Array.isArray(openingRes)
-          ? openingRes
-          : [];
-      const openingRow = openingList?.[0] ?? null;
-      setOpeningSummary(openingRow);
-      // Magimai / processing fee from GET /frontcash/openingbalance
-      setProcessingFeeTotal(Number(openingRow?.processing_fee ?? 0) || 0);
-
-      if (useTodayDashboardForFees && todayDashRes != null) {
+      if (isTodayRange && todayDashRes != null) {
         applyTodayDashboardResponse(todayDashRes);
       } else {
         setTodayDashboard(null);
-        const paySplit = await sumPaymentSplitAcrossPages(
-          fromDate,
-          toDate,
-          historyRes,
-          (p) => apiServices.collection.getCollectionHistory(p),
-        );
-        setCollectionPaymentSplit(paySplit);
-        // Processing fee for non-today ranges was summed from daily collection lists.
-        // Now taken from openingbalance.processing_fee above.
-        // const start = new Date(startDate);
-        // const end = new Date(endDate);
-        // start.setHours(0, 0, 0, 0);
-        // end.setHours(0, 0, 0, 0);
-        // const days =
-        //   Math.floor(
-        //     (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
-        //   ) + 1;
-        // if (days >= 1 && days <= 31) {
-        //   let sumProcessing = 0;
-        //   for (let i = 0; i < days; i += 1) {
-        //     const d = new Date(start);
-        //     d.setDate(start.getDate() + i);
-        //     const dateStr = formatDateForAPI(d);
-        //     const collectionsRes =
-        //       await apiServices.collection.getCollectionList({
-        //         collection_date: dateStr,
-        //       });
-        //     const colRaw =
-        //       collectionsRes?.response ?? collectionsRes?.data ?? [];
-        //     const colArr = Array.isArray(colRaw) ? colRaw : [];
-        //     const collections = Collection.fromApiResponseArray(colArr);
-        //     sumProcessing += collections.reduce(
-        //       (sum, c) => sum + (parseFloat(c.processingFees) || 0),
-        //       0,
-        //     );
-        //   }
-        //   setProcessingFeeTotal(sumProcessing);
-        // } else {
-        //   setProcessingFeeTotal(0);
-        // }
+        setCollectionPaymentSplit({ cash: 0, online: 0 });
       }
     } catch (err) {
       showError(
         t("common.error"),
         getApiErrorMessage(err, t("errors.somethingWentWrong")),
       );
-      setStats(null);
-      setOpeningSummary(null);
-      setProcessingFeeTotal(0);
+      setCloseAccountView(null);
       setTodayDashboard(null);
       setCollectionPaymentSplit({ cash: 0, online: 0 });
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, validateDates, applyTodayDashboardResponse]);
+  }, [startDate, endDate, validateDates, applyTodayDashboardResponse, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -425,92 +351,45 @@ const CashAccountScreen = ({ navigation }) => {
     }, [fetchSummary]),
   );
 
-  // Prefer dashboard frontcashByType (cash vs upi+bank+other). Fall back to openingbalance totals.
-  const upfrontByCash =
-    todayDashboard != null
-      ? Number(todayDashboard.frontcashByType?.cash ?? 0) || 0
-      : Number(
-          openingSummary?.total_frontcash_by_type?.cash ??
-            openingSummary?.total_frontcash ??
-            0,
-        ) || 0;
-  const upfrontByOnline =
-    todayDashboard != null
-      ? Number(
-          (todayDashboard.frontcashByType?.upi ?? 0) +
-            (todayDashboard.frontcashByType?.bank ?? 0) +
-            (todayDashboard.frontcashByType?.other ?? 0),
-        ) || 0
-      : Number(
-          openingSummary?.total_frontcash_online ??
-            openingSummary?.total_frontcash_by_type?.online ??
-            openingSummary?.total_frontcash_by_type?.upi ??
-            0,
-        ) || 0;
-  const upfrontCash =
-    todayDashboard != null
-      ? Number(todayDashboard.frontcash?.totalAmount ?? 0) ||
-        upfrontByCash + upfrontByOnline
-      : Number(openingSummary?.total_frontcash ?? 0) ||
-        upfrontByCash + upfrontByOnline;
-  // Table rows: GET /frontcash/openingbalance only (not dashboard / collection history).
-  const loanGiven = Number(openingSummary?.total_loangiven ?? 0) || 0;
-  const expenses = Number(openingSummary?.total_expeses ?? 0) || 0;
-  const collectionCompleted = Number(openingSummary?.total_collection ?? 0) || 0;
-  const previousBalance =
-    Number(
-      openingSummary?.opening_balance ?? openingSummary?.previous_balance ?? 0,
-    ) || 0;
+  const openingBalance = creditSideValue(closeAccountView, "opening_balance");
+  const collectionCompleted = creditSideValue(closeAccountView, "collection");
+  const nipCollection = creditSideValue(closeAccountView, "nip_collection");
+  const magimai = creditSideValue(closeAccountView, "magimai");
+  const aathayam = creditSideValue(closeAccountView, "aathayam");
+  const loanGiven = debitSideValue(closeAccountView, "loan");
+  const expenses = debitSideValue(closeAccountView, "expenses");
 
-  /** Received total: previous balance + collection + magimai. */
+  /** Credit (Varavu): opening + collection + nip + magimai + aathayam. */
   const totalReceived = useMemo(
-    () => previousBalance + processingFeeTotal + collectionCompleted,
-    [previousBalance, processingFeeTotal, collectionCompleted],
+    () =>
+      openingBalance +
+      collectionCompleted +
+      nipCollection +
+      magimai +
+      aathayam,
+    [
+      openingBalance,
+      collectionCompleted,
+      nipCollection,
+      magimai,
+      aathayam,
+    ],
   );
 
-  /** Spent total: loan given + expenses. */
-  const totalSpent = useMemo(() => loanGiven + expenses, [loanGiven, expenses]);
+  /** Debit (Pattru): loan + expenses (when shown). */
+  const totalSpent = useMemo(
+    () => loanGiven + (showExpensesRow ? expenses : 0),
+    [loanGiven, expenses, showExpensesRow],
+  );
 
-  /**
-   * Net closing (Close Account payload): received total − spent total.
-   */
+  /** Closing = Credit − Debit (may be negative; shown under Debit column). */
   const totalBalance = useMemo(
     () => totalReceived - totalSpent,
     [totalReceived, totalSpent],
   );
 
   /**
-   * **In account** / **In hand** (footer): same formula as the table, but each line item is split
-   * using dashboard `by_type` / `by_payment_type`:
-   * `(front + collection + processing fee) − (expenses + loan given)` per channel.
-   * Without today's dashboard, totals are split across channels approximately from collections mix.
-   */
-  const channelEodBalances = useMemo(() => {
-    if (todayDashboard != null) {
-      const b = todayDashboard.getCloseAccountChannelBreakdown();
-      return {
-        onlineNet: Math.round(b.online.net),
-        cashNet: Math.round(b.cash.net),
-      };
-    }
-    const c = Number(collectionPaymentSplit.cash) || 0;
-    const o = Number(collectionPaymentSplit.online) || 0;
-    const mix = c + o;
-    const tbInt = Math.round(Number(totalBalance));
-    if (mix > 0) {
-      const { cashNet, onlineNet } = splitBalanceIntoChannelInts(tbInt, c, o);
-      return { onlineNet, cashNet };
-    }
-    const half = Math.trunc(tbInt / 2);
-    return {
-      onlineNet: tbInt - half,
-      cashNet: half,
-    };
-  }, [todayDashboard, collectionPaymentSplit, totalBalance]);
-
-  /**
    * Close Account may run only on the **current calendar day**: both pickers must match today (YYYY-MM-DD).
-   * Past/future single-day ranges or multi-day ranges must not show the button.
    */
   const isCurrentDaySelectedForClose = useMemo(() => {
     const todayKey = getCurrentDateString();
@@ -521,10 +400,7 @@ const CashAccountScreen = ({ navigation }) => {
     );
   }, [startDate, endDate]);
 
-  const accountClosingBlocked = useMemo(
-    () => isClosingBalanceDone(stats),
-    [stats],
-  );
+  const accountClosingBlocked = false;
 
   const selectedDayKey = useMemo(
     () => formatDateForAPI(startDate),
@@ -897,14 +773,15 @@ const CashAccountScreen = ({ navigation }) => {
           <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={[
-            styles.contentScroll,
+        <View
+          style={[
+            styles.contentBody,
             {
-              paddingBottom: (showCloseAccountButton ? 96 : 24) + insets.bottom,
+              paddingBottom: showCloseAccountButton
+                ? 96 + insets.bottom
+                : SIZES.padding + insets.bottom,
             },
           ]}
-          showsVerticalScrollIndicator={false}
         >
           <View style={styles.summaryHeader}>
             <Ionicons
@@ -975,76 +852,80 @@ const CashAccountScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* {renderTableRow3(
-              'upfrontByCash',
-              t('cashAccount.upfrontByCash'),
-              null,
-              formatCurrency(String(upfrontByCash))
-            )}
-            {renderTableRow3(
-              'upfrontByOnline',
-              t('cashAccount.upfrontByOnline'),
-              null,
-              formatCurrency(String(upfrontByOnline))
-            )} */}
             {renderTableRow3(
               "previousBalance",
               t("cashAccount.previousBalance"),
               null,
-              formatCurrency(String(previousBalance)),
+              formatCellAmount(openingBalance),
             )}
             {renderTableRow3(
               "collection",
               t("cashAccount.collection"),
               null,
-              formatCurrency(String(collectionCompleted)),
+              formatCellAmount(collectionCompleted),
+            )}
+            {renderTableRow3(
+              "nipCollection",
+              t("cashAccount.nipCollection"),
+              null,
+              formatCellAmount(nipCollection),
             )}
             {renderTableRow3(
               "magimai",
               t("cashAccount.magimai"),
               null,
-              formatCurrency(String(processingFeeTotal)),
+              formatCellAmount(magimai),
+            )}
+            {renderTableRow3(
+              "aathayam",
+              t("cashAccount.aathayam"),
+              null,
+              formatCellAmount(aathayam),
             )}
             {renderTableRow3(
               "loanGiven",
               t("cashAccount.loanGiven"),
-              formatCurrency(String(loanGiven)),
+              formatCellAmount(loanGiven),
               null,
+              showExpensesRow ? undefined : styles.tableGridRowLastBeforeFooter,
             )}
-            {renderTableRow3(
-              "expenses",
-              t("cashAccount.expenses"),
-              formatCurrency(String(expenses)),
-              null,
-              styles.tableGridRowLastBeforeFooter,
-              {
-                labelNode: (
-                  <View style={styles.particularsWithInfo}>
-                    <Text
-                      style={[
-                        styles.tableCellParticularsText,
-                        isTableClosedInserted && styles.tableTextClosedBlack,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {t("cashAccount.expenses")}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setExpenseDetailsVisible(true)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("cashAccount.expenseDetails")}
-                    >
-                      <Ionicons
-                        name="information-circle-outline"
-                        size={SIZES.body3}
-                        color={COLORS.primary}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                ),
-              },
-            )}
+            {showExpensesRow
+              ? renderTableRow3(
+                  "expenses",
+                  t("cashAccount.expenses"),
+                  formatCellAmount(expenses),
+                  null,
+                  styles.tableGridRowLastBeforeFooter,
+                  {
+                    labelNode: (
+                      <View style={styles.particularsWithInfo}>
+                        <Text
+                          style={[
+                            styles.tableCellParticularsText,
+                            isTableClosedInserted &&
+                              styles.tableTextClosedBlack,
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {t("cashAccount.expenses")}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => setExpenseDetailsVisible(true)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("cashAccount.expenseDetails")}
+                        >
+                          <Ionicons
+                            name="information-circle-outline"
+                            size={SIZES.body3}
+                            color={COLORS.primary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ),
+                  },
+                )
+              : null}
 
             <View style={styles.tableSummaryFooter}>
               <View
@@ -1100,7 +981,7 @@ const CashAccountScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
-        </ScrollView>
+        </View>
       )}
 
       {showCloseAccountButton ? (
@@ -1236,9 +1117,8 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
     fontSize: SIZES.body3,
   },
-  contentScroll: {
-    paddingBottom: 0,
-    paddingHorizontal: 0,
+  contentBody: {
+    flex: 1,
   },
   filterSection: {
     padding: SIZES.padding,
@@ -1280,6 +1160,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   tableFrame: {
+    flex: 1,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
@@ -1320,6 +1201,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   tableGridRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "stretch",
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -1327,7 +1209,7 @@ const styles = StyleSheet.create({
   },
   tableGridCell: {
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 8,
     borderRightWidth: 1,
     borderRightColor: COLORS.border,

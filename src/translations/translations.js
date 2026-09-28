@@ -147,7 +147,7 @@ const translations = {
 
     // Cash Account
     cashAccount: {
-      title: "Cash Account",
+      title: "Close Account",
       selectDate: "Select Date",
       closeAccount: "Close Account",
       todaySummary: "Today Summary",
@@ -163,7 +163,9 @@ const translations = {
       upfrontByCash: "Up-front Cash (Cash)",
       upfrontByOnline: "Up-front Cash (Online)",
       collection: "Collection",
+      nipCollection: "NIP Collection",
       magimai: "Magimai",
+      aathayam: "Aathayam",
       previousBalance: "Previous balance",
       closingBalance: "Closing balance",
       processingFee: "Magimai",
@@ -955,7 +957,7 @@ const translations = {
       todaySummary: "இன்றைய சுருக்கம்",
       particulars: "விவரம்",
       received: "வரவு",
-      spent: "செலவு",
+      spent: "பற்று",
       totalReceived: "மொத்தம் பெறப்பட்டது",
       totalSpent: "மொத்தம் செலவழிக்கப்பட்டது",
       paymentBreakdown: "நேரடி பணம் மற்றும் ஆன்லைன்",
@@ -965,7 +967,9 @@ const translations = {
       upfrontByCash: "முன்பணம் (பணம்)",
       upfrontByOnline: "முன்பணம் (ஆன்லைன்)",
       collection: "வசூல்",
+      nipCollection: "நிப்பு வரவு",
       magimai: "மகிமை",
+      aathayam: "அதாயம்",
       previousBalance: "முந்தைய இருப்பு",
       closingBalance: "இறுதி இருப்பு",
       processingFee: "செயலாக்க கட்டணம்",

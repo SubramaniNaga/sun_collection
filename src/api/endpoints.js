@@ -60,6 +60,8 @@ export const ENDPOINTS = {
     OPENING_BALANCE: "/frontcash/openingbalance",
     CLOSE_ACCOUNT: "/frontcash/openingbalance/closeaccount",
   },
+  /** GET close-account-view?from_date&to_date&line_id&branch_id */
+  CLOSE_ACCOUNT_VIEW: "/close-account-view",
   DASHBOARD: {
     TODAY: "/frontcash/dashboard/today",
   },

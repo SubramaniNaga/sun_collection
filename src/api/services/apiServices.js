@@ -1758,6 +1758,47 @@ export const apiServices = {
         throw error;
       }
     },
+
+    /**
+     * GET /close-account-view — weekly plan + expenses for Cash Account screen.
+     * line_id / branch_id default from AsyncStorage when omitted.
+     */
+    getCloseAccountView: async (params = {}) => {
+      try {
+        const { branchId, lineIds } = await getLineAndBranchIds();
+        const {
+          from_date = "",
+          to_date = "",
+          line_id = lineIds?.[0] ?? "1",
+          branch_id = branchId || "1",
+        } = params;
+
+        const requestParams = {
+          ...(from_date && { from_date }),
+          ...(to_date && { to_date }),
+          line_id,
+          branch_id,
+        };
+
+        console.log(
+          "💰 API: getCloseAccountView - GET",
+          ENDPOINTS.CLOSE_ACCOUNT_VIEW,
+          "| params:",
+          JSON.stringify(requestParams, null, 2),
+        );
+        const response = await apiClient.get(ENDPOINTS.CLOSE_ACCOUNT_VIEW, {
+          params: requestParams,
+        });
+        console.log(
+          "💰 API: getCloseAccountView - Response:",
+          JSON.stringify(response.data, null, 2),
+        );
+        return response.data;
+      } catch (error) {
+        if (__DEV__) console.warn("Get close account view error:", error);
+        throw error;
+      }
+    },
   },
 
   companyVaravu: {
