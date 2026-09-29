@@ -646,6 +646,7 @@ export const apiServices = {
         //   "| pagination:",
         //   JSON.stringify(response.data?.pagination ?? {}),
         // );
+        console.log("💰 API: getLoanList - Response:", JSON.stringify(response.data, null, 2));
         return response.data;
       } catch (error) {
         if (__DEV__) console.warn("Get loan list error:", error);

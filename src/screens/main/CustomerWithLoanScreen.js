@@ -1775,6 +1775,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.base,
+    paddingRight: 10,
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -1807,6 +1808,7 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     color: COLORS.primary,
     marginLeft: SIZES.base,
+    padding: 4,
   },
   radioLabelActive: {
     color: COLORS.primary,

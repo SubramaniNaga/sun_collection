@@ -502,7 +502,7 @@ const translations = {
       customerHasOpenLoans: "Customer has open loans",
       loanType: "Loan Type",
       loanAmount: "Loan Amount",
-      aathayam: " Aathayam",
+      aathayam: "Aathayam",
       magimai: "Magimai",
       aathayamRequired: "Aathayam is required",
       magimaiRequired: "Magimai is required",

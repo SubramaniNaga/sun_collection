@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,11 +8,40 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { apiServices } from '../../api/services/apiServices';
 import LogoutModal from '../../components/common/LogoutModal';
 import { APP_VERSION } from '../../constants/appVersion';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+
+const asText = (value) => {
+  if (value == null) return '';
+  if (typeof value === 'object') {
+    return String(value.name ?? value.branch_name ?? value.line_name ?? '').trim();
+  }
+  return String(value).trim();
+};
+
+const isDisplayName = (value) => {
+  const text = asText(value);
+  return Boolean(text) && !/^\d+$/.test(text);
+};
+
+const firstDisplayName = (...values) => {
+  for (const value of values) {
+    if (isDisplayName(value)) return asText(value);
+  }
+  return '';
+};
+
+const lineNamesFrom = (source) => {
+  const fromList = (Array.isArray(source?.lines) ? source.lines : [])
+    .map((line) => firstDisplayName(line?.line_name, line?.name, line?.line))
+    .filter(Boolean);
+  if (fromList.length) return fromList.join(', ');
+  return firstDisplayName(source?.line_name, source?.lineName, source?.line);
+};
 
 const CustomDrawerContent = (props) => {
   const { t } = useLanguage();
@@ -19,6 +49,47 @@ const CustomDrawerContent = (props) => {
   const { user, logout } = useAuthContext();
   const { navigation, state } = props;
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const [lineName, setLineName] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfilePlace = async () => {
+      let stored = {};
+      try {
+        const raw = await AsyncStorage.getItem('userData');
+        stored = raw ? JSON.parse(raw) : {};
+      } catch {
+        stored = {};
+      }
+
+      const source = { ...stored, ...(user || {}) };
+      if (!active) return;
+      setBranchName(firstDisplayName(source.branch_name, source.branchName, source.branch));
+      setLineName(lineNamesFrom(source));
+
+      try {
+        const users = await apiServices.branchUsers.getList(source.branch_id ?? source.branchId);
+        if (!active) return;
+        const me = (Array.isArray(users) ? users : []).find(
+          (item) => String(item?.id) === String(source.id)
+        );
+        if (!me) return;
+        const resolvedLine = lineNamesFrom(me);
+        const resolvedBranch = firstDisplayName(me.branch_name, me.branchName, me.branch);
+        if (resolvedLine) setLineName(resolvedLine);
+        if (resolvedBranch) setBranchName(resolvedBranch);
+      } catch {
+        // Keep names already stored on the login profile.
+      }
+    };
+
+    loadProfilePlace();
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const navigateAndCloseDrawer = (action) => {
     navigation.closeDrawer();
@@ -81,15 +152,35 @@ const CustomDrawerContent = (props) => {
               </Text>
             </View>
           </View>
-            <View style={styles.userInfo}>
-            <View style={styles.userHeader}>
-              <Text style={styles.userName}>
-                {user?.name || t('profile.user')}
+          <View style={styles.userInfo}>
+            <Text style={styles.userName} numberOfLines={1}>
+              {user?.name || t('profile.user')}
+            </Text>
+            <View style={styles.contactInfo}>
+              <Ionicons name="call-outline" size={13} color="rgba(255,255,255,0.92)" />
+              <Text style={styles.userEmail} numberOfLines={1}>
+                {user?.phone || '—'}
               </Text>
             </View>
-            <View style={styles.contactInfo}>
-              <Text style={styles.userEmail}>
-                {user?.phone || '+1234567890'}
+          </View>
+        </View>
+        <View style={styles.metaCard}>
+          <View style={styles.metaItem}>
+            <Ionicons name="business-outline" size={16} color={COLORS.white} />
+            <View style={styles.metaTextWrap}>
+              <Text style={styles.metaLabel}>{t('profile.branch')}</Text>
+              <Text style={styles.metaValue}>
+                {branchName || '—'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaItem}>
+            <Ionicons name="git-branch-outline" size={16} color={COLORS.white} />
+            <View style={styles.metaTextWrap}>
+              <Text style={styles.metaLabel}>{t('profile.line')}</Text>
+              <Text style={styles.metaValue}>
+                {lineName || '—'}
               </Text>
             </View>
           </View>
@@ -108,7 +199,9 @@ const CustomDrawerContent = (props) => {
             ]}
             onPress={item.onPress}
           >
-            <Ionicons name={item.icon} size={20} color={COLORS.primary} style={{ marginRight: SIZES.margin }} />
+            <View style={styles.itemIconWrap}>
+              <Ionicons name={item.icon} size={18} color={COLORS.primary} />
+            </View>
             <Text style={[
               styles.itemLabel,
               state?.routeNames?.[state?.index] === item.id && styles.activeLabel,
@@ -122,7 +215,9 @@ const CustomDrawerContent = (props) => {
       {/* Logout */}
       <View style={styles.logoutSection}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.primary} style={{ marginRight: SIZES.margin }} />
+          <View style={styles.itemIconWrap}>
+            <Ionicons name="log-out-outline" size={18} color={COLORS.primary} />
+          </View>
           <Text style={styles.logoutText}>{t('settings.logout')}</Text>
         </TouchableOpacity>
       </View>
@@ -161,7 +256,6 @@ const styles = StyleSheet.create({
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SIZES.margin,
   },
   avatarContainer: {
     position: 'relative',
@@ -192,10 +286,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   userName: {
-    fontSize: SIZES.h2,
+    fontSize: SIZES.h3,
     fontWeight: '700',
     color: COLORS.white,
-    flex: 1,
+    textTransform: 'capitalize',
+    marginBottom: 4,
   },
   roleBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -220,12 +315,50 @@ const styles = StyleSheet.create({
   contactInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   userEmail: {
     fontSize: SIZES.body4,
     color: COLORS.white,
-    opacity: 0.8,
+    opacity: 0.9,
     flex: 1,
+  },
+  metaCard: {
+    marginTop: SIZES.padding,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  metaTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  metaLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.75)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  metaValue: {
+    marginTop: 2,
+    fontSize: SIZES.body4,
+    fontWeight: '700',
+    color: COLORS.white,
+    textTransform: 'capitalize',
+  },
+  metaDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
   },
   separator: {
     fontSize: SIZES.body4,
@@ -274,14 +407,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: SIZES.padding,
   },
+  itemIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E8F3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SIZES.padding * 1.5,
-    paddingVertical: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 10,
     marginHorizontal: SIZES.margin,
-    marginBottom: SIZES.base,
-    borderRadius: SIZES.radius,
+    marginBottom: 6,
+    borderRadius: 12,
   },
   activeDrawerItem: {
     backgroundColor: COLORS.primary + '10',

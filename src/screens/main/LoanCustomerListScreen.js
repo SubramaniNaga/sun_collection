@@ -453,8 +453,55 @@ const LoanCustomerListScreen = ({ navigation }) => {
       item?.pending_weeks,
     );
     const footerActionIconColor = isNip ? COLORS.error : COLORS.primary;
-    const customerName = String(item?.customer_name ?? "").trim();
-    const isLongCustomerName = customerName.length > 10;
+    const detailFields = [
+      {
+        label: t("loan.loanAmount"),
+        value: formatCurrency(item?.loan_amount),
+        valueStyle: isNip ? styles.loanCardValueAmountNip : styles.loanCardValueAmount,
+      },
+      {
+        label: t("loan.interestAmount"),
+        value: formatAmountOrDash(item?.intrest_amount),
+      },
+      {
+        label: t("loan.processingFees"),
+        value: formatAmountOrDash(item?.processing_fees),
+      },
+      {
+        label: t("loan.balanceAmount"),
+        value: formatAmountOrDash(getLoanListBalance(item)),
+      },
+      ...(item?.approved_amount != null && item?.approved_amount !== ""
+        ? [
+            {
+              label: t("loan.approved"),
+              value: formatCurrency(item?.approved_amount),
+            },
+          ]
+        : []),
+      ...(item?.completed_collection_count != null ||
+      item?.completed_weeks != null ||
+      item?.total_period != null
+        ? [
+            {
+              label: t("loan.loanDueStatus"),
+              value: `${item?.completed_collection_count ?? 0}(${item?.pending_collection_count ?? 0})/${item?.current_collection_due_count ?? 0}`,
+            },
+          ]
+        : []),
+    ];
+    const statusBadge = (
+      <View
+        style={[
+          styles.statusBadge,
+          { backgroundColor: isNip ? "#FEE2E2" : getStatusColor(item) },
+        ]}
+      >
+        <Text style={[styles.statusText, isNip && styles.statusTextRed]}>
+          {getStatusLabel(item)}
+        </Text>
+      </View>
+    );
     return (
       <TouchableOpacity
         style={[
@@ -490,159 +537,49 @@ const LoanCustomerListScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
           <View style={styles.loanCardHeaderBody}>
-            {isLongCustomerName ? (
-              <>
-                <Text
-                  style={[
-                    styles.loanCardNameLine,
-                    isNip && styles.loanCardNameLineNip,
-                  ]}
-                  numberOfLines={2}
-                >
-                  {item?.customer_no ?? "—"} - {item?.customer_name ?? "—"}
-                </Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    styles.statusBadgeBelowName,
-                    {
-                      backgroundColor: isNip ? "#FEE2E2" : getStatusColor(item),
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.statusText, isNip && styles.statusTextRed]}
-                  >
-                    {getStatusLabel(item)}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.loanCardNameRow}>
-                <Text
-                  style={[
-                    styles.loanCardNameLine,
-                    styles.loanCardNameLineInline,
-                    isNip && styles.loanCardNameLineNip,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item?.customer_no ?? "—"} - {item?.customer_name ?? "—"}
-                </Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    styles.statusBadgeInline,
-                    {
-                      backgroundColor: isNip ? "#FEE2E2" : getStatusColor(item),
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.statusText, isNip && styles.statusTextRed]}
-                  >
-                    {getStatusLabel(item)}
-                  </Text>
-                </View>
-              </View>
-            )}
+            <View style={styles.loanCardNameRow}>
+              <Text
+                style={[
+                  styles.loanCardNameLine,
+                  styles.loanCardNameLineInline,
+                  isNip && styles.loanCardNameLineNip,
+                ]}
+                numberOfLines={1}
+              >
+                {item?.customer_no ?? "—"} - {item?.customer_name ?? "—"}
+              </Text>
+              {statusBadge}
+            </View>
+            <Text style={styles.headerMetaText} numberOfLines={1}>
+              {item?.branch ?? "—"}-{item?.line_name ?? "—"} - {item?.loan_period ?? item?.loanPeriod ?? "—"}/
+              {item?.loan_type_name ?? item?.loanTypeName ?? "—"}
+            </Text>
           </View>
         </View>
         <View style={styles.loanCardDivider} />
-        <View style={styles.loanCardRow}>
-          <Ionicons
-            name="cash-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-          <Text style={styles.loanCardLabel}>{t("loan.loanAmount")}</Text>
-          <Text
-            style={[
-              styles.loanCardValueAmount,
-              isNip && styles.loanCardValueAmountNip,
-            ]}
-          >
-            {formatCurrency(item?.loan_amount)}
-          </Text>
+        <View style={styles.detailGrid}>
+          {detailFields.map((field, index) => (
+            <View
+              key={field.label}
+              style={[
+                styles.detailCell,
+                detailFields.length % 2 === 1 &&
+                  index === detailFields.length - 1 &&
+                  styles.detailCellFull,
+              ]}
+            >
+              <Text style={styles.loanCardLabel} numberOfLines={1}>
+                {field.label}
+              </Text>
+              <Text
+                style={[styles.loanCardValue, field.valueStyle]}
+                numberOfLines={2}
+              >
+                {field.value}
+              </Text>
+            </View>
+          ))}
         </View>
-        <View style={styles.loanCardRow}>
-          <Ionicons
-            name="pricetag-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-          <Text style={styles.loanCardLabel}>{t("customer.aathayam")}</Text>
-          <Text style={styles.loanCardValue} numberOfLines={1}>
-            {formatAmountOrDash(item?.intrest_amount)}
-          </Text>
-        </View>
-        <View style={styles.loanCardRow}>
-          <Ionicons
-            name="trending-up-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-          <Text style={styles.loanCardLabel}>{t("customer.magimai")}</Text>
-          <Text style={styles.loanCardValue} numberOfLines={1}>
-            {formatAmountOrDash(item?.processing_fees)}
-          </Text>
-        </View>
-        {item?.approved_amount != null && item?.approved_amount !== "" && (
-          <View style={styles.loanCardRow}>
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={16}
-              color={COLORS.text?.tertiary || "#666"}
-            />
-            <Text style={styles.loanCardLabel}>{t("loan.approved")}</Text>
-            <Text style={styles.loanCardValue}>
-              {formatCurrency(item?.approved_amount)}
-            </Text>
-          </View>
-        )}
-        <View style={styles.loanCardRow}>
-          <Ionicons
-            name="business-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-          <Text style={styles.loanCardLabel}>{t("loan.balanceAmount")}</Text>
-          <Text
-            style={[styles.loanCardValue, styles.loanCardValueAmount]}
-            numberOfLines={1}
-          >
-            {formatAmountOrDash(getLoanListBalance(item))}
-          </Text>
-        </View>
-        <View style={styles.loanCardRow}>
-          <Ionicons
-            name="business-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-          <Text style={styles.loanCardLabel}>{t("loan.loanPeriod")}</Text>
-          <Text style={styles.loanCardValue} numberOfLines={1}>
-            {item?.loanPeriod ?? item?.loan_period ?? "—"}/
-            {item?.loanTypeName ?? item?.loan_type_name ?? "—"}
-          </Text>
-        </View>
-        {(item?.completed_collection_count != null ||
-          item?.completed_weeks != null ||
-          item?.total_period != null) && (
-          <View style={styles.loanCardRow}>
-            <Ionicons
-              name="calendar-outline"
-              size={16}
-              color={COLORS.text?.tertiary || "#666"}
-            />
-            <Text style={styles.loanCardLabel}>{t("loan.loanDueStatus")}</Text>
-            <Text style={styles.loanCardValue} numberOfLines={1}>
-              {item?.completed_collection_count ?? 0}(
-              {item?.pending_collection_count ?? 0})/
-              {item?.current_collection_due_count ?? 0}
-            </Text>
-          </View>
-        )}
         <View style={styles.loanCardFooter}>
           <Text style={styles.loanCardDate}>
             {t("loan.requested")} {formatDisplayDate(item?.requested_date)}
@@ -650,7 +587,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
           <View style={styles.loanCardFooterIcons}>
             {item?.address_latitude && item?.address_longitude && (
               <TouchableOpacity
-                style={styles.loanCardIconButton}
+                style={[styles.loanCardIconButton, isNip && styles.loanCardIconButtonNip]}
                 onPress={(e) => {
                   e.stopPropagation();
                   handleMapPress(item.address_latitude, item.address_longitude);
@@ -665,7 +602,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
             )}
             {item?.customer_phone && (
               <TouchableOpacity
-                style={styles.loanCardIconButton}
+                style={[styles.loanCardIconButton, isNip && styles.loanCardIconButtonNip]}
                 onPress={(e) => {
                   e.stopPropagation();
                   handlePhonePress(item.customer_phone);
@@ -676,7 +613,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
             )}
             {item?.id != null && item?.id !== "" && (
               <TouchableOpacity
-                style={styles.loanCardIconButton}
+                style={[styles.loanCardIconButton, isNip && styles.loanCardIconButtonNip]}
                 onPress={(e) => {
                   e.stopPropagation();
                   setCollectionsModalLoanId(item.id);
@@ -812,6 +749,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
       </View>
 
       <FlatList
+        style={styles.loanList}
         data={loanList}
         keyExtractor={(item) => String(item?.id ?? Math.random())}
         renderItem={renderLoanItem}
@@ -938,8 +876,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  loanList: {
+    flex: 1,
+    backgroundColor: "#F4F6F9",
+  },
   customerListContainer: {
-    padding: SIZES.padding,
+    paddingHorizontal: 12,
+    paddingTop: 10,
     paddingBottom: SIZES.padding,
   },
   customerListContainerEmpty: {
@@ -993,29 +936,32 @@ const styles = StyleSheet.create({
   },
   loanCard: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius * 1.25,
-    paddingHorizontal: SIZES.base * 1.5,
-    paddingVertical: SIZES.base * 1.25,
-    marginBottom: SIZES.margin,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    borderColor: "#E6EBF2",
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    shadowColor: "#1d3a5f",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 1,
   },
   loanCardPending: {
     borderColor: "#F5D000",
-    borderWidth: 2,
+    borderLeftColor: "#F5C400",
   },
   loanCardNip: {
-    borderColor: COLORS.error,
-    borderWidth: 2,
+    borderColor: "#F3D0D0",
+    borderLeftColor: COLORS.error,
   },
   loanCardHighPending: {
     borderColor: "#FED7AA",
-    borderWidth: 2,
+    borderLeftColor: "#FB923C",
   },
   loanCardHeader: {
     flexDirection: "row",
@@ -1033,11 +979,12 @@ const styles = StyleSheet.create({
     marginVertical: SIZES.base * 0.75,
   },
   loanCardNameLine: {
-    fontSize: SIZES.body2,
+    fontSize: SIZES.body3,
     fontWeight: "700",
-    color: COLORS.text?.primary || COLORS.primary,
-    marginBottom: SIZES.base * 0.375,
-    lineHeight: Math.round((SIZES.body2 || 14) * 1.25),
+    color: COLORS.black,
+    marginBottom: 0,
+    lineHeight: Math.round((SIZES.body3 || 14) * 1.3),
+    textTransform: "capitalize",
   },
   loanCardNameLineInline: {
     marginBottom: 0,
@@ -1049,15 +996,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  headerMetaText: {
+    marginTop: 2,
+    fontSize: SIZES.body5,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
   loanCardNameLineNip: {
     color: COLORS.error,
   },
   loanCardPhotoWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     overflow: "hidden",
-    marginRight: SIZES.base * 0.75,
+    marginRight: 10,
+    backgroundColor: COLORS.lightGray,
   },
   loanCardPhoto: {
     width: "100%",
@@ -1092,26 +1046,34 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "80%",
   },
-  loanCardRow: {
+  detailGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: SIZES.base * 0.375,
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 8,
+  },
+  detailCell: {
+    width: "48%",
+    backgroundColor: "#F7F9FC",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  detailCellFull: {
+    width: "100%",
   },
   loanCardLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.text?.tertiary || "#666",
-    marginLeft: SIZES.base,
-    flex: 1,
+    fontSize: SIZES.body5,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 1,
   },
   loanCardValue: {
-    fontSize: SIZES.body3,
-    fontWeight: "600",
-    color: COLORS.text?.secondary || "#333",
-    maxWidth: "50%",
+    fontSize: SIZES.body4,
+    fontWeight: "700",
+    color: COLORS.black,
   },
   loanCardValueAmount: {
-    fontSize: SIZES.body2,
-    fontWeight: "700",
     color: COLORS.primary,
   },
   loanCardValueAmountNip: {
@@ -1119,35 +1081,39 @@ const styles = StyleSheet.create({
   },
   loanCardFooter: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginTop: SIZES.base * 0.75,
-    paddingTop: SIZES.base * 0.75,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E6EBF2",
   },
   loanCardDate: {
-    fontSize: SIZES.body4 || 12,
-    color: COLORS.text?.tertiary || "#666",
+    fontSize: SIZES.body5,
+    color: COLORS.text.tertiary,
+    flex: 1,
+    marginRight: 8,
   },
   loanCardFooterIcons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SIZES.base / 2,
+    gap: SIZES.base,
   },
   loanCardIconButton: {
-    padding: SIZES.base / 2,
-    borderRadius: SIZES.radius,
-    backgroundColor: COLORS.lightGray,
-    alignItems: "center",
-    justifyContent: "center",
     width: 32,
     height: 32,
+    borderRadius: 16,
+    backgroundColor: "#E8F3FC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loanCardIconButtonNip: {
+    backgroundColor: "#FEE2E2",
   },
   statusBadge: {
-    paddingHorizontal: SIZES.base * 0.75,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   statusBadgeBelowName: {
     alignSelf: "flex-start",

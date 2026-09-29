@@ -388,7 +388,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
     const history = item instanceof CollectionHistory ? item : new CollectionHistory(item);
     const isLast = index === filteredCollectionHistory.length - 1;
     return (
-      <View style={[styles.tableRow, isLast && styles.tableRowLast]}>
+      <View style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt, isLast && styles.tableRowLast]}>
         <Text style={[styles.tableCell, styles.colNo]} numberOfLines={2}>
           {history.customerNo != null && history.customerNo !== '' ? String(history.customerNo) : '—'}
         </Text>
@@ -647,9 +647,10 @@ const CollectionHistoryScreen = ({ navigation }) => {
                     </Text>
                     <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
                   </View>
+                  <View style={styles.summaryColumnDivider} />
                   <View style={styles.summaryItem}>
                     <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
-                    <Text style={styles.summaryValue}>{formatCurrency(filteredStats.total_amount)}</Text>
+                    <Text style={[styles.summaryValue, styles.summaryValueAmount]}>{formatCurrency(filteredStats.total_amount)}</Text>
                   </View>
                 </View>
                 {selectedPaymentType === 'cash' && (
@@ -695,6 +696,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
                       <Text style={styles.summaryLabel}>{t('collectionHistory.cash')}</Text>
                       <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
                     </View>
+                    <View style={styles.summaryColumnDivider} />
                     <View style={styles.summaryItem}>
                       <Text style={styles.summaryLabel}>{t('collectionHistory.nonCash')}</Text>
                       <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
@@ -746,7 +748,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F4F6F9',
   },
   mainBody: {
     flex: 1,
@@ -755,7 +757,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: SIZES.padding * 0.5,
+    paddingHorizontal: 12,
+    paddingTop: 12,
     paddingBottom: SIZES.padding * 2,
   },
   centerContainer: {
@@ -783,11 +786,13 @@ const styles = StyleSheet.create({
   },
   filterSection: {
     backgroundColor: COLORS.white,
-    padding: SIZES.padding * 0.2,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.margin / 10,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderRadius: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E6EBF2',
   },
   sectionTitle: {
     fontSize: SIZES.body2, // Reduced from SIZES.body1
@@ -811,35 +816,54 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: COLORS.white,
-    padding: SIZES.base,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.margin / 3,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E6EBF2',
+    shadowColor: '#1d3a5f',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  summaryColumnDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: '#E6EBF2',
+    marginVertical: 4,
+  },
   summaryItem: {
     alignItems: 'center',
     flex: 1,
+    paddingHorizontal: 6,
   },
   summaryLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    marginBottom: SIZES.base / 4,
+    fontSize: SIZES.body4,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   summaryValue: {
     fontSize: SIZES.h3,
-    fontWeight: '600',
-    color: COLORS.text.primary,
+    fontWeight: '800',
+    color: COLORS.black,
+  },
+  summaryValueAmount: {
+    color: COLORS.primary,
   },
   summarySubValue: {
-    fontSize: SIZES.body1,
-    fontWeight: '600',
-    color: COLORS.text.secondary,
+    fontSize: SIZES.body2,
+    fontWeight: '700',
+    color: COLORS.black,
+    marginTop: 2,
   },
   summaryDivider: {
     height: StyleSheet.hairlineWidth,
@@ -935,20 +959,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tableWrap: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: SIZES.radius,
-    borderTopRightRadius: SIZES.radius,
+    backgroundColor: COLORS.primary,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    overflow: 'hidden',
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
+    borderColor: '#D5E6F6',
   },
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.primary,
-    paddingVertical: SIZES.base,
-    paddingHorizontal: SIZES.base / 2,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
   tableHeaderText: {
     fontSize: SIZES.body4,
@@ -960,30 +984,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    paddingVertical: SIZES.base + 2,
-    paddingHorizontal: SIZES.base / 2,
+    paddingVertical: 11,
+    paddingHorizontal: 8,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E6EBF2',
+  },
+  tableRowAlt: {
+    backgroundColor: '#F7F9FC',
   },
   tableRowLast: {
-    borderBottomLeftRadius: SIZES.radius,
-    borderBottomRightRadius: SIZES.radius,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    borderBottomWidth: 1,
   },
   tableCell: {
     fontSize: SIZES.body4,
-    color: COLORS.text.secondary,
+    color: '#4B5563',
     textAlign: 'center',
   },
   tableCellName: {
     fontSize: SIZES.body4,
-    color: COLORS.text.secondary,
-    textAlign: 'start',
+    fontWeight: '600',
+    color: COLORS.black,
+    textAlign: 'left',
+    textTransform: 'capitalize',
   },
   tableCellAmount: {
-    fontWeight: '600',
-    color: COLORS.text.secondary,
+    fontWeight: '700',
+    color: COLORS.primary,
     textAlign: 'center',
   },
   colNo: {
@@ -1010,22 +1040,22 @@ const styles = StyleSheet.create({
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    padding: SIZES.base / 2,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.margin / 3,
+    padding: 4,
+    borderRadius: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    gap: SIZES.base / 2,
+    borderColor: '#E6EBF2',
+    gap: 4,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SIZES.base,
-    paddingHorizontal: SIZES.base,
-    borderRadius: SIZES.radius * 0.75,
-    backgroundColor: COLORS.lightGray,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#F4F6F9',
   },
   tabActive: {
     backgroundColor: COLORS.primary,

@@ -458,125 +458,68 @@ const NIPScreen = ({ navigation }) => {
                 </View>
               </View>
             )}
+            <Text style={styles.headerMetaText} numberOfLines={1}>
+              {item?.branchName ?? "—"} - {item?.loanPeriod ?? item?.loan_period ?? "—"}/
+              {item?.loanTypeName ?? item?.loan_type_name ?? "—"}
+            </Text>
           </View>
         </View>
 
         <View style={styles.nipCardDivider} />
 
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="cash-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("loan.loanAmount")}</Text>
-
-          <Text style={styles.nipCardValueAmount}>
-            {formatCurrency(item?.loanAmount)}
-          </Text>
-        </View>
-
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="pricetag-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("loan.interestAmount")}</Text>
-
-          <Text style={styles.nipCardValue} numberOfLines={1}>
-            {formatAmountOrDash(item?.intrestAmount ?? item?.intrest_amount)}
-          </Text>
-        </View>
-
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="trending-up-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("loan.processingFees")}</Text>
-
-          <Text style={styles.nipCardValue} numberOfLines={1}>
-            {formatAmountOrDash(item?.processingFees ?? item?.processing_fees)}
-          </Text>
-        </View>
-
-        {item?.balanceAmount != null && item?.balanceAmount !== "" && (
-          <View style={styles.nipCardRow}>
-            <Ionicons
-              name="wallet-outline"
-              size={16}
-              color={COLORS.text?.tertiary || "#666"}
-            />
-
-            <Text style={styles.nipCardLabel}>{t("loan.balance")}</Text>
-
-            <Text style={styles.nipCardValue}>
-              {formatCurrency(item?.balanceAmount)}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="business-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("loan.loanPeriod")}</Text>
-
-          <Text style={styles.nipCardValue} numberOfLines={1}>
-            {item?.loanPeriod ?? item?.loan_period ?? "—"}/
-            {item?.loanTypeName ?? item?.loan_type_name ?? "—"}
-          </Text>
-        </View>
-
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="pie-chart-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("loan.loanDueStatus")}</Text>
-
-          <Text style={styles.nipCardValue}>
-            {item?.completed_count ?? 0}({item?.pending_count ?? 0})/
-            {(item?.completed_count ?? 0) + (item?.pending_count ?? 0)}
-          </Text>
-        </View>
-
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="business-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("loan.branch")}</Text>
-
-          <Text style={styles.nipCardValue} numberOfLines={1}>
-            {item?.branchName ?? "—"}
-          </Text>
-        </View>
-
-        <View style={styles.nipCardRow}>
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={16}
-            color={COLORS.text?.tertiary || "#666"}
-          />
-
-          <Text style={styles.nipCardLabel}>{t("nip.nipPaidTotal")}</Text>
-
-          <Text style={styles.nipCardValuePaidTotal}>
-            {formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total)}
-          </Text>
+        <View style={styles.detailGrid}>
+          {[
+            {
+              label: t("loan.loanAmount"),
+              value: formatCurrency(item?.loanAmount),
+              valueStyle: styles.nipCardValueAmount,
+            },
+            {
+              label: t("loan.interestAmount"),
+              value: formatAmountOrDash(item?.intrestAmount ?? item?.intrest_amount),
+            },
+            {
+              label: t("loan.processingFees"),
+              value: formatAmountOrDash(item?.processingFees ?? item?.processing_fees),
+            },
+            ...(item?.balanceAmount != null && item?.balanceAmount !== ""
+              ? [
+                  {
+                    label: t("loan.balance"),
+                    value: formatCurrency(item?.balanceAmount),
+                  },
+                ]
+              : []),
+            {
+              label: t("loan.loanDueStatus"),
+              value: `${item?.completed_count ?? 0}(${item?.pending_count ?? 0})/${(item?.completed_count ?? 0) + (item?.pending_count ?? 0)}`,
+            },
+            {
+              label: t("nip.nipPaidTotal"),
+              value: formatAmountOrDash(item?.nipPaidTotal ?? item?.nip_paid_total),
+              valueStyle: styles.nipCardValuePaidTotal,
+            },
+          ].map((field, index, fields) => (
+            <View
+              key={field.label}
+              style={[
+                styles.detailCell,
+                fields.length % 2 === 1 &&
+                  index === fields.length - 1 &&
+                  styles.detailCellFull,
+              ]}
+            >
+              <Text style={styles.nipCardLabel} numberOfLines={1}>
+                {field.label}
+              </Text>
+              <Text
+                style={[styles.nipCardValue, field.valueStyle]}
+                numberOfLines={2}
+              >
+                {field.value}
+              </Text>
+            </View>
+          ))}
         </View>
 
         <View style={styles.nipCardFooter}>
@@ -783,6 +726,7 @@ const NIPScreen = ({ navigation }) => {
       </View>
 
       <FlatList
+        style={styles.nipList}
         data={nipList}
         keyExtractor={(item) => String(item?.id ?? Math.random())}
         renderItem={renderNIPItem}
@@ -1007,8 +951,15 @@ function createNipScreenStyles(language) {
       flex: 1,
     },
 
+    nipList: {
+      flex: 1,
+      backgroundColor: "#F4F6F9",
+    },
+
     nipListContainer: {
-      padding: SIZES.padding,
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: SIZES.padding,
     },
 
     nipListContainerEmpty: {
@@ -1017,26 +968,20 @@ function createNipScreenStyles(language) {
 
     nipCard: {
       backgroundColor: COLORS.white,
-
-      borderRadius: SIZES.radius,
-
-      padding: SIZES.padding,
-
-      marginBottom: SIZES.margin,
-
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 10,
+      marginBottom: 10,
       borderWidth: 1,
-
-      borderColor: COLORS.error,
-
-      shadowColor: COLORS.black,
-
-      shadowOffset: { width: 0, height: 2 },
-
+      borderColor: "#F3D0D0",
+      borderLeftWidth: 3,
+      borderLeftColor: COLORS.error,
+      shadowColor: "#1d3a5f",
+      shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.05,
-
-      shadowRadius: 3.84,
-
-      elevation: 3,
+      shadowRadius: 4,
+      elevation: 1,
     },
 
     nipCardHeader: {
@@ -1064,15 +1009,11 @@ function createNipScreenStyles(language) {
     },
 
     nipCardNameLine: {
-      fontSize: font(SIZES.body2),
-
+      fontSize: font(SIZES.body3),
       fontWeight: "700",
-
-      color: COLORS.error,
-
-      marginBottom: SIZES.base * 0.375,
-
-      lineHeight: Math.round(font(SIZES.body2) * 1.25),
+      color: COLORS.black,
+      marginBottom: 0,
+      lineHeight: Math.round(font(SIZES.body3) * 1.3),
     },
     nipCardNameLineInline: {
       marginBottom: 0,
@@ -1084,17 +1025,20 @@ function createNipScreenStyles(language) {
       alignItems: "center",
       justifyContent: "space-between",
     },
+    headerMetaText: {
+      marginTop: 2,
+      fontSize: font(SIZES.body5),
+      fontWeight: "600",
+      color: "#4B5563",
+    },
 
     nipCardPhotoWrap: {
-      width: 40,
-
-      height: 40,
-
-      borderRadius: 20,
-
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       overflow: "hidden",
-
-      marginRight: SIZES.base * 0.75,
+      marginRight: 10,
+      backgroundColor: COLORS.lightGray,
     },
 
     nipCardPhoto: {
@@ -1116,11 +1060,9 @@ function createNipScreenStyles(language) {
     },
 
     statusBadge: {
-      paddingHorizontal: SIZES.base * 0.75,
-
-      paddingVertical: 2,
-
-      borderRadius: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 999,
     },
 
     statusBadgeBelowName: {
@@ -1131,10 +1073,8 @@ function createNipScreenStyles(language) {
     },
 
     statusText: {
-      fontSize: font(SIZES.body4),
-
+      fontSize: font(SIZES.body5),
       fontWeight: "600",
-
       color: COLORS.white,
     },
 
@@ -1142,79 +1082,52 @@ function createNipScreenStyles(language) {
       color: COLORS.error,
     },
 
-    nipCardRow: {
+    detailGrid: {
       flexDirection: "row",
-
-      alignItems: "center",
-
-      marginBottom: SIZES.base * 0.5,
-
-      gap: SIZES.base * 0.5,
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      rowGap: 8,
     },
-
+    detailCell: {
+      width: "48%",
+      backgroundColor: "#F7F9FC",
+      borderRadius: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    detailCellFull: {
+      width: "100%",
+    },
     nipCardLabel: {
-      fontSize: font(SIZES.body3),
-
-      color: COLORS.text.tertiary,
-
-      flex: 1,
+      fontSize: font(SIZES.body5) - 1,
+      fontWeight: "600",
+      color: "#6B7280",
+      marginBottom: 1,
     },
-
     nipCardValue: {
-      fontSize: font(SIZES.body3),
-
-      fontWeight: "500",
-
-      color: COLORS.text.secondary,
-
-      flex: 1,
-
-      textAlign: "right",
+      fontSize: font(SIZES.body4),
+      fontWeight: "700",
+      color: COLORS.black,
     },
-
     nipCardValueAmount: {
-      fontSize: font(SIZES.body2),
-
-      fontWeight: "600",
-
       color: COLORS.error,
-
-      flex: 1,
-
-      textAlign: "right",
     },
-
     nipCardValuePaidTotal: {
-      fontSize: font(SIZES.body2),
-
-      fontWeight: "600",
-
       color: COLORS.primary,
-
-      flex: 1,
-
-      textAlign: "right",
     },
 
     nipCardFooter: {
       flexDirection: "row",
-
       justifyContent: "space-between",
-
       alignItems: "center",
-
-      marginTop: SIZES.margin * 0.5,
-
-      paddingTop: SIZES.margin * 0.5,
-
+      marginTop: 10,
+      paddingTop: 8,
       borderTopWidth: StyleSheet.hairlineWidth,
-
-      borderTopColor: COLORS.border,
+      borderTopColor: "#E6EBF2",
     },
 
     nipCardDate: {
-      fontSize: font(SIZES.body4),
-
+      fontSize: font(SIZES.body5),
       color: COLORS.text.tertiary,
     },
 
@@ -1227,7 +1140,12 @@ function createNipScreenStyles(language) {
     },
 
     nipCardIconButton: {
-      padding: SIZES.base * 0.5,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: "#FEE2E2",
+      alignItems: "center",
+      justifyContent: "center",
     },
 
     footerLoader: {

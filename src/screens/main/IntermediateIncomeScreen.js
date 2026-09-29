@@ -10,7 +10,6 @@ import {
   Keyboard,
   Linking,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -164,19 +163,11 @@ const resolveAgentLoanDefaults = async (options = []) => {
   }
 };
 
-const ANDROID_NAV_BAR_HEIGHT = 56;
 const KEYBOARD_FALLBACK_HEIGHT = 280;
-
-const getBottomInset = (insets) => (
-  Platform.OS === 'android'
-    ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
-    : Math.max(insets.bottom, SIZES.base)
-);
 
 const IntermediateIncomeScreen = ({ navigation }) => {
   const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
-  const bottomInset = getBottomInset(insets);
   const [searchQuery, setSearchQuery] = useState('');
   const [registerDayFilter, setRegisterDayFilter] = useState(() => getRegisterDayNameFromDate());
   const debouncedSearchQuery = useDebouncedValue(searchQuery, DEBOUNCE_MS_DEFAULT);
@@ -668,8 +659,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         loan_amount: Number(loanAmount),
         loan_period: Number(loanPeriod),
         loantype_id: Number(loanTypeId),
-        processing_fees: Number(aathayamAmount) || 0,
-        intrest_amount: Number(magimaiAmount) || 0,
+        processing_fees: Number(magimaiAmount) || 0,
+        intrest_amount: Number(aathayamAmount) || 0,
         registered_day: String(renewalDay || registerDayFilter),
       };
       console.log('💰 IntermediateIncome: renewLoan payload:', JSON.stringify(payload, null, 2));
@@ -723,17 +714,41 @@ const IntermediateIncomeScreen = ({ navigation }) => {
               </Text>
               {renderActionIcons(collection)}
             </View>
+            <View style={styles.headerMetaRow}>
+              {collection.loanTypeName ? (
+                <View style={styles.loanTypePill}>
+                  <Text style={styles.loanTypePillText} numberOfLines={1}>
+                    {collection.loanTypeName}
+                  </Text>
+                </View>
+              ) : null}
+              <Text style={styles.headerMetaText} numberOfLines={1}>
+                {t('customer.loanAmount')}: {formatCurrencyOrDash(collection.loanAmount)}
+              </Text>
+              <Text style={styles.headerMetaText} numberOfLines={1}>
+                {String(t('loan.interestAmount')).trim()}: {formatCurrencyOrDash(collection.intrestAmount)}
+              </Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.itemDivider} />
-        <View style={styles.itemRow}>
-          <Text style={styles.itemMetaLeft}>{t('loan.paid')}: {collection.getFormattedAmountPaid()}</Text>
-          <Text style={styles.itemMetaRight}>{t('loan.balance')}: {collection.getFormattedBalanceAmount()}</Text>
-        </View>
-        <View style={[styles.itemRow, styles.itemRowLast]}>
-          <Text style={styles.itemMetaLeft}>{t('customer.loanAmount')}: {formatCurrencyOrDash(collection.loanAmount)}</Text>
-          <Text style={styles.itemMetaRight}>{collection.loanTypeName || ''}</Text>
+        <View style={styles.amountFooter}>
+          <View style={styles.amountChip}>
+            <Text style={styles.amountChipLabel}>{t('loan.paid')}</Text>
+            <Text style={styles.amountChipValue} numberOfLines={1}>
+              {collection.getFormattedAmountPaid()}
+            </Text>
+          </View>
+          <View style={[styles.amountChip, styles.amountChipBalance]}>
+            <Text style={styles.amountChipLabel}>{t('loan.balance')}</Text>
+            <Text
+              style={[styles.amountChipValue, styles.amountChipBalanceValue]}
+              numberOfLines={1}
+            >
+              {collection.getFormattedBalanceAmount()}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -943,6 +958,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
+          style={styles.list}
           data={list}
           keyExtractor={(item, index) => String(item.id ?? index)}
           renderItem={renderItem}
@@ -1005,9 +1021,9 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         animationType="slide"
         onRequestClose={handleClosePaymentModal}
       >
-        <View style={[styles.paymentDrawerOverlay, { paddingBottom: bottomInset }]}>
+        <View style={styles.paymentDrawerOverlay}>
           <Pressable style={styles.paymentDrawerDismiss} onPress={handleClosePaymentModal} />
-          <View style={styles.paymentDrawerSheet}>
+          <View style={[styles.paymentDrawerSheet, { paddingBottom: insets.bottom }]}>
             <View style={styles.centeredModalHeader}>
               <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
               <TouchableOpacity onPress={handleClosePaymentModal} style={styles.closeButton}>
@@ -1021,12 +1037,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                   style={styles.centeredModalScrollView}
                   contentContainerStyle={[
                     styles.centeredModalContent,
-                    {
-                      paddingBottom: SIZES.padding + (
-                        paymentKeyboardHeight > 0
-                          ? paymentKeyboardHeight
-                          : 24
-                      ),
+                    paymentKeyboardHeight > 0 && {
+                      paddingBottom: paymentKeyboardHeight,
                     },
                   ]}
                   keyboardShouldPersistTaps="handled"
@@ -1240,9 +1252,13 @@ const styles = StyleSheet.create({
   clearButton: {
     paddingHorizontal: 4,
   },
+  list: {
+    flex: 1,
+    backgroundColor: '#F4F6F9',
+  },
   listContent: {
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 16,
   },
   listContentGrow: {
@@ -1250,21 +1266,27 @@ const styles = StyleSheet.create({
   },
   listItem: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 6,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
+    borderColor: '#E6EBF2',
+    shadowColor: '#1d3a5f',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   listItemPending: {
-    borderColor: '#F5D000',
-    borderWidth: 2,
+    borderColor: '#F5C400',
+    borderWidth: 1.5,
+    backgroundColor: '#FFFDF6',
   },
   collectionCardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   collectionCardHeaderBody: {
     flex: 1,
@@ -1272,11 +1294,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   collectionCardPhotoWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     overflow: 'hidden',
-    marginRight: 8,
+    marginRight: 10,
     backgroundColor: COLORS.lightGray,
   },
   collectionCardPhoto: {
@@ -1289,9 +1311,9 @@ const styles = StyleSheet.create({
   },
   collectionCardNameLine: {
     fontSize: SIZES.body2,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.black,
-    lineHeight: Math.round((SIZES.body2 || 16) * 1.25),
+    lineHeight: Math.round((SIZES.body2 || 16) * 1.3),
   },
   collectionCardNameLineInline: {
     flex: 1,
@@ -1310,36 +1332,92 @@ const styles = StyleSheet.create({
     gap: SIZES.base / 2,
   },
   collectionCardIconButton: {
-    padding: SIZES.base / 2,
-    borderRadius: SIZES.radius,
-    backgroundColor: COLORS.lightGray,
+    borderRadius: 16,
+    backgroundColor: '#E8F3FC',
     alignItems: 'center',
     justifyContent: 'center',
     width: 32,
     height: 32,
   },
+  loanTypePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E8F3FC',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  loanTypePillText: {
+    fontSize: SIZES.body5,
+    fontWeight: '400',
+    color: COLORS.primary,
+  },
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  headerMetaText: {
+    fontSize: SIZES.body5,
+    fontWeight: '600',
+    color: '#4B5563',
+    flexShrink: 1,
+  },
   itemDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.border,
-    marginVertical: 6,
+    backgroundColor: '#E6EBF2',
+    marginTop: 8,
+    marginBottom: 8,
   },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    marginTop: 8,
+    gap: 12,
   },
   itemRowLast: {
     marginBottom: 0,
   },
   itemMetaLeft: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
+    fontSize: SIZES.body4,
+    color: '#6B7280',
+    flexShrink: 1,
   },
   itemMetaRight: {
     fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    marginLeft: SIZES.base,
+    fontWeight: '700',
+    color: COLORS.black,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  amountFooter: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  amountChip: {
+    flex: 1,
+    backgroundColor: '#F4F6F9',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  amountChipBalance: {
+    backgroundColor: '#EAF3FC',
+  },
+  amountChipLabel: {
+    fontSize: SIZES.body5,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  amountChipValue: {
+    fontSize: SIZES.body3,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  amountChipBalanceValue: {
+    color: COLORS.primary,
   },
   centerContainer: {
     flex: 1,
@@ -1428,14 +1506,14 @@ const styles = StyleSheet.create({
   },
   submitButtonInScroll: {
     marginTop: SIZES.padding,
-    marginBottom: SIZES.padding,
+    marginBottom: SIZES.base,
   },
   customerInfo: {
     backgroundColor: COLORS.lightGray,
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
-    marginTop: SIZES.padding,
+  
   },
   customerInfoName: {
     fontSize: SIZES.body1,

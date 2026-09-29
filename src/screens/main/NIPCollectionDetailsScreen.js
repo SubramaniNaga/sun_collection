@@ -66,6 +66,7 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   const [photoModalUri, setPhotoModalUri] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -79,8 +80,17 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   const notesRef = useRef(null);
 
   useEffect(() => {
-    // Loan from NIPScreen includes loanTypeName / loan_type_name from API when NIPLoan model maps it
-  }, [loan]);
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const paymentTypes = [
     { key: "cash", label: t("nip.cash"), icon: "cash-outline" },
@@ -516,7 +526,10 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardContainer}
+        style={[
+          styles.keyboardContainer,
+          !isFormComplete && keyboardHeight === 0 && { marginBottom: bottomInset },
+        ]}
       >
         <ScrollView
           style={styles.scrollView}

@@ -112,183 +112,6 @@ function roundMoney2(value) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-/** Number or null (rejects '', null, undefined, NaN, Infinity). */
-function toNumOrNull(v) {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * First finite number found at any dot path in `source`.
- * A path that lands on an object reads its `total_amount` / `total` / `amount` /
- * `balance` / `closing_balance` child.
- */
-function pickNum(source, paths) {
-  if (!source || typeof source !== "object") return null;
-  for (const path of paths) {
-    const keys = path.split(".");
-    let cur = source;
-    let found = true;
-    for (const k of keys) {
-      if (cur == null || typeof cur !== "object" || !(k in cur)) {
-        found = false;
-        break;
-      }
-      cur = cur[k];
-    }
-    if (!found) continue;
-    if (cur != null && typeof cur === "object") {
-      const n = toNumOrNull(
-        cur.total_amount ??
-          cur.total ??
-          cur.amount ??
-          cur.balance ??
-          cur.closing_balance,
-      );
-      if (n !== null) return n;
-      continue;
-    }
-    const n = toNumOrNull(cur);
-    if (n !== null) return n;
-  }
-  return null;
-}
-
-/** GET /close-account-view → in-hand (hard cash) closing balance. */
-const VIEW_CASH_PATHS = [
-  "closing_balance_by_cash",
-  "closing_balance.cash",
-  "closing_balance.in_hand",
-  "closing_balance.cash_amount",
-  "closing.cash",
-  "cash_closing_balance",
-  "channel_closing_balance.cash",
-  "channel_balance.cash",
-  "by_channel.cash",
-  "by_payment_type.cash",
-  "totals.cash",
-  "totals.cash_closing_balance",
-  "amounts.cash",
-  "cash.closing_balance",
-  "cash.total_amount",
-  "cash.total",
-];
-
-/** GET /close-account-view → account (online / non-cash) closing balance. */
-const VIEW_ACCOUNT_PATHS = [
-  "closing_balance_by_account",
-  "closing_balance.account",
-  "closing_balance.online",
-  "closing.account",
-  "account_closing_balance",
-  "online_closing_balance",
-  "channel_closing_balance.account",
-  "channel_closing_balance.online",
-  "channel_balance.account",
-  "channel_balance.online",
-  "by_channel.account",
-  "by_channel.online",
-  "by_payment_type.account",
-  "by_payment_type.online",
-  "totals.account",
-  "totals.online",
-  "amounts.account",
-  "amounts.online",
-  "account.closing_balance",
-  "account.total_amount",
-  "account.total",
-  "online.closing_balance",
-  "online.total_amount",
-  "online.total",
-];
-
-/** First finite number among an object's own values (one level, non-recursive). */
-function firstNumericLeaf(obj) {
-  if (!obj || typeof obj !== "object") return null;
-  for (const k of [
-    "total_amount",
-    "total",
-    "amount",
-    "balance",
-    "closing_balance",
-    "value",
-  ]) {
-    const n = toNumOrNull(obj[k]);
-    if (n !== null) return n;
-  }
-  for (const v of Object.values(obj)) {
-    const n = toNumOrNull(v);
-    if (n !== null) return n;
-  }
-  return null;
-}
-
-/**
- * Depth-first search for `key` anywhere in a JSON response, so the value is
- * found no matter how deeply the backend nests it.
- * @returns {{ value: number, path: string } | null}
- */
-function deepFindNum(source, key, maxDepth = 6, trail = "") {
-  if (!source || typeof source !== "object" || maxDepth < 0) return null;
-  if (Object.prototype.hasOwnProperty.call(source, key)) {
-    const direct = toNumOrNull(source[key]);
-    if (direct !== null) return { value: direct, path: `${trail}${key}` };
-    const nested =
-      source[key] && typeof source[key] === "object"
-        ? firstNumericLeaf(source[key])
-        : null;
-    if (nested !== null)
-      return { value: nested, path: `${trail}${key}.<total>` };
-  }
-  for (const k of Object.keys(source)) {
-    const v = source[k];
-    if (v && typeof v === "object") {
-      const found = deepFindNum(v, key, maxDepth - 1, `${trail}${k}.`);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-/**
- * Read the two channel closing balances straight out of GET /close-account-view.
- * Prefers the exact keys `closing_balance_by_cash` / `closing_balance_by_account`
- * at any nesting depth, then falls back to the known field-name variants.
- * @returns {{ cash: number|null, account: number|null, cashPath: string|null, accountPath: string|null }}
- */
-function deriveClosingBalancesFromView(view) {
-  const cashHit = deepFindNum(view, "closing_balance_by_cash");
-  const accountHit = deepFindNum(view, "closing_balance_by_account");
-
-  let cash = cashHit ? cashHit.value : null;
-  let cashPath = cashHit ? `deep:${cashHit.path}` : null;
-  let account = accountHit ? accountHit.value : null;
-  let accountPath = accountHit ? `deep:${accountHit.path}` : null;
-
-  if (cash === null) {
-    for (const p of VIEW_CASH_PATHS) {
-      const n = pickNum(view, [p]);
-      if (n !== null) {
-        cash = n;
-        cashPath = p;
-        break;
-      }
-    }
-  }
-  if (account === null) {
-    for (const p of VIEW_ACCOUNT_PATHS) {
-      const n = pickNum(view, [p]);
-      if (n !== null) {
-        account = n;
-        accountPath = p;
-        break;
-      }
-    }
-  }
-  return { cash, account, cashPath, accountPath };
-}
-
 /** Whole rupees only; `cash + online` equals `totalInt` (Hamilton / largest remainder, two-way). */
 function splitBalanceIntoChannelInts(totalInt, weightCash, weightOnline) {
   const t = Math.round(Number(totalInt));
@@ -708,17 +531,11 @@ const CashAccountScreen = ({ navigation }) => {
               let closing_balance_by_cash;
               let channelSource;
 
-              /** Primary: channel balances straight from GET /close-account-view. */
-              const viewBalances = deriveClosingBalancesFromView(closeAccountView);
-
-              if (viewBalances.cash !== null && viewBalances.account !== null) {
-                closing_balance_by_cash = roundMoney2(viewBalances.cash);
-                closing_balance_by_account = roundMoney2(viewBalances.account);
-                channelSource = `GET /close-account-view (cash ← ${viewBalances.cashPath}, account ← ${viewBalances.accountPath})`;
-              } else if (todayDashboard != null) {
+              if (todayDashboard != null) {
                 channelBreakdown =
                   todayDashboard.getCloseAccountChannelBreakdown();
-                channelSource = `GET /frontcash/dashboard/today (parsed Dashboard) — close-account-view had no channel balances (cash=${viewBalances.cash}, account=${viewBalances.account})`;
+                channelSource =
+                  "GET /frontcash/dashboard/today (parsed Dashboard)";
                 closing_balance_by_cash = roundMoney2(
                   channelBreakdown.cash.net,
                 );
@@ -727,7 +544,7 @@ const CashAccountScreen = ({ navigation }) => {
                 );
               } else {
                 channelSource =
-                  "fallback: totalBalance × collection cash/online mix (close-account-view had no channel balances and today dashboard missing)";
+                  "fallback: totalBalance × collection cash/online mix (today dashboard missing)";
                 const c = Number(collectionPaymentSplit.cash) || 0;
                 const o = Number(collectionPaymentSplit.online) || 0;
                 const mix = c + o;
@@ -741,15 +558,6 @@ const CashAccountScreen = ({ navigation }) => {
                   closing_balance_by_cash = half;
                   closing_balance_by_account = tbInt - half;
                 }
-              }
-
-              if (viewBalances.cash === null || viewBalances.account === null) {
-                console.warn(
-                  "[CloseAccount] close-account-view did not expose both channel balances. Available top-level keys:",
-                  closeAccountView && typeof closeAccountView === "object"
-                    ? Object.keys(closeAccountView)
-                    : closeAccountView,
-                );
               }
 
               console.log(
@@ -766,25 +574,6 @@ const CashAccountScreen = ({ navigation }) => {
                 "[CloseAccount] channel calculation source:",
                 channelSource,
               );
-
-              if (!channelBreakdown) {
-                console.log(
-                  "[CloseAccount] closing_balance_by_cash ← view:",
-                  viewBalances.cash,
-                  "(",
-                  viewBalances.cashPath ?? "no match",
-                  ") →",
-                  closing_balance_by_cash,
-                );
-                console.log(
-                  "[CloseAccount] closing_balance_by_account ← view:",
-                  viewBalances.account,
-                  "(",
-                  viewBalances.accountPath ?? "no match",
-                  ") →",
-                  closing_balance_by_account,
-                );
-              }
 
               if (channelBreakdown) {
                 const ch = channelBreakdown.cash;
@@ -872,21 +661,6 @@ const CashAccountScreen = ({ navigation }) => {
                   "[CloseAccount] closing_balance_by_account (estimated):",
                   closing_balance_by_account,
                 );
-              }
-
-              if (
-                !Number.isFinite(closing_balance_by_cash) ||
-                !Number.isFinite(closing_balance_by_account)
-              ) {
-                console.error(
-                  "[CloseAccount] Aborting: channel balances are not finite",
-                  { closing_balance_by_cash, closing_balance_by_account },
-                );
-                showError(
-                  t("common.error"),
-                  t("errors.somethingWentWrong"),
-                );
-                return;
               }
 
               const closePayload = {
@@ -999,28 +773,31 @@ const CashAccountScreen = ({ navigation }) => {
           <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : (
-        <View
-          style={[
-            styles.contentBody,
-            {
-              paddingBottom: showCloseAccountButton
-                ? 96 + insets.bottom
-                : SIZES.padding + insets.bottom,
-            },
-          ]}
+        <ScrollView
+          style={styles.contentBody}
+          contentContainerStyle={{
+            paddingBottom: showCloseAccountButton
+              ? 96 + insets.bottom
+              : SIZES.padding + insets.bottom,
+            flexGrow: 1,
+          }}
+          showsVerticalScrollIndicator={false}
         >
+          <View style={styles.statementCard}>
           <View style={styles.summaryHeader}>
-            <Ionicons
-              name="calculator-outline"
-              size={20}
-              color={COLORS.primary}
-            />
+            <View style={styles.summaryIconWrap}>
+              <Ionicons
+                name="calculator-outline"
+                size={16}
+                color={COLORS.primary}
+              />
+            </View>
             <Text style={styles.summaryTitle}>
               {t("cashAccount.todaySummary")}
             </Text>
-            <Text
-              style={styles.summaryDate}
-            >{`${formatDateForAPI(startDate)} - ${formatDateForAPI(endDate)}`}</Text>
+            <Text style={styles.summaryDate} numberOfLines={1}>
+              {`${formatDateForAPI(startDate)} - ${formatDateForAPI(endDate)}`}
+            </Text>
           </View>
 
           <View style={styles.tableFrame}>
@@ -1153,61 +930,72 @@ const CashAccountScreen = ({ navigation }) => {
                 )
               : null}
 
-            <View style={styles.tableSummaryFooter}>
+            <View style={styles.totalsRow}>
+              <View
+                style={[styles.tableGridCell, styles.tableGridColParticulars]}
+              />
               <View
                 style={[
                   styles.tableGridCell,
-                  styles.tableGridColParticulars,
-                  styles.closingCalcLabelCell,
+                  styles.tableGridColAmount,
+                  styles.tableGridCellAmount,
                 ]}
               >
                 <Text
                   style={[
-                    styles.tableClosingBalanceText,
-                    isTableClosedInserted && styles.tableTextClosedBlack,
-                  ]}
-                  numberOfLines={2}
-                >
-                  {t("cashAccount.closingBalance")}
-                </Text>
-              </View>
-              <View style={styles.closingCalcStack}>
-                <Text
-                  style={[
-                    styles.closingCalcAmount,
+                    styles.tableTotalsText,
                     isTableClosedInserted && styles.tableTextClosedBlack,
                   ]}
                   numberOfLines={1}
                 >
                   {formatCurrency(String(totalReceived))}
                 </Text>
+              </View>
+              <View
+                style={[
+                  styles.tableGridCell,
+                  styles.tableGridColAmount,
+                  styles.tableGridCellAmount,
+                  styles.tableGridCellLast,
+                ]}
+              >
                 <Text
                   style={[
-                    styles.closingCalcAmount,
+                    styles.tableTotalsText,
                     isTableClosedInserted && styles.tableTextClosedBlack,
                   ]}
                   numberOfLines={1}
                 >
                   {formatCurrency(String(totalSpent))}
                 </Text>
-
-                <View style={styles.closingCalcUnderline} />
-
-                <Text
-                  style={[
-                    styles.closingCalcAmount,
-                    styles.closingCalcResult,
-                    isTableClosedInserted && styles.tableTextClosedBlack,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {formatCurrency(String(totalBalance))}
-                </Text>
-                <View style={styles.closingCalcUnderline} />
               </View>
             </View>
+
+            <View style={styles.closingRow}>
+              <Text
+                style={[
+                  styles.tableClosingBalanceText,
+                  isTableClosedInserted && styles.tableTextClosedBlack,
+                ]}
+                numberOfLines={2}
+              >
+                {t("cashAccount.closingBalance")}
+              </Text>
+              <Text
+                style={[
+                  styles.closingValue,
+                  totalBalance < 0 && styles.closingValueNegative,
+                  totalBalance > 0 && styles.closingValuePositive,
+                  isTableClosedInserted && styles.tableTextClosedBlack,
+                ]}
+                numberOfLines={1}
+              >
+                {formatCurrency(String(totalBalance))}
+              </Text>
+            </View>
           </View>
-        </View>
+          </View>
+        </ScrollView>
       )}
 
       {showCloseAccountButton ? (
@@ -1331,7 +1119,7 @@ const CashAccountScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: "#F4F6F9" },
   center: {
     flex: 1,
     alignItems: "center",
@@ -1347,8 +1135,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterSection: {
-    padding: SIZES.padding,
-    paddingBottom: 0,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E6EBF2",
   },
   dateRow: {
     flexDirection: "row",
@@ -1365,15 +1157,39 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: SIZES.margin,
   },
+  statementCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E6EBF2",
+    overflow: "hidden",
+    shadowColor: "#1d3a5f",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   summaryHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SIZES.padding,
-    paddingTop: SIZES.base,
-    paddingBottom: SIZES.margin,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E6EBF2",
+    backgroundColor: COLORS.white,
+  },
+  summaryIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E8F3FC",
   },
   summaryTitle: {
-    marginLeft: SIZES.base,
+    marginLeft: 8,
     flex: 1,
     color: COLORS.text.primary,
     fontSize: SIZES.body3,
@@ -1382,15 +1198,11 @@ const styles = StyleSheet.create({
   },
   summaryDate: {
     color: COLORS.text.secondary,
-    fontSize: SIZES.body5,
-    fontWeight: "700",
+    fontSize: SIZES.body4,
+    fontWeight: "600",
+    marginLeft: 8,
   },
   tableFrame: {
-    flex: 1,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    overflow: "hidden",
     backgroundColor: COLORS.white,
   },
   tableGridRowLastBeforeFooter: {
@@ -1399,46 +1211,47 @@ const styles = StyleSheet.create({
   tableGridHeadRow: {
     flexDirection: "row",
     alignItems: "stretch",
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#EAF3FC",
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: "#D5E6F6",
   },
   tableGridHeadCell: {
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: "#D5E6F6",
   },
   /** Horizontally center Spent / Received column content */
   tableGridCellAmount: {
     alignItems: "center",
   },
   tableHeadCellText: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body4,
     fontWeight: "700",
-    color: COLORS.black,
+    color: COLORS.primary,
+    letterSpacing: 0.2,
   },
   tableHeadCellTextAmount: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body4,
     fontWeight: "700",
-    color: COLORS.black,
+    color: COLORS.primary,
     textAlign: "center",
     width: "100%",
+    letterSpacing: 0.2,
   },
   tableGridRow: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "stretch",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: "#EEF1F4",
   },
   tableGridCell: {
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: "#EEF1F4",
   },
   tableGridCellLast: {
     borderRightWidth: 0,
@@ -1475,22 +1288,31 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   tableSummaryFooter: {
-    flexDirection: "row",
-    alignItems: "center",
     borderTopWidth: StyleSheet.hairlineWidth * 2,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.background,
-    paddingVertical: 10,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
-  closingCalcLabelCell: {
-    borderRightWidth: 0,
-    alignSelf: "stretch",
-  },
-  closingCalcStack: {
-    flex: 2,
+  closingSubtotals: {
     alignItems: "flex-end",
     paddingRight: 12,
     paddingLeft: 8,
+  },
+  closingCalcLabelCell: {
+    justifyContent: "center",
+    paddingLeft: 10,
+    paddingRight: 8,
+  },
+  closingResultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  closingResultAmount: {
+    flex: 2,
+    alignItems: "flex-end",
+    paddingRight: 12,
   },
   closingCalcAmount: {
     fontSize: SIZES.body3,
@@ -1498,27 +1320,29 @@ const styles = StyleSheet.create({
     color: COLORS.black,
     textAlign: "right",
     minWidth: 120,
+    lineHeight: 20,
+  },
+  closingCalcSpent: {
+    marginTop: 8,
   },
   closingCalcResult: {
     fontWeight: "800",
-    paddingTop: 4,
-  },
-  closingCalcDoubleLine: {
-    width: 120,
-    marginTop: 4,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.black,
-    height: 4,
   },
   closingCalcUnderline: {
     width: 120,
-    marginTop: 2,
+    marginTop: 8,
+    borderBottomWidth: 1,
+    borderColor: COLORS.black,
+  },
+  closingCalcUnderlineStrong: {
+    width: 120,
+    marginTop: 6,
     borderBottomWidth: 1,
     borderColor: COLORS.black,
   },
   tableClosingBalanceText: {
-    marginTop: 40,
+    flex: 1,
+    marginRight: 8,
     fontSize: SIZES.body3,
     fontWeight: "700",
     color: COLORS.black,
@@ -1552,8 +1376,45 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   tableCellDash: {
-    color: COLORS.black,
+    color: "#B0B7C3",
     fontWeight: "500",
+  },
+  totalsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    backgroundColor: "#F7F9FC",
+    borderTopWidth: 1,
+    borderTopColor: "#E6EBF2",
+  },
+  tableTotalsText: {
+    fontSize: SIZES.body3,
+    fontWeight: "800",
+    color: COLORS.black,
+    textAlign: "center",
+    width: "100%",
+  },
+  closingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: "#EAF3FC",
+    borderTopWidth: 1,
+    borderTopColor: "#D5E6F6",
+    gap: 12,
+  },
+  closingValue: {
+    fontSize: SIZES.body2,
+    fontWeight: "800",
+    color: COLORS.black,
+    textAlign: "right",
+  },
+  closingValueNegative: {
+    color: "#E53935",
+  },
+  closingValuePositive: {
+    color: COLORS.success,
   },
   tableTextClosedBlack: {
     color: COLORS.black,

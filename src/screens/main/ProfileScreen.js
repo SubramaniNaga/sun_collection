@@ -2,8 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { ActivityIndicator, Keyboard, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import Button from '../../components/common/Button';
@@ -26,6 +25,7 @@ const ProfileScreen = ({ navigation }) => {
   const [lineId, setLineId] = useState(null);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordKeyboardHeight, setPasswordKeyboardHeight] = useState(0);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -73,12 +73,35 @@ const ProfileScreen = ({ navigation }) => {
     AsyncStorage.getItem('lineId').then(setLineId);
   }, []);
 
+  useEffect(() => {
+    if (!showPasswordModal) {
+      setPasswordKeyboardHeight(0);
+      return undefined;
+    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setPasswordKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => setPasswordKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [showPasswordModal]);
+
+  const closePasswordModal = () => {
+    Keyboard.dismiss();
+    setShowPasswordModal(false);
+    setPasswordData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+  };
+
   const displayBranch = user?.branch ?? user?.branch_id ?? branchId ?? 'N/A';
   const displayLine = user?.line ?? user?.line_name ?? lineId ?? 'N/A';
-  const truncateText = (value, maxLength = 24) => {
-    if (!value) return '';
-    return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
-  };
   const safeT = (key, fallback) => {
     const value = t(key);
     return value && value !== key ? value : fallback;
@@ -214,6 +237,27 @@ const ProfileScreen = ({ navigation }) => {
       });
   };
 
+  const getInitials = (name) => {
+    const parts = String(name ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (!parts.length) return 'U';
+    return parts
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase();
+  };
+
+  const detailRows = [
+    { key: 'phone', icon: 'call-outline', label: t('common.phone'), value: user?.phone || '—' },
+    { key: 'id', icon: 'id-card-outline', label: t('profile.id'), value: user?.id ?? '—' },
+    { key: 'device', icon: 'phone-portrait-outline', label: t('profile.device'), value: user?.device || '—' },
+    { key: 'branch', icon: 'business-outline', label: t('profile.branch'), value: displayBranch || '—' },
+    { key: 'line', icon: 'git-branch-outline', label: t('profile.line'), value: displayLine || '—' },
+  ];
+
   const languages = [
     { code: 'en', name: t('profile.english'), nativeName: 'English' },
     { code: 'ta', name: t('profile.tamil'), nativeName: 'தமிழ்' },
@@ -267,12 +311,11 @@ const ProfileScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Header */}
-        <Card style={styles.profileCard}>
+        <View style={styles.profileCard}>
           <View style={styles.profileTop}>
             <View style={styles.avatarWrap}>
               <Text style={styles.avatarText}>
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                {getInitials(user?.name)}
               </Text>
             </View>
             <Text style={styles.profileName}>
@@ -284,35 +327,24 @@ const ProfileScreen = ({ navigation }) => {
               </Text>
             </View>
           </View>
-          <View style={styles.profileDivider} />
           <View style={styles.profileDetails}>
-            <View style={styles.detailRow}>
-              <Ionicons name="call-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('common.phone')}</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>{user?.phone || 'N/A'}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Ionicons name="id-card-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('profile.id')}</Text>
-              <Text style={styles.detailValue}>{user?.id ?? 'N/A'}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Ionicons name="phone-portrait-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('profile.device')}</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>{user?.device || 'N/A'}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Ionicons name="business-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('profile.branch')}</Text>
-              <Text style={styles.detailValue}>{displayBranch}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Ionicons name="git-branch-outline" size={18} color={COLORS.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>{t('profile.line')}</Text>
-              <Text style={styles.detailValue}>{displayLine}</Text>
-            </View>
+            {detailRows.map((row, index) => (
+              <View
+                key={row.key}
+                style={[
+                  styles.detailRow,
+                  index === detailRows.length - 1 && styles.detailRowLast,
+                ]}
+              >
+                <View style={styles.detailIconWrap}>
+                  <Ionicons name={row.icon} size={16} color={COLORS.primary} />
+                </View>
+                <Text style={styles.detailLabel}>{row.label}</Text>
+                <Text style={styles.detailValue}>{row.value}</Text>
+              </View>
+            ))}
           </View>
-        </Card>
+        </View>
 
         {/* Edit Form */}
         {isEditing && (
@@ -395,15 +427,22 @@ const ProfileScreen = ({ navigation }) => {
           </Card>
         )}
 
-        {/* Menu Options */}
         <View style={styles.menuSection}>
-          {menuItems.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.menuItem} onPress={item.onPress}>
-              <View style={styles.menuContent}>
-                <Ionicons name={item.icon} size={20} color={COLORS.primary} style={styles.menuIcon} />
-                <Text style={styles.menuTitle}>{item.title}</Text>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.menuItem,
+                index === menuItems.length - 1 && styles.menuItemLast,
+              ]}
+              onPress={item.onPress}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuIconWrap}>
+                <Ionicons name={item.icon} size={18} color={COLORS.primary} />
               </View>
-              <Text style={styles.menuArrow}>›</Text>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
             </TouchableOpacity>
           ))}
         </View>
@@ -425,7 +464,7 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderContent}>
                 <View style={styles.modalIconContainer}>
-                  <Ionicons name="language" size={28} color={COLORS.primary} />
+                  <Ionicons name="language" size={18} color={COLORS.white} />
                 </View>
                 <Text style={styles.modalTitle}>{t('profile.selectLanguage')}</Text>
               </View>
@@ -434,7 +473,7 @@ const ProfileScreen = ({ navigation }) => {
                 onPress={() => setShowLanguageModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
+                <Ionicons name="close" size={22} color={COLORS.white} />
               </TouchableOpacity>
             </View>
 
@@ -459,7 +498,7 @@ const ProfileScreen = ({ navigation }) => {
                       ]}>
                         <Ionicons
                           name={lang.code === 'en' ? "globe-outline" : "book-outline"}
-                          size={28}
+                          size={20}
                           color={isSelected ? COLORS.white : COLORS.primary}
                         />
                       </View>
@@ -494,80 +533,79 @@ const ProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Change Password Modal */}
       <Modal
         visible={showPasswordModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowPasswordModal(false)}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={closePasswordModal}
       >
-        <KeyboardAvoidingView
-          style={styles.passwordModalKeyboardRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowPasswordModal(false)}
+        <View style={styles.passwordSheetOverlay}>
+          <Pressable style={styles.passwordSheetDismiss} onPress={closePasswordModal} />
+          <View
+            style={[
+              styles.passwordSheet,
+              {
+                marginBottom: passwordKeyboardHeight,
+                paddingBottom: passwordKeyboardHeight > 0 ? 12 : Math.max(insets.bottom, 16),
+              },
+            ]}
           >
-            <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
-              <View style={styles.modalHeader}>
-                <View style={styles.modalHeaderContent}>
-                  <View style={styles.modalIconContainer}>
-                    <Ionicons name="lock-closed" size={28} color={COLORS.primary} />
-                  </View>
-                  <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="tail">
-                    {truncateText(t('profile.changePassword') || 'Change Password', 18)}
-                  </Text>
+            <View style={styles.passwordSheetTop}>
+            <View style={styles.passwordSheetHandle} />
+            <View style={[styles.modalHeader, styles.passwordSheetHeader]}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="lock-closed" size={18} color={COLORS.white} />
                 </View>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => {
-                    setShowPasswordModal(false);
-                    setPasswordData({
-                      currentPassword: '',
-                      newPassword: '',
-                      confirmPassword: '',
-                    });
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close-circle" size={28} color={COLORS.text.tertiary} />
-                </TouchableOpacity>
+                <Text style={styles.modalTitle}>
+                  {t('profile.changePassword')}
+                </Text>
               </View>
-
-              <KeyboardAwareScrollView
-                style={styles.passwordModalScroll}
-                contentContainerStyle={styles.passwordModalScrollContent}
-                showsVerticalScrollIndicator={false}
-                enableOnAndroid
-                enableAutomaticScroll
-                keyboardShouldPersistTaps="handled"
-                extraScrollHeight={Platform.OS === 'android' ? 140 : 100}
-                extraHeight={120}
-                nestedScrollEnabled
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={closePasswordModal}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
+                <Ionicons name="close" size={22} color={COLORS.white} />
+              </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.passwordModalScroll}
+              contentContainerStyle={styles.passwordModalScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+            >
                 {/* Current Password */}
                 <View style={styles.passwordInputContainer}>
-                  <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
-                    {truncateText(t('profile.currentPassword') || 'Current Password', 24)}
+                  <Text style={styles.passwordLabel}>
+                    {t('profile.currentPassword')}
                   </Text>
                   <View style={styles.passwordInputWrapper}>
-                    <TextInput
-                      ref={currentPasswordRef}
-                      style={styles.passwordInput}
-                      placeholder={truncateText(t('profile.enterCurrentPassword') || 'Enter current password', 18)}
-                      placeholderTextColor={COLORS.text.tertiary}
-                      value={passwordData.currentPassword}
-                      onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
-                      secureTextEntry={!showPasswords.current}
-                      autoCapitalize="none"
-                      returnKeyType="next"
-                      blurOnSubmit={false}
-                      submitBehavior="submit"
-                      onSubmitEditing={() => newPasswordRef.current?.focus()}
-                    />
+                    <View style={styles.passwordInputField}>
+                      <TextInput
+                        ref={currentPasswordRef}
+                        style={styles.passwordInput}
+                        value={passwordData.currentPassword}
+                        onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
+                        secureTextEntry={!!passwordData.currentPassword && !showPasswords.current}
+                        autoCapitalize="none"
+                        returnKeyType="next"
+                        blurOnSubmit={false}
+                        submitBehavior="submit"
+                        onSubmitEditing={() => newPasswordRef.current?.focus()}
+                      />
+                      {!passwordData.currentPassword ? (
+                        <View style={styles.passwordPlaceholderWrap} pointerEvents="none">
+                          <Text style={styles.passwordPlaceholder}>
+                            {t('profile.enterCurrentPassword')}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <TouchableOpacity
                       style={styles.eyeIcon}
                       onPress={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
@@ -583,24 +621,31 @@ const ProfileScreen = ({ navigation }) => {
 
                 {/* New Password */}
                 <View style={styles.passwordInputContainer}>
-                  <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
-                    {truncateText(t('profile.newPassword') || 'New Password', 24)}
+                  <Text style={styles.passwordLabel}>
+                    {t('profile.newPassword')}
                   </Text>
                   <View style={styles.passwordInputWrapper}>
-                    <TextInput
-                      ref={newPasswordRef}
-                      style={styles.passwordInput}
-                      placeholder={truncateText(t('profile.enterNewPassword') || 'Enter new password', 18)}
-                      placeholderTextColor={COLORS.text.tertiary}
-                      value={passwordData.newPassword}
-                      onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
-                      secureTextEntry={!showPasswords.new}
-                      autoCapitalize="none"
-                      returnKeyType="next"
-                      blurOnSubmit={false}
-                      submitBehavior="submit"
-                      onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-                    />
+                    <View style={styles.passwordInputField}>
+                      <TextInput
+                        ref={newPasswordRef}
+                        style={styles.passwordInput}
+                        value={passwordData.newPassword}
+                        onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
+                        secureTextEntry={!!passwordData.newPassword && !showPasswords.new}
+                        autoCapitalize="none"
+                        returnKeyType="next"
+                        blurOnSubmit={false}
+                        submitBehavior="submit"
+                        onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                      />
+                      {!passwordData.newPassword ? (
+                        <View style={styles.passwordPlaceholderWrap} pointerEvents="none">
+                          <Text style={styles.passwordPlaceholder}>
+                            {t('profile.enterNewPassword')}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <TouchableOpacity
                       style={styles.eyeIcon}
                       onPress={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
@@ -616,22 +661,29 @@ const ProfileScreen = ({ navigation }) => {
 
                 {/* Confirm Password */}
                 <View style={styles.passwordInputContainer}>
-                  <Text style={styles.passwordLabel} numberOfLines={1} ellipsizeMode="tail">
-                    {truncateText(t('profile.confirmPassword') || 'Confirm Password', 24)}
+                  <Text style={styles.passwordLabel}>
+                    {t('profile.confirmPassword')}
                   </Text>
                   <View style={styles.passwordInputWrapper}>
-                    <TextInput
-                      ref={confirmPasswordRef}
-                      style={styles.passwordInput}
-                      placeholder={truncateText(t('profile.confirmNewPassword') || 'Confirm new password', 18)}
-                      placeholderTextColor={COLORS.text.tertiary}
-                      value={passwordData.confirmPassword}
-                      onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
-                      secureTextEntry={!showPasswords.confirm}
-                      autoCapitalize="none"
-                      returnKeyType="done"
-                      onSubmitEditing={Keyboard.dismiss}
-                    />
+                    <View style={styles.passwordInputField}>
+                      <TextInput
+                        ref={confirmPasswordRef}
+                        style={styles.passwordInput}
+                        value={passwordData.confirmPassword}
+                        onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
+                        secureTextEntry={!!passwordData.confirmPassword && !showPasswords.confirm}
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
+                      />
+                      {!passwordData.confirmPassword ? (
+                        <View style={styles.passwordPlaceholderWrap} pointerEvents="none">
+                          <Text style={styles.passwordPlaceholder}>
+                            {t('profile.confirmNewPassword')}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <TouchableOpacity
                       style={styles.eyeIcon}
                       onPress={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
@@ -650,14 +702,7 @@ const ProfileScreen = ({ navigation }) => {
                   <TouchableOpacity
                     style={[styles.passwordButton, styles.passwordButtonCancel]}
                     disabled={passwordSubmitting}
-                    onPress={() => {
-                      setShowPasswordModal(false);
-                      setPasswordData({
-                        currentPassword: '',
-                        newPassword: '',
-                        confirmPassword: '',
-                      });
-                    }}
+                    onPress={closePasswordModal}
                   >
                     <Text style={styles.passwordButtonCancelText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
@@ -673,10 +718,9 @@ const ProfileScreen = ({ navigation }) => {
                     )}
                   </TouchableOpacity>
                 </View>
-              </KeyboardAwareScrollView>
-            </View>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -685,93 +729,106 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F4F6F9',
   },
   scrollView: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F4F6F9',
   },
   scrollContent: {
-    paddingBottom: SIZES.padding * 2, // Add bottom padding to avoid navigation bar overlap
+    paddingBottom: SIZES.padding * 2,
   },
   profileCard: {
     margin: SIZES.padding,
-    padding: 0,
-    marginBottom: SIZES.padding * 1.5,
+    marginBottom: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E6EBF2',
   },
   profileTop: {
     alignItems: 'center',
-    paddingVertical: SIZES.padding * 1.5,
+    backgroundColor: COLORS.primary,
+    paddingTop: 22,
+    paddingBottom: 20,
     paddingHorizontal: SIZES.padding,
   },
   avatarWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: COLORS.primary,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SIZES.margin,
+    marginBottom: 12,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '700',
     color: COLORS.white,
   },
   profileName: {
     fontSize: SIZES.h3,
     fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: SIZES.base,
+    color: COLORS.white,
+    marginBottom: 8,
     textAlign: 'center',
-  },
-  roleBadge: {
-    backgroundColor: COLORS.primary + '18',
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.base / 2,
-    borderRadius: SIZES.radius * 2,
-  },
-  roleBadgeText: {
-    fontSize: SIZES.body3,
-    color: COLORS.primary,
-    fontWeight: '600',
     textTransform: 'capitalize',
   },
-  profileDivider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginHorizontal: SIZES.padding,
+  roleBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  roleBadgeText: {
+    fontSize: SIZES.body4,
+    color: COLORS.white,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   profileDetails: {
-    paddingVertical: SIZES.margin,
-    paddingHorizontal: SIZES.padding,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
   detailRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SIZES.base,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: '#E6EBF2',
   },
   detailRowLast: {
     borderBottomWidth: 0,
   },
-  detailIcon: {
-    marginRight: SIZES.base,
-    width: 24,
+  detailIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E8F3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   detailLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.tertiary,
-    width: 110,
+    fontSize: SIZES.body4,
+    color: '#6B7280',
+    width: 88,
+    marginTop: 6,
   },
   detailValue: {
     flex: 1,
-    fontSize: SIZES.body2,
-    color: COLORS.text.primary,
-    fontWeight: '500',
+    fontSize: SIZES.body3,
+    color: COLORS.black,
+    fontWeight: '700',
     textAlign: 'right',
+    marginTop: 6,
   },
   detailRight: {
     flex: 1,
@@ -849,126 +906,137 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   menuSection: {
-    margin: SIZES.padding,
+    marginHorizontal: SIZES.padding,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E6EBF2',
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SIZES.padding,
-    paddingHorizontal: SIZES.padding,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E6EBF2',
   },
-  menuContent: {
-    flexDirection: 'row',
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E8F3FC',
     alignItems: 'center',
-  },
-  menuIcon: {
-    marginRight: SIZES.margin,
+    justifyContent: 'center',
+    marginRight: 12,
   },
   menuTitle: {
-    fontSize: SIZES.body2,
-    color: COLORS.text.primary,
-    fontWeight: '500',
-  },
-  menuArrow: {
-    fontSize: SIZES.h2,
-    color: COLORS.text.tertiary,
-  },
-  passwordModalKeyboardRoot: {
     flex: 1,
+    fontSize: SIZES.body2,
+    color: COLORS.black,
+    fontWeight: '600',
+  },
+  passwordSheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  passwordSheetDismiss: {
+    flex: 1,
+  },
+  passwordSheet: {
+    width: '100%',
+    maxHeight: '92%',
+    flexShrink: 1,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  passwordSheetTop: {
+    backgroundColor: COLORS.primary,
+  },
+  passwordSheetHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 10,
+  },
+  passwordSheetHeader: {
+    backgroundColor: 'transparent',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SIZES.padding * 2,
+    paddingHorizontal: 20,
   },
   modalContainer: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius * 3,
+    borderRadius: 16,
     width: '100%',
     maxWidth: 420,
     maxHeight: '88%',
     overflow: 'hidden',
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SIZES.padding * 1.5,
-    paddingVertical: SIZES.padding * 1.5,
-    backgroundColor: COLORS.lightGray,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: COLORS.primary,
   },
   modalHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
   },
   modalIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary + '15',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SIZES.margin,
+    marginRight: 10,
   },
   modalTitle: {
-    fontSize: SIZES.h3,
-    fontWeight: '700',
-    color: COLORS.text.primary,
     flex: 1,
-    marginRight: SIZES.base,
+    fontSize: SIZES.body1,
+    fontWeight: '700',
+    color: COLORS.white,
+    lineHeight: 26,
   },
   closeButton: {
     padding: SIZES.base / 2,
     borderRadius: SIZES.radius,
   },
   languageOptions: {
-    padding: SIZES.padding,
+    padding: 16,
+    gap: 10,
   },
   languageOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SIZES.padding * 1.5,
-    paddingVertical: SIZES.padding * 1.5,
-    marginBottom: SIZES.margin,
-    borderRadius: SIZES.radius * 2,
-    backgroundColor: COLORS.lightGray,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F7F9FC',
+    borderWidth: 1,
+    borderColor: '#E6EBF2',
   },
   languageOptionSelected: {
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: '#E8F3FC',
     borderColor: COLORS.primary,
-    borderWidth: 2,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   languageOptionLast: {
     marginBottom: 0,
@@ -979,15 +1047,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   languageIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.white,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F3FC',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SIZES.margin,
-    borderWidth: 2,
-    borderColor: COLORS.primary + '30',
+    marginRight: 12,
   },
   languageIconContainerSelected: {
     backgroundColor: COLORS.primary,
@@ -1031,11 +1097,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   passwordModalScroll: {
-    maxHeight: 420,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   passwordModalScrollContent: {
-    padding: SIZES.padding * 1.5,
-    paddingBottom: SIZES.padding * 3,
+    padding: 16,
+    paddingBottom: 8,
   },
   passwordInputContainer: {
     marginBottom: SIZES.margin * 1.5,
@@ -1045,24 +1112,41 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: SIZES.base,
+    lineHeight: 22,
   },
   passwordInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.lightGray,
-    borderRadius: SIZES.radius * 2,
+    backgroundColor: '#F7F9FC',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SIZES.padding,
-    height: 50,
+    borderColor: '#E6EBF2',
+    paddingHorizontal: 12,
+    minHeight: 64,
+    paddingVertical: 10,
+  },
+  passwordInputField: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
   },
   passwordInput: {
-    flex: 1,
     fontSize: SIZES.body2,
     color: COLORS.black,
-    paddingVertical: SIZES.base,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    margin: 0,
+    minHeight: 24,
     textAlignVertical: 'center',
-    includeFontPadding: false,
+  },
+  passwordPlaceholderWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+  },
+  passwordPlaceholder: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.text.tertiary,
   },
   eyeIcon: {
     padding: SIZES.base / 2,
@@ -1075,20 +1159,23 @@ const styles = StyleSheet.create({
   },
   passwordButton: {
     flex: 1,
-    paddingVertical: SIZES.padding,
-    borderRadius: SIZES.radius * 2,
+    minHeight: 48,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   passwordButtonCancel: {
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: '#F4F6F9',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E6EBF2',
   },
   passwordButtonCancelText: {
     fontSize: SIZES.body2,
     fontWeight: '600',
     color: COLORS.text.secondary,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   passwordButtonSubmit: {
     backgroundColor: COLORS.primary,
@@ -1100,6 +1187,8 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     fontWeight: '600',
     color: COLORS.white,
+    lineHeight: 22,
+    textAlign: 'center',
   },
 });
 

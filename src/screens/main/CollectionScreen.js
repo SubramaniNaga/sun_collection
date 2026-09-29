@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, InteractionManager, Keyboard, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, InteractionManager, Keyboard, Linking, Modal, NativeModules, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
@@ -43,14 +43,7 @@ const formatCurrencyOrDash = (val) => {
 
 const UNPAID_LIMIT = 10;
 const PAID_LIMIT = 10;
-const ANDROID_NAV_BAR_HEIGHT = 56;
 const KEYBOARD_FALLBACK_HEIGHT = 280;
-
-const getBottomInset = (insets) => (
-  Platform.OS === 'android'
-    ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
-    : Math.max(insets.bottom, SIZES.base)
-);
 
 const parseCollectionsFromResponse = (response) => {
   const raw = response?.data?.collections ?? response?.collections;
@@ -152,7 +145,6 @@ const CollectionListPane = memo(function CollectionListPane({
 const CollectionScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const bottomInset = getBottomInset(insets);
   const [searchText, setSearchText] = useState('');
   const [selectedDate, setSelectedDate] = useState(getCalendarDate());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -514,6 +506,17 @@ const CollectionScreen = ({ navigation }) => {
       maybeLoadMorePaidIfShort();
     }
   }, [loadingPaid, paidList.length, paidPagination.hasNextPage, maybeLoadMorePaidIfShort]);
+
+  // Let Weekly / Daily colors paint through the system navigation bar on this screen.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return undefined;
+      NativeModules.AppNavigationBar?.setTabColorBehindNavigation?.(true);
+      return () => {
+        NativeModules.AppNavigationBar?.setTabColorBehindNavigation?.(false);
+      };
+    }, [])
+  );
 
   // Initial load: fetch loan type IDs, then unpaid + paid lists
   useFocusEffect(
@@ -903,9 +906,20 @@ const CollectionScreen = ({ navigation }) => {
         payload.notes = remarks.trim();
       }
 
-      await apiServices.collection.updateAmount(selectedCollection.id, payload);
+      const response = await apiServices.collection.updateAmount(selectedCollection.id, payload);
+      const success = response?.success !== false
+        && (response?.status === 200 || response?.status === undefined);
+      const message = response?.message || response?.data?.message;
 
-      showSuccess(t('common.success'), t('success.collectionUpdated'), [
+      if (!success) {
+        showError(
+          t('common.error'),
+          message || t('errors.somethingWentWrong'),
+        );
+        return;
+      }
+
+      showSuccess(t('common.success'), message || t('success.collectionUpdated'), [
         {
           text: t('common.ok'),
           onPress: () => {
@@ -1092,7 +1106,6 @@ const CollectionScreen = ({ navigation }) => {
   const renderCollectionItem = ({ item }) => {
     const collection = item instanceof Collection ? item : new Collection(item);
     const customerName = String(collection.customerName ?? '').trim();
-    const isLongCustomerName = customerName.length > 12;
     const displayId = collection.customerNo ?? collection.customerId ?? '—';
 
     return (
@@ -1125,24 +1138,25 @@ const CollectionScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
           <View style={styles.collectionCardHeaderBody}>
-            {isLongCustomerName ? (
-              <>
-                <Text style={styles.collectionCardNameLine} numberOfLines={2}>
-                  {displayId} - {customerName || '—'}
-                </Text>
-                {renderCollectionActionIcons(collection)}
-              </>
-            ) : (
-              <View style={styles.collectionCardNameRow}>
-                <Text
-                  style={[styles.collectionCardNameLine, styles.collectionCardNameLineInline]}
-                  numberOfLines={1}
-                >
-                  {displayId} - {customerName || '—'}
-                </Text>
-                {renderCollectionActionIcons(collection)}
+            <View style={styles.collectionCardNameRow}>
+              <Text style={styles.collectionCardNameLine} numberOfLines={2}>
+                {displayId} - {customerName || '—'}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: collection.getStatusColor() }]}>
+                <Text style={styles.statusText}>{collection.getStatusText()}</Text>
               </View>
-            )}
+            </View>
+            <View style={styles.collectionCardActionsRow}>
+              {renderCollectionActionIcons(collection)}
+              <View style={styles.feeColumn}>
+                <Text style={styles.feeColumnLine} numberOfLines={1}>
+                  {String(t('loan.interestAmount')).trim()} : {formatCurrencyOrDash(collection.intrestAmount)}
+                </Text>
+                <Text style={styles.feeColumnLine} numberOfLines={1}>
+                  {t('loan.processingFees')} : {formatCurrencyOrDash(collection.processingFees)}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
         <View style={styles.itemDivider} />
@@ -1150,13 +1164,14 @@ const CollectionScreen = ({ navigation }) => {
           <Text style={styles.itemAssets}>
             {t('loan.week')} {collection.collectionWeek ?? '—'} · {collection.getFormattedCollectionDate()}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: collection.getStatusColor() }]}>
-            <Text style={styles.statusText}>{collection.getStatusText()}</Text>
-          </View>
         </View>
         <View style={styles.itemRow}>
           <Text style={styles.itemMetaLeft}>{t('loan.loanPeriod')}:</Text>
           <Text style={styles.itemMetaRight}>{collection.loanPeriod ?? '—'}/{collection.loanTypeName ?? '—'}</Text>
+        </View>
+        <View style={styles.itemRow}>
+          <Text style={styles.itemMetaLeft}>{t('loan.loanAmount')}:</Text>
+          <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.loanAmount)}</Text>
         </View>
 
         {/* Loan due status row hidden per product request
@@ -1169,15 +1184,6 @@ const CollectionScreen = ({ navigation }) => {
           </Text>
         </View>
         */}
-
-        <View style={styles.itemRow}>
-          <Text style={styles.itemMetaLeft}>{t('loan.interestAmount')}:</Text>
-          <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.intrestAmount)}</Text>
-        </View>
-        <View style={styles.itemRow}>
-          <Text style={styles.itemMetaLeft}>{t('loan.processingFees')}:</Text>
-          <Text style={styles.itemMetaRight}>{formatCurrencyOrDash(collection.processingFees)}</Text>
-        </View>
         {collection.extraAmount != null && collection.extraAmount !== '' && (
           <View style={styles.itemRow}>
             <Text style={[styles.itemMetaLeft, styles.extraAmountText]}>{t('collection.extraAmount')}:</Text>
@@ -1186,16 +1192,29 @@ const CollectionScreen = ({ navigation }) => {
             </Text>
           </View>
         )}
-        <View style={styles.itemRow}>
-          <Text style={styles.itemMetaLeft}>{t('loan.paid')}: {collection.getFormattedAmountPaid()}</Text>
-          <Text style={styles.itemMetaRight}>{t('loan.balance')}: {collection.getFormattedBalanceAmount()}</Text>
+        <View style={styles.amountFooter}>
+          <View style={styles.amountChip}>
+            <Text style={styles.amountChipLabel}>{t('loan.paid')}</Text>
+            <Text style={styles.amountChipValue} numberOfLines={1}>
+              {collection.getFormattedAmountPaid()}
+            </Text>
+          </View>
+          <View style={[styles.amountChip, styles.amountChipBalance]}>
+            <Text style={styles.amountChipLabel}>{t('loan.balance')}</Text>
+            <Text
+              style={[styles.amountChipValue, styles.amountChipBalanceValue]}
+              numberOfLines={1}
+            >
+              {collection.getFormattedBalanceAmount()}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar style="light" backgroundColor={COLORS.statusBar} />
       <Header
         title={t('collection.title')}
@@ -1346,34 +1365,45 @@ const CollectionScreen = ({ navigation }) => {
 
         <View style={styles.loanTypeFooter}>
           <Pressable
-            style={[styles.loanTypeTab, loanTypeTab === 'weekly' && styles.loanTypeTabActive]}
+            style={[
+              styles.loanTypeTab,
+              loanTypeTab === 'weekly' && styles.loanTypeTabActive,
+              { paddingBottom: insets.bottom },
+            ]}
             onPress={() => handleLoanTypeTabPress('weekly')}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            android_ripple={{ color: loanTypeTab === 'weekly' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)' }}
           >
-            <Text style={[styles.loanTypeTabText, loanTypeTab === 'weekly' && styles.loanTypeTabTextActive]}>
-              {t('collection.weeklyTab')}
-            </Text>
-            <View style={[styles.loanTypeBadge, loanTypeTab === 'weekly' && styles.loanTypeBadgeActive]}>
-              <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'weekly' && styles.loanTypeBadgeTextActive]}>
-                {weeklyLoanTypeCount}
+            <View style={styles.loanTypeTabInner}>
+              <Text style={[styles.loanTypeTabText, loanTypeTab === 'weekly' && styles.loanTypeTabTextActive]}>
+                {t('collection.weeklyTab')}
               </Text>
+              <View style={[styles.loanTypeBadge, loanTypeTab === 'weekly' && styles.loanTypeBadgeActive]}>
+                <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'weekly' && styles.loanTypeBadgeTextActive]}>
+                  {weeklyLoanTypeCount}
+                </Text>
+              </View>
             </View>
           </Pressable>
           <Pressable
-            style={[styles.loanTypeTab, loanTypeTab === 'daily' && styles.loanTypeTabActive]}
+            style={[
+              styles.loanTypeTab,
+              loanTypeTab === 'daily' && styles.loanTypeTabActive,
+              { paddingBottom: insets.bottom },
+            ]}
             onPress={() => handleLoanTypeTabPress('daily')}
-            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+            android_ripple={{ color: loanTypeTab === 'daily' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)' }}
           >
-            <Text style={[styles.loanTypeTabText, loanTypeTab === 'daily' && styles.loanTypeTabTextActive]}>
-              {t('collection.dailyTab')}
-            </Text>
-            <View style={[styles.loanTypeBadge, loanTypeTab === 'daily' && styles.loanTypeBadgeActive]}>
-              <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'daily' && styles.loanTypeBadgeTextActive]}>
-                {dailyLoanTypeCount}
+            <View style={styles.loanTypeTabInner}>
+              <Text style={[styles.loanTypeTabText, loanTypeTab === 'daily' && styles.loanTypeTabTextActive]}>
+                {t('collection.dailyTab')}
               </Text>
+              <View style={[styles.loanTypeBadge, loanTypeTab === 'daily' && styles.loanTypeBadgeActive]}>
+                <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'daily' && styles.loanTypeBadgeTextActive]}>
+                  {dailyLoanTypeCount}
+                </Text>
+              </View>
             </View>
           </Pressable>
-
         </View>
       </View>
 
@@ -1413,9 +1443,9 @@ const CollectionScreen = ({ navigation }) => {
         animationType="slide"
         onRequestClose={handleClosePaymentModal}
       >
-        <View style={[styles.paymentDrawerOverlay, { paddingBottom: bottomInset }]}>
+        <View style={styles.paymentDrawerOverlay}>
           <Pressable style={styles.paymentDrawerDismiss} onPress={handleClosePaymentModal} />
-          <View style={styles.paymentDrawerSheet}>
+          <View style={[styles.paymentDrawerSheet, { paddingBottom: insets.bottom }]}>
             <View style={styles.centeredModalHeader}>
               <Text style={styles.paymentModalTitle}>{t('collection.submitPayment')}</Text>
               <TouchableOpacity onPress={handleClosePaymentModal} style={styles.closeButton}>
@@ -1430,12 +1460,8 @@ const CollectionScreen = ({ navigation }) => {
                   style={styles.centeredModalScrollView}
                   contentContainerStyle={[
                     styles.centeredModalContent,
-                    {
-                      paddingBottom: SIZES.padding + (
-                        paymentKeyboardHeight > 0
-                          ? paymentKeyboardHeight
-                          : 24
-                      ),
+                    paymentKeyboardHeight > 0 && {
+                      paddingBottom: paymentKeyboardHeight,
                     },
                   ]}
                   keyboardShouldPersistTaps="handled"
@@ -1708,30 +1734,35 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
-    paddingHorizontal: SIZES.padding,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    backgroundColor: '#F4F6F9',
   },
   loanTypeFooter: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.white,
   },
   loanTypeTab: {
     flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  loanTypeTabActive: {
+    backgroundColor: COLORS.primary,
+    marginTop: -StyleSheet.hairlineWidth,
+  },
+  loanTypeTabInner: {
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SIZES.base,
-    paddingVertical: 10,
-  },
-  loanTypeTabActive: {
-    borderTopWidth: 2,
-    borderTopColor: COLORS.white,
-    backgroundColor: COLORS.primary,
-    marginTop: -1,
+    paddingHorizontal: SIZES.base,
   },
   loanTypeTabText: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.body2,
     fontWeight: '600',
     color: COLORS.text.secondary,
   },
@@ -1739,10 +1770,10 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   loanTypeBadge: {
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 7,
-    borderRadius: 12,
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 8,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.lightGray,
@@ -1751,7 +1782,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   loanTypeBadgeText: {
-    fontSize: SIZES.body5,
+    fontSize: SIZES.body4,
     fontWeight: '700',
     color: COLORS.text.secondary,
   },
@@ -1786,20 +1817,28 @@ const styles = StyleSheet.create({
   },
   listItem: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding / 2, // Reduced from 16px to 8px for more compact layout
-    marginBottom: SIZES.base / 2, // Reduced from 8px to 4px for more compact layout
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E6EBF2',
+    shadowColor: '#1d3a5f',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   listItemPending: {
-    borderColor: '#F5D000',
-    borderWidth: 2,
+    borderColor: '#F5C400',
+    borderWidth: 1.5,
+    backgroundColor: '#FFFDF6',
   },
   listItemHighPending: {
-    borderColor: '#FED7AA',
-    borderWidth: 2,
+    borderColor: '#FB923C',
+    borderWidth: 1.5,
+    backgroundColor: '#FFF8F1',
   },
   collectionCardHeader: {
     flexDirection: 'row',
@@ -1824,22 +1863,37 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   collectionCardNameLine: {
-    fontSize: SIZES.body1,
-    fontWeight: '600',
+    fontSize: SIZES.body2,
+    fontWeight: '700',
     color: COLORS.black,
-    marginBottom: SIZES.base * 0.375,
-    lineHeight: Math.round((SIZES.body1 || 16) * 1.25),
-  },
-  collectionCardNameLineInline: {
-    marginBottom: 0,
+    lineHeight: Math.round((SIZES.body2 || 16) * 1.3),
     flex: 1,
-    marginRight: SIZES.base * 0.75,
-    minWidth: 0,
+    flexShrink: 1,
+    textTransform: 'capitalize',
   },
   collectionCardNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+  },
+  collectionCardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    gap: 10,
+  },
+  feeColumn: {
+    alignItems: 'flex-end',
+    flexShrink: 1,
+    gap: 4,
+  },
+  feeColumnLine: {
+    fontSize: SIZES.body4,
+    fontWeight: '600',
+    color: COLORS.black,
+    textAlign: 'right',
   },
   collectionCardIconsRow: {
     flexDirection: 'row',
@@ -1848,9 +1902,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   collectionCardIconButton: {
-    padding: SIZES.base / 2,
-    borderRadius: SIZES.radius,
-    backgroundColor: COLORS.lightGray,
+    borderRadius: 16,
+    backgroundColor: '#E8F3FC',
     alignItems: 'center',
     justifyContent: 'center',
     width: 32,
@@ -1880,34 +1933,40 @@ const styles = StyleSheet.create({
   },
   itemDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.border,
-    marginVertical: SIZES.base / 2, // Reduced from 8px to 4px for more compact layout
+    backgroundColor: '#E6EBF2',
+    marginTop: 10,
+    marginBottom: 8,
     marginLeft: 0,
   },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.base / 2, // Reduced from 8px to 4px for more compact layout
-    minHeight: 24,
+    marginBottom: 6,
+    minHeight: 22,
+    gap: 12,
   },
   itemRowLast: {
     marginBottom: 0,
   },
   itemAssets: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
+    fontSize: SIZES.body4,
+    fontWeight: '600',
+    color: '#4B5563',
     flex: 1,
     marginRight: SIZES.base,
   },
   itemMetaLeft: {
-    fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
+    fontSize: SIZES.body4,
+    color: '#6B7280',
+    flexShrink: 1,
   },
   itemMetaRight: {
     fontSize: SIZES.body3,
-    color: COLORS.text.secondary,
-    marginLeft: SIZES.base,
+    fontWeight: '600',
+    color: COLORS.black,
+    textAlign: 'right',
+    flexShrink: 1,
   },
   extraAmountText: {
     color: COLORS.error || '#FF3B30',
@@ -1919,16 +1978,46 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   statusBadge: {
-    paddingHorizontal: SIZES.base,
-    paddingVertical: SIZES.base / 2,
-    borderRadius: SIZES.radius / 2,
-    minWidth: 56,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    minWidth: 64,
     alignItems: 'center',
   },
   statusText: {
     fontSize: SIZES.body5,
     color: COLORS.white,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  amountFooter: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  amountChip: {
+    flex: 1,
+    backgroundColor: '#F4F6F9',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  amountChipBalance: {
+    backgroundColor: '#EAF3FC',
+  },
+  amountChipLabel: {
+    fontSize: SIZES.body5,
     fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  amountChipValue: {
+    fontSize: SIZES.body3,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  amountChipBalanceValue: {
+    color: COLORS.primary,
   },
   centerContainer: {
     flex: 1,
@@ -2053,7 +2142,7 @@ const styles = StyleSheet.create({
   },
   submitButtonInScroll: {
     marginTop: SIZES.padding,
-    marginBottom: SIZES.padding,
+    marginBottom: SIZES.base,
   },
   customerInfo: {
     backgroundColor: COLORS.lightGray,
@@ -2066,6 +2155,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.black,
     marginBottom: SIZES.base / 2,
+    textTransform: 'capitalize',
   },
   customerInfoBalance: {
     fontSize: SIZES.body3,

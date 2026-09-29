@@ -666,7 +666,7 @@ const LoanScreen = ({ navigation, route }) => {
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t("customer.customer")}</Text>
-                <Text style={styles.detailValue}>
+                <Text style={[styles.detailValue, styles.detailValueName]}>
                   {(loanDetails?.customer_name || loan?.customer_name) ?? "—"}
                 </Text>
               </View>
@@ -1344,6 +1344,9 @@ const styles = StyleSheet.create({
     color: COLORS.text?.secondary || "#333",
     flex: 1,
     textAlign: "right",
+  },
+  detailValueName: {
+    textTransform: "capitalize",
   },
   detailValueHighlight: {
     fontSize: SIZES.body2,

@@ -6,30 +6,30 @@ import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    AppState,
-    Easing,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  AppState,
+  Easing,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import apiServices from "../../api/services/apiServices";
 import AppUpdateBottomSheet from "../../components/common/AppUpdateBottomSheet";
 import Header from "../../components/common/Header";
 import {
-    ATTENDANCE,
-    applyAppBlockFromResponse,
-    applyAttendanceFromResponse,
-    isAttendanceCheckedIn,
-    isAttendanceClosed,
-    setLocalAttendanceClosed,
-    setLocalCheckInState,
+  ATTENDANCE,
+  applyAppBlockFromResponse,
+  applyAttendanceFromResponse,
+  isAttendanceCheckedIn,
+  isAttendanceClosed,
+  setLocalAttendanceClosed,
+  setLocalCheckInState,
 } from "../../config/appToggles";
 import { COLORS, SIZES } from "../../constants/theme";
 import { useAppVersionCheck } from "../../hooks/useAppVersionCheck";
@@ -38,9 +38,9 @@ import NIPLoan from "../../models/NIPLoan";
 import { useAuthContext } from "../../store/AuthContext";
 import { useLanguage } from "../../store/LanguageContext";
 import {
-    getApiErrorMessage,
-    showAlert,
-    showError,
+  getApiErrorMessage,
+  showAlert,
+  showError,
 } from "../../utils/alertService";
 import { formatCurrency } from "../../utils/amountFormatters";
 import { getServerDateTimeISO } from "../../utils/dateFormatter";
@@ -842,8 +842,8 @@ const HomeScreen = ({ navigation }) => {
                   { fontSize: taFont(SIZES.h3) },
                 ]}
               >
-                {t("home.todaysStatistics")}
-                {user?.id != null ? ` (${user.id})` : ""}
+              {user?.line ?? ""} {t("home.todaysStatistics")}
+                {user?.id != null ? ` (${user.id})` : ""} 
               </Text>
               {showAttendance && (
                 <TouchableOpacity

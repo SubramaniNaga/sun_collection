@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { StatusBar } from 'expo-status-bar';
 import { useRef, useState } from 'react';
 import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getDeviceId } from '../../utils/deviceId';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '../../api/apiClient';
 import Button from '../../components/common/Button';
@@ -16,6 +14,8 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 import { getApiErrorMessage, showError, showSuccess, showWarning } from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
+import { getDeviceId } from '../../utils/deviceId';
+import { pickFromCamera, pickFromLibrary } from '../../utils/imagePickerHelper';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const AddCustomerScreen = ({ navigation }) => {
