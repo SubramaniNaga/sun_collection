@@ -24,9 +24,9 @@ import apiServices from "../../api/services/apiServices";
 import AppUpdateBottomSheet from "../../components/common/AppUpdateBottomSheet";
 import Header from "../../components/common/Header";
 import {
-  ATTENDANCE,
   applyAppBlockFromResponse,
   applyAttendanceFromResponse,
+  ATTENDANCE,
   isAttendanceCheckedIn,
   isAttendanceClosed,
   setLocalAttendanceClosed,
@@ -41,9 +41,8 @@ import { useLanguage } from "../../store/LanguageContext";
 import {
   getApiErrorMessage,
   showAlert,
-  showError,
   showErrorWithRetry,
-  throwIfApiFailed,
+  throwIfApiFailed
 } from "../../utils/alertService";
 import { formatCurrency } from "../../utils/amountFormatters";
 import { getServerDateTimeISO } from "../../utils/dateFormatter";

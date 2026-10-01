@@ -7,19 +7,19 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Keyboard,
-  Linking,
-  Modal,
-  Platform,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Keyboard,
+    Linking,
+    Modal,
+    Platform,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -34,8 +34,8 @@ import VoiceMicButton from "../../components/common/VoiceMicButton";
 
 import { COLORS, SIZES } from "../../constants/theme";
 import {
-  DEBOUNCE_MS_DEFAULT,
-  useDebouncedValue,
+    DEBOUNCE_MS_DEFAULT,
+    useDebouncedValue,
 } from "../../hooks/useDebouncedValue";
 
 import NIPLoan from "../../models/NIPLoan";
@@ -44,10 +44,10 @@ import { useLanguage } from "../../store/LanguageContext";
 
 import ListLoadError from "../../components/common/ListLoadError";
 import {
-  getApiErrorMessage,
-  showError,
-  showErrorWithRetry,
-  throwIfApiFailed,
+    getApiErrorMessage,
+    showError,
+    showErrorWithRetry,
+    throwIfApiFailed,
 } from "../../utils/alertService";
 import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
 import { safeGoBack } from "../../utils/navigationHelpers";

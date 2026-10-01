@@ -1,8 +1,8 @@
 import {
-  ACCOUNT,
-  ATTENDANCE,
-  isAccountClosed,
-  isAttendanceCheckedIn,
+    ACCOUNT,
+    ATTENDANCE,
+    isAccountClosed,
+    isAttendanceCheckedIn,
 } from '../config/appToggles';
 import { showWarning } from './alertService';
 
