@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,12 +19,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiServices } from '../../api/services/apiServices';
 import DatePicker from '../../components/common/DatePicker';
 import Header from '../../components/common/Header';
+import ListLoadError from '../../components/common/ListLoadError';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import CollectionHistory from '../../models/CollectionHistory';
 import Dashboard from '../../models/Dashboard';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import {
+  getApiErrorMessage,
+  showError,
+  showErrorWithRetry,
+  showSuccess,
+  throwIfApiFailed,
+} from '../../utils/alertService';
 import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, getCalendarDateISO, getCurrentDateString } from '../../utils/dateFormatter';
@@ -77,6 +84,10 @@ const CollectionHistoryScreen = ({ navigation }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  /** HTTP/API failure — show error UI, not "no collections found" */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState('');
+  const fetchCollectionHistoryRef = useRef(async () => {});
 
   // Stats from API
   const [stats, setStats] = useState({
@@ -160,6 +171,8 @@ const CollectionHistoryScreen = ({ navigation }) => {
       if (page === 1 && !skipPageLoader) {
         setLoading(true);
         setError(null);
+        setLoadFailed(false);
+        setLoadErrorMessage('');
       } else {
         setLoadingMore(true);
       }
@@ -173,6 +186,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
         page,
         limit: LIMIT,
       });
+      throwIfApiFailed(response, t('collectionHistory.failedToLoad'));
 
       const data = response?.data || {};
       const collections = Array.isArray(data?.collections) ? data.collections : [];
@@ -204,17 +218,37 @@ const CollectionHistoryScreen = ({ navigation }) => {
         hasNextPage: Boolean(pag.hasNextPage),
         totalPages: pag.totalPages ?? 1,
       });
+      if (page === 1) {
+        setLoadFailed(false);
+        setLoadErrorMessage('');
+      }
     } catch (err) {
       if (page === 1) {
-        showError(t('common.error'), getApiErrorMessage(err, t('collectionHistory.failedToLoad')));
+        const msg = getApiErrorMessage(err, t('collectionHistory.failedToLoad'));
         setError(null);
         setCollectionHistory([]);
+        setStats({
+          total_count: 0,
+          total_amount: 0,
+          cash_count: 0,
+          non_cash_count: 0,
+          collected_amount: 0,
+          expenses_spent: 0,
+          loan_given_amount: 0,
+        });
+        setLoadFailed(true);
+        setLoadErrorMessage(msg);
+        showErrorWithRetry(t('common.error'), msg, () => {
+          void fetchCollectionHistoryRef.current?.(1, false);
+        }, { ok: t('common.ok'), retry: t('common.retry') });
       }
     } finally {
       if (!skipPageLoader) setLoading(false);
       setLoadingMore(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, t]);
+
+  fetchCollectionHistoryRef.current = fetchCollectionHistory;
 
   const onRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -424,6 +458,13 @@ const CollectionHistoryScreen = ({ navigation }) => {
         </View>
       );
     }
+    if (loadFailed) {
+      return (
+        <ListLoadError
+          message={loadErrorMessage || t('collectionHistory.failedToLoad')}
+        />
+      );
+    }
     const filterText = selectedPaymentType === null
       ? t('collectionHistory.inSelectedDateRange')
       : selectedPaymentType === 'cash'
@@ -432,7 +473,9 @@ const CollectionHistoryScreen = ({ navigation }) => {
 
     return (
       <View style={styles.noDataContainer}>
-        <Text style={styles.noDataText}>{t('collectionHistory.noCollectionsFound')} {filterText}</Text>
+        <Text style={styles.noDataText}>
+          {t('collectionHistory.noCollectionsFound')} {filterText}
+        </Text>
       </View>
     );
   };
@@ -535,6 +578,7 @@ const CollectionHistoryScreen = ({ navigation }) => {
               // Extra bottom inset was LIST_EXTRA_BOTTOM when fixed “Account closing” bar was shown (block below is commented out).
               paddingBottom: SIZES.padding * 2,
             },
+            filteredCollectionHistory.length === 0 && styles.contentEmpty,
           ]}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
@@ -571,143 +615,136 @@ const CollectionHistoryScreen = ({ navigation }) => {
                 )}
               </View>
 
-              {/* Payment Type Tabs */}
-              <View style={styles.tabsContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    selectedPaymentType === null && styles.tabActive,
-                  ]}
-                  onPress={() => handlePaymentTypeChange(null)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      selectedPaymentType === null && styles.tabTextActive,
-                    ]}
-                  >
-                    {t('common.all')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    selectedPaymentType === 'cash' && styles.tabActive,
-                  ]}
-                  onPress={() => handlePaymentTypeChange('cash')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="cash-outline"
-                    size={18}
-                    color={selectedPaymentType === 'cash' ? COLORS.white : COLORS.text.secondary}
-                    style={styles.tabIcon}
-                  />
-                  <Text
-                    style={[
-                      styles.tabText,
-                      selectedPaymentType === 'cash' && styles.tabTextActive,
-                    ]}
-                  >
-                    {t('common.cash')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    selectedPaymentType === 'online' && styles.tabActive,
-                  ]}
-                  onPress={() => handlePaymentTypeChange('online')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="card-outline"
-                    size={18}
-                    color={selectedPaymentType === 'online' ? COLORS.white : COLORS.text.secondary}
-                    style={styles.tabIcon}
-                  />
-                  <Text
-                    style={[
-                      styles.tabText,
-                      selectedPaymentType === 'online' && styles.tabTextActive,
-                    ]}
-                  >
-                    {t('common.online')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {/* Tabs, summary, table header only when at least one collection exists */}
+              {!loadFailed && hasCollections ? (
+                <>
+                  <View style={styles.tabsContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.tab,
+                        selectedPaymentType === null && styles.tabActive,
+                      ]}
+                      onPress={() => handlePaymentTypeChange(null)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.tabText,
+                          selectedPaymentType === null && styles.tabTextActive,
+                        ]}
+                      >
+                        {t('common.all')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.tab,
+                        selectedPaymentType === 'cash' && styles.tabActive,
+                      ]}
+                      onPress={() => handlePaymentTypeChange('cash')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="cash-outline"
+                        size={18}
+                        color={selectedPaymentType === 'cash' ? COLORS.white : COLORS.text.secondary}
+                        style={styles.tabIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.tabText,
+                          selectedPaymentType === 'cash' && styles.tabTextActive,
+                        ]}
+                      >
+                        {t('common.cash')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.tab,
+                        selectedPaymentType === 'online' && styles.tabActive,
+                      ]}
+                      onPress={() => handlePaymentTypeChange('online')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="card-outline"
+                        size={18}
+                        color={selectedPaymentType === 'online' ? COLORS.white : COLORS.text.secondary}
+                        style={styles.tabIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.tabText,
+                          selectedPaymentType === 'online' && styles.tabTextActive,
+                        ]}
+                      >
+                        {t('common.online')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
-              {/* Summary Card (Cash Receipts / Total Amount + Cash Summary when Cash selected) */}
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>
-                      {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
-                    </Text>
-                    <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
-                  </View>
-                  <View style={styles.summaryColumnDivider} />
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
-                    <Text style={[styles.summaryValue, styles.summaryValueAmount]}>{formatCurrency(filteredStats.total_amount)}</Text>
-                  </View>
-                </View>
-                {selectedPaymentType === 'cash' && (
-                  <>
-                    <View style={styles.summaryDivider} />
-                    {/* <Text style={styles.cashStatsTitleInCard}>{t('common.cash')} {t('collectionHistory.summary')}</Text> */}
-                    <View style={styles.cashStatsHorizontalRow}>
-                      <View style={styles.cashStatsColumn}>
-                        {/* <View style={styles.cashStatsIconWrap}>
-                        <Ionicons name="wallet-outline" size={22} color={COLORS.primary} />
-                      </View> */}
-                        <View style={styles.cashStatsLabelWrap}>
-                          <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.collectedAmount')}</Text>
-                        </View>
-                        <Text style={styles.cashStatValue}>{formatCurrency(stats.collected_amount)}</Text>
+                  <View style={styles.summaryCard}>
+                    <View style={styles.summaryRow}>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>
+                          {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
+                        </Text>
+                        <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
                       </View>
-                      <View style={styles.cashStatsColumnDivider} />
-                      <View style={styles.cashStatsColumn}>
-                        {/* <View style={styles.cashStatsIconWrap}>
-                        <Ionicons name="card-outline" size={22} color={COLORS.text.secondary} />
-                      </View> */}
-                        <View style={styles.cashStatsLabelWrap}>
-                          <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.expensesSpent')}</Text>
-                        </View>
-                        <Text style={styles.cashStatValue}>{formatCurrency(stats.expenses_spent)}</Text>
-                      </View>
-                      <View style={styles.cashStatsColumnDivider} />
-                      <View style={styles.cashStatsColumn}>
-                        {/* <View style={styles.cashStatsIconWrap}>
-                        <Ionicons name="business-outline" size={22} color={COLORS.primary} />
-                      </View> */}
-                        <View style={styles.cashStatsLabelWrap}>
-                          <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.loanGivenAmount')}</Text>
-                        </View>
-                        <Text style={styles.cashStatValue}>{formatCurrency(stats.loan_given_amount)}</Text>
+                      <View style={styles.summaryColumnDivider} />
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
+                        <Text style={[styles.summaryValue, styles.summaryValueAmount]}>{formatCurrency(filteredStats.total_amount)}</Text>
                       </View>
                     </View>
-                  </>
-                )}
-                {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
-                  <View style={styles.summaryRow}>
-                    <View style={styles.summaryItem}>
-                      <Text style={styles.summaryLabel}>{t('collectionHistory.cash')}</Text>
-                      <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
-                    </View>
-                    <View style={styles.summaryColumnDivider} />
-                    <View style={styles.summaryItem}>
-                      <Text style={styles.summaryLabel}>{t('collectionHistory.nonCash')}</Text>
-                      <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
-                    </View>
+                    {selectedPaymentType === 'cash' && (
+                      <>
+                        <View style={styles.summaryDivider} />
+                        <View style={styles.cashStatsHorizontalRow}>
+                          <View style={styles.cashStatsColumn}>
+                            <View style={styles.cashStatsLabelWrap}>
+                              <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.collectedAmount')}</Text>
+                            </View>
+                            <Text style={styles.cashStatValue}>{formatCurrency(stats.collected_amount)}</Text>
+                          </View>
+                          <View style={styles.cashStatsColumnDivider} />
+                          <View style={styles.cashStatsColumn}>
+                            <View style={styles.cashStatsLabelWrap}>
+                              <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.expensesSpent')}</Text>
+                            </View>
+                            <Text style={styles.cashStatValue}>{formatCurrency(stats.expenses_spent)}</Text>
+                          </View>
+                          <View style={styles.cashStatsColumnDivider} />
+                          <View style={styles.cashStatsColumn}>
+                            <View style={styles.cashStatsLabelWrap}>
+                              <Text style={styles.cashStatLabel} numberOfLines={2}>{t('collectionHistory.loanGivenAmount')}</Text>
+                            </View>
+                            <Text style={styles.cashStatValue}>{formatCurrency(stats.loan_given_amount)}</Text>
+                          </View>
+                        </View>
+                      </>
+                    )}
+                    {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
+                      <View style={styles.summaryRow}>
+                        <View style={styles.summaryItem}>
+                          <Text style={styles.summaryLabel}>{t('collectionHistory.cash')}</Text>
+                          <Text style={styles.summarySubValue}>{stats.cash_count || 0}</Text>
+                        </View>
+                        <View style={styles.summaryColumnDivider} />
+                        <View style={styles.summaryItem}>
+                          <Text style={styles.summaryLabel}>{t('collectionHistory.nonCash')}</Text>
+                          <Text style={styles.summarySubValue}>{stats.non_cash_count || 0}</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
 
-              <View style={styles.tableWrap}>
-                {renderTableHeader()}
-              </View>
+                  <View style={styles.tableWrap}>
+                    {renderTableHeader()}
+                  </View>
+                </>
+              ) : null}
             </>
           }
           refreshControl={
@@ -760,6 +797,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: SIZES.padding * 2,
+  },
+  contentEmpty: {
+    flexGrow: 1,
   },
   centerContainer: {
     flex: 1,
@@ -1029,13 +1069,17 @@ const styles = StyleSheet.create({
     width: '25%',
   },
   noDataContainer: {
-    padding: SIZES.padding * 1.5,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: SIZES.padding * 1.5,
+    minHeight: 220,
   },
   noDataText: {
     fontSize: SIZES.body2,
     color: COLORS.text.secondary,
     textAlign: 'center',
+    lineHeight: 22,
   },
   tabsContainer: {
     flexDirection: 'row',

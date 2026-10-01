@@ -11,7 +11,12 @@ import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import {
+  getApiErrorMessage,
+  showError,
+  showSuccess,
+  throwIfApiFailed,
+} from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -90,10 +95,13 @@ const UpfrontCashAddScreen = ({ navigation }) => {
         user_id: userId,
         message: formData.message.trim(),
       };
-      await apiServices.upfrontCash.createFrontCash(payload);
-      showSuccess(t('common.success'), t('upfrontCash.frontCashSuccess'), [
-        { text: t('common.ok'), onPress: () => safeGoBack(navigation) },
-      ]);
+      const response = await apiServices.upfrontCash.createFrontCash(payload);
+      throwIfApiFailed(response, t('upfrontCash.failedToSubmitEntry'));
+      showSuccess(
+        t('common.success'),
+        response?.message || t('upfrontCash.frontCashSuccess'),
+        [{ text: t('common.ok'), onPress: () => safeGoBack(navigation) }],
+      );
     } catch (error) {
       showError(t('common.error'), getApiErrorMessage(error, t('upfrontCash.failedToSubmitEntry')));
     } finally {

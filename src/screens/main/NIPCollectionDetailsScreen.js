@@ -26,7 +26,12 @@ import Header from "../../components/common/Header";
 import VoiceMicButton from "../../components/common/VoiceMicButton";
 import { COLORS, SIZES } from "../../constants/theme";
 import { useLanguage } from "../../store/LanguageContext";
-import { showError, showSuccess } from "../../utils/alertService";
+import {
+  getApiErrorMessage,
+  showError,
+  showSuccess,
+  throwIfApiFailed,
+} from "../../utils/alertService";
 import {
   formatAmountPlain,
   formatCurrency,
@@ -106,6 +111,13 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
       }));
     }
   }, [loan]);
+
+  // Block screen if account closed (closing_status) or attendance gate fails
+  useEffect(() => {
+    if (!guardAttendanceGatedEntry(t)) {
+      safeGoBack(navigation);
+    }
+  }, [navigation, t]);
 
   const getCurrentLocation = async () => {
     try {
@@ -218,20 +230,16 @@ const NIPCollectionDetailsScreen = ({ navigation, route }) => {
 
       console.log("Submitting NIP collection:", payload);
 
-      // Call API
       const response = await apiServices.loan.createNIPCollection(payload);
+      throwIfApiFailed(response, t("nip.failedToSubmit"));
 
-      if (response.success) {
-        showSuccess("Success", "NIP collection created successfully");
-        safeGoBack(navigation);
-      } else {
-        showError(
-          "Error",
-          response.message || "Failed to create NIP collection",
-        );
-      }
+      showSuccess(t("common.success"), response?.message || t("nip.createdSuccess"));
+      safeGoBack(navigation);
     } catch (error) {
-      showError("Error", "Failed to create NIP collection. Please try again.");
+      showError(
+        t("common.error"),
+        getApiErrorMessage(error, t("nip.failedToSubmit")),
+      );
     } finally {
       setSubmitting(false);
     }

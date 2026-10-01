@@ -19,28 +19,41 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import ListLoadError from '../../components/common/ListLoadError';
 import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import {
+  getApiErrorMessage,
+  showError,
+  showErrorWithRetry,
+  showSuccess,
+  throwIfApiFailed,
+} from '../../utils/alertService';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
 const CitiesScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const cityInputRef = useRef(null);
+  const loadCitiesRef = useRef(async () => {});
   const [cities, setCities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cityName, setCityName] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState('');
   const [showAddCityModal, setShowAddCityModal] = useState(false);
 
   const loadCities = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
+    setLoadFailed(false);
+    setLoadErrorMessage('');
     try {
       const list = await apiServices.city.getActiveList();
+      throwIfApiFailed(list, t('customer.failedToLoadCities'));
       const rows = (Array.isArray(list) ? list : [])
         .map((item) => ({
           id: String(item.id ?? ''),
@@ -48,14 +61,26 @@ const CitiesScreen = ({ navigation }) => {
         }))
         .filter((item) => item.name);
       setCities(rows);
+      setLoadFailed(false);
     } catch (err) {
-      showError(t('common.error'), getApiErrorMessage(err, t('customer.loadingCities')));
+      const msg = getApiErrorMessage(err, t('customer.failedToLoadCities'));
       setCities([]);
+      setLoadFailed(true);
+      setLoadErrorMessage(msg);
+      showErrorWithRetry(
+        t('common.error'),
+        msg,
+        () => {
+          void loadCitiesRef.current?.();
+        },
+        { ok: t('common.ok'), retry: t('common.retry') },
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [t]);
+  loadCitiesRef.current = loadCities;
 
   useFocusEffect(
     useCallback(() => {
@@ -128,6 +153,10 @@ const CitiesScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>{t('customer.loadingCities')}</Text>
         </View>
+      ) : loadFailed ? (
+        <ListLoadError
+          message={loadErrorMessage || t('customer.failedToLoadCities')}
+        />
       ) : (
         <FlatList
           data={cities}

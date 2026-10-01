@@ -25,7 +25,8 @@ import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showError } from '../../utils/alertService';
+import ListLoadError from '../../components/common/ListLoadError';
+import { getApiErrorMessage, showErrorWithRetry, throwIfApiFailed } from '../../utils/alertService';
 import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { safeGoBack } from '../../utils/navigationHelpers';
 
@@ -45,6 +46,8 @@ const DelayCollectionScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState('');
   const [pagination, setPagination] = useState({
     currentPage: 1,
     hasNextPage: false,
@@ -58,6 +61,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
   delayUnitRef.current = delayUnit;
   const loadMoreLockRef = useRef(false);
   const searchDebounceRef = useRef(null);
+  const fetchListRef = useRef(async () => {});
 
   const delayUnitLabel = delayUnit === 'days' ? t('collection.dailyTab') : t('collection.weeklyTab');
 
@@ -75,6 +79,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
         delay_unit: delayUnitRef.current,
         ...(searchTrimmed ? { search: searchTrimmed } : {}),
       });
+      throwIfApiFailed(response, t('collection.failedToLoad'));
 
       const rows = parseDelayList(response);
       const pag = response?.pagination || {};
@@ -83,10 +88,19 @@ const DelayCollectionScreen = ({ navigation, route }) => {
         currentPage: pag.currentPage ?? page,
         hasNextPage: Boolean(pag.hasNextPage),
       });
+      if (page === 1 && !append) {
+        setLoadFailed(false);
+        setLoadErrorMessage('');
+      }
     } catch (err) {
       if (page === 1 && !append) {
-        showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
+        const msg = getApiErrorMessage(err, t('collection.failedToLoad'));
         setList([]);
+        setLoadFailed(true);
+        setLoadErrorMessage(msg);
+        showErrorWithRetry(t('common.error'), msg, () => {
+          void fetchListRef.current?.(1, false, searchTextRef.current);
+        }, { ok: t('common.ok'), retry: t('common.retry') });
       }
     } finally {
       if (page === 1 && !append) {
@@ -98,6 +112,7 @@ const DelayCollectionScreen = ({ navigation, route }) => {
       }
     }
   }, [t]);
+  fetchListRef.current = fetchList;
 
   useFocusEffect(
     useCallback(() => {
@@ -313,9 +328,15 @@ const DelayCollectionScreen = ({ navigation, route }) => {
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.2}
             ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={styles.emptyText}>{t('collection.noDelayedCollections')}</Text>
-              </View>
+              loadFailed ? (
+                <ListLoadError
+                  message={loadErrorMessage || t('collection.failedToLoad')}
+                />
+              ) : (
+                <View style={styles.center}>
+                  <Text style={styles.emptyText}>{t('collection.noDelayedCollections')}</Text>
+                </View>
+              )
             }
             ListFooterComponent={
               loadingMore ? (

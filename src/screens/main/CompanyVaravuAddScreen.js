@@ -19,7 +19,12 @@ import FormInput from '../../components/common/FormInput';
 import Header from '../../components/common/Header';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showError, showSuccess } from '../../utils/alertService';
+import {
+  getApiErrorMessage,
+  showError,
+  showSuccess,
+  throwIfApiFailed,
+} from '../../utils/alertService';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, getCalendarDate, getCalendarDateISO } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -177,10 +182,13 @@ const CompanyVaravuAddScreen = ({ navigation }) => {
         remarks: formData.remarks.trim(),
       };
 
-      await apiServices.companyVaravu.create(payload);
-      showSuccess(t('common.success'), t('companyVaravu.createSuccess'), [
-        { text: t('common.ok'), onPress: () => safeGoBack(navigation) },
-      ]);
+      const response = await apiServices.companyVaravu.create(payload);
+      throwIfApiFailed(response, t('companyVaravu.failedToSubmit'));
+      showSuccess(
+        t('common.success'),
+        response?.message || t('companyVaravu.createSuccess'),
+        [{ text: t('common.ok'), onPress: () => safeGoBack(navigation) }],
+      );
     } catch (error) {
       showError(t('common.error'), getApiErrorMessage(error, t('companyVaravu.failedToSubmit')));
     } finally {

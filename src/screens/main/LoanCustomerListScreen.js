@@ -31,11 +31,17 @@ import {
 } from "../../hooks/useDebouncedValue";
 import { isHighPendingCount, isPendingBorder } from "../../models/Collection";
 import { useLanguage } from "../../store/LanguageContext";
-import { getApiErrorMessage, showError } from "../../utils/alertService";
+import ListLoadError from "../../components/common/ListLoadError";
+import {
+  getApiErrorMessage,
+  showErrorWithRetry,
+  throwIfApiFailed,
+} from "../../utils/alertService";
 import {
   formatAmountPlain,
   formatCurrency,
 } from "../../utils/amountFormatters";
+import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
 import {
   formatDisplayDate,
   getRegisterDayNameFromDate,
@@ -105,6 +111,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
   const listContentHeightRef = useRef(0);
   const listContainerHeightRef = useRef(0);
   const fetchRequestIdRef = useRef(0);
+  const fetchLoansRef = useRef(async () => {});
 
   const registerDayOptions = useMemo(
     () => [
@@ -170,6 +177,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
           search: !isNumericSearch ? trimmedSearch : "",
           ...(registerDayFilter ? { register_day: registerDayFilter } : {}),
         });
+        throwIfApiFailed(response, t("loan.failedToLoad"));
 
         if (requestId !== fetchRequestIdRef.current) return;
 
@@ -182,15 +190,21 @@ const LoanCustomerListScreen = ({ navigation }) => {
           hasNextPage: Boolean(pag.hasNextPage),
           totalPages: pag.totalPages ?? 1,
         });
+        if (isPageOne) setError(null);
       } catch (err) {
         if (requestId !== fetchRequestIdRef.current) return;
         if (isPageOne) {
-          showError(
-            t("common.error"),
-            getApiErrorMessage(err, t("loan.failedToLoad")),
-          );
-          setError(null);
+          const msg = getApiErrorMessage(err, t("loan.failedToLoad"));
+          setError(msg);
           setLoanList([]);
+          showErrorWithRetry(
+            t("common.error"),
+            msg,
+            () => {
+              void fetchLoansRef.current?.(1, false);
+            },
+            { ok: t("common.ok"), retry: t("common.retry") },
+          );
         }
       } finally {
         if (requestId !== fetchRequestIdRef.current) return;
@@ -204,6 +218,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
     },
     [registerDayFilter, debouncedSearchQuery, t],
   );
+  fetchLoansRef.current = fetchLoans;
 
   const onRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -298,6 +313,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
   };
 
   const handleAddPress = () => {
+    if (!guardAttendanceGatedEntry(t)) return;
     navigation.navigate("CustomerWithLoan");
   };
 
@@ -655,6 +671,11 @@ const LoanCustomerListScreen = ({ navigation }) => {
         <View style={styles.centerWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
+      );
+    }
+    if (error) {
+      return (
+        <ListLoadError message={error} />
       );
     }
     return (

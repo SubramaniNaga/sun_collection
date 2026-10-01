@@ -38,6 +38,10 @@ Backend team: to allow this app to call the API from the browser (web build), pl
 export const API_BASE_URL = __DEV__
   ? "http://13.206.98.152:6005/api/v1"
   : "http://13.206.98.152:6005/api/v1";
+ 
+// export const API_BASE_URL = __DEV__
+//   ? "https://sun-enterprises.co.in/api/v1"
+//   : "https://sun-enterprises.co.in/api/v1";
 
 /** Host root for media paths (no /api/v1 suffix). */
 export const API_HOST_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
@@ -290,8 +294,6 @@ apiClient.interceptors.response.use(
         url,
         "| Status:",
         error.response?.status,
-        "| Code:",
-        error.code,
         "| Message:",
         error.message,
       );

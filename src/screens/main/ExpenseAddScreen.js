@@ -111,14 +111,19 @@ const ExpenseAddScreen = ({ navigation }) => {
           );
         }
       } catch (err) {
-        if (!cancelled) setCategoryOptions([]);
-        console.warn('Failed to load expense categories:', err);
+        if (!cancelled) {
+          setCategoryOptions([]);
+          showError(
+            t('common.error'),
+            getApiErrorMessage(err, t('errors.somethingWentWrong')),
+          );
+        }
       } finally {
         if (!cancelled) setCategoriesLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [t]);
 
   const loadBranchUsers = async () => {
     if (branchUsersFetchRef.current) return branchUsersFetchRef.current;
@@ -306,7 +311,12 @@ const ExpenseAddScreen = ({ navigation }) => {
           { text: t('common.ok'), onPress: () => safeGoBack(navigation) },
         ]);
       } else {
-        showError(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
+        showError(
+          t('common.error'),
+          response?.message ||
+            response?.error ||
+            t('errors.somethingWentWrong'),
+        );
       }
     } catch (error) {
       showError(t('common.error'), getApiErrorMessage(error, t('errors.somethingWentWrong')));

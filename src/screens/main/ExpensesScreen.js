@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,7 +19,14 @@ import Header from '../../components/common/Header';
 import ListSkeleton from '../../components/common/ListSkeleton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showAlert, showError } from '../../utils/alertService';
+import ListLoadError from '../../components/common/ListLoadError';
+import {
+  getApiErrorMessage,
+  showAlert,
+  showError,
+  showErrorWithRetry,
+  throwIfApiFailed,
+} from '../../utils/alertService';
 import { safeGoBack } from '../../utils/navigationHelpers';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate, getCurrentDateString } from '../../utils/dateFormatter';
@@ -52,6 +59,7 @@ const STATUS_CONFIG = {
 
 const ExpensesScreen = ({ navigation }) => {
   const { t } = useLanguage();
+  const fetchExpensesRef = useRef(async () => {});
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -83,6 +91,7 @@ const ExpensesScreen = ({ navigation }) => {
       }
 
       const result = await apiServices.expense.getList({ page, limit: LIMIT });
+      throwIfApiFailed(result, t('errors.somethingWentWrong'));
       const list = Array.isArray(result?.data) ? result.data : [];
       const pag = result?.pagination || {};
 
@@ -92,17 +101,22 @@ const ExpensesScreen = ({ navigation }) => {
         hasNextPage: Boolean(pag.hasNextPage),
         totalPages: pag.totalPages ?? 1,
       });
+      if (page === 1) setError(null);
     } catch (err) {
       if (page === 1) {
-        showError(t('common.error'), getApiErrorMessage(err, t('errors.somethingWentWrong')));
-        setError(null);
+        const msg = getApiErrorMessage(err, t('errors.somethingWentWrong'));
+        setError(msg);
         setExpenses([]);
+        showErrorWithRetry(t('common.error'), msg, () => {
+          void fetchExpensesRef.current?.(1, false);
+        }, { ok: t('common.ok'), retry: t('common.retry') });
       }
     } finally {
       if (!skipPageLoader) setLoading(false);
       setLoadingMore(false);
     }
   }, [t]);
+  fetchExpensesRef.current = fetchExpenses;
 
   const onRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -160,7 +174,7 @@ const ExpensesScreen = ({ navigation }) => {
                 showAlert({
                   type: 'error',
                   title: t('common.error'),
-                  message: err?.message || t('errors.somethingWentWrong'),
+                  message: getApiErrorMessage(err, t('errors.somethingWentWrong')),
                 });
               } finally {
                 setDeletingId(null);
@@ -285,6 +299,11 @@ const ExpensesScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
+      );
+    }
+    if (error) {
+      return (
+        <ListLoadError message={error} />
       );
     }
     return (

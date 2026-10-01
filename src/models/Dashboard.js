@@ -32,10 +32,26 @@ class Dashboard {
     // Date
     this.date = data.date || null;
 
-    /** `closing_status` from GET /frontcash/dashboard/today: 0 = can close, 1 = already closed */
+    /** `closing_status` from GET /frontcash/dashboard/today: 0 = open (entries OK), 1 = closed (block entries + hide Close Account) */
     const cs = data.closing_status;
     this.closingStatus =
       cs != null && cs !== "" && !Number.isNaN(Number(cs)) ? Number(cs) : null;
+
+    /** Entry block mirrors closing_status (1 = blocked). Legacy isAccountClosed field kept commented. */
+    if (this.closingStatus === 1) {
+      this.isAccountClosed = true;
+    } else if (this.closingStatus === 0) {
+      this.isAccountClosed = false;
+    } else {
+      this.isAccountClosed = null;
+    }
+    // Legacy API field (unused — entry gate uses closing_status):
+    // const apiClosed = data.isAccountClosed ?? data.is_account_closed;
+    // if (apiClosed === true || apiClosed === 1 || apiClosed === "1") {
+    //   this.isAccountClosed = true;
+    // } else if (apiClosed === false || apiClosed === 0 || apiClosed === "0") {
+    //   this.isAccountClosed = false;
+    // }
 
     // Frontcash statistics
     const fc = data.frontcash;

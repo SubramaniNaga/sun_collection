@@ -7,10 +7,21 @@ const LanguageContext = createContext();
 const LANGUAGE_STORAGE_KEY = '@app_language';
 const DEFAULT_LANGUAGE = 'en';
 
+/** Sync language for non-React helpers (e.g. getApiErrorMessage). */
+let _currentLanguage = DEFAULT_LANGUAGE;
+export function getCurrentAppLanguage() {
+  return _currentLanguage || DEFAULT_LANGUAGE;
+}
+
 export const LanguageProvider = ({ children }) => {
   const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const [loading, setLoading] = useState(true);
   const [updateKey, setUpdateKey] = useState(0); // Force re-render key
+
+  // Keep module-level language in sync for alert/error helpers
+  useEffect(() => {
+    _currentLanguage = language;
+  }, [language]);
 
   // Load saved language preference on mount
   useEffect(() => {

@@ -3,7 +3,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { restoreAttendanceFromStorage, restoreFeatureFlagsFromStorage, subscribeAppBlock } from '../../config/appToggles';
+import {
+  restoreAccountClosedFromStorage,
+  restoreAttendanceFromStorage,
+  restoreFeatureFlagsFromStorage,
+  subscribeAppBlock,
+} from '../../config/appToggles';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
 
@@ -35,7 +40,11 @@ export function AppBlockGate({ children }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([restoreAttendanceFromStorage(), restoreFeatureFlagsFromStorage()]).finally(() => {
+    Promise.all([
+      restoreAttendanceFromStorage(),
+      restoreFeatureFlagsFromStorage(),
+      restoreAccountClosedFromStorage(),
+    ]).finally(() => {
       if (!cancelled) setRestored(true);
     });
     const unsubscribe = subscribeAppBlock(setBlocked);

@@ -15,7 +15,8 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess, showWarning } from '../../utils/alertService';
+import ListLoadError from '../../components/common/ListLoadError';
+import { getApiErrorMessage, showAlert, showError, showErrorWithRetry, showInfo, showSuccess, showWarning, throwIfApiFailed } from '../../utils/alertService';
 import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { formatDateForAPI, formatDisplayDate, formatDisplayDateWithDay, getCalendarDate, getCurrentDateString } from '../../utils/dateFormatter';
@@ -194,6 +195,8 @@ const CollectionScreen = ({ navigation }) => {
   const paidContainerHeightRef = useRef(0);
   const unpaidLoadMoreLockRef = useRef(false);
   const paidLoadMoreLockRef = useRef(false);
+  const fetchUnpaidRef = useRef(async () => {});
+  const fetchPaidRef = useRef(async () => {});
 
   // Payment collection modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -277,6 +280,7 @@ const CollectionScreen = ({ navigation }) => {
         loan_type: loanTypeIdsRef.current[requestedLoanType],
         ...buildSearchParams(searchQuery),
       });
+      throwIfApiFailed(response, t('collection.failedToLoad'));
 
       const list = parseCollectionsFromResponse(response);
       const models = Collection.fromApiResponseArray(list);
@@ -296,11 +300,15 @@ const CollectionScreen = ({ navigation }) => {
           pending: { ...prev.pending, [requestedLoanType]: count },
         }));
       }
+      if (page === 1 && !append) setError(null);
     } catch (err) {
       if (page === 1 && !append) {
-        showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
-        setError(null);
+        const msg = getApiErrorMessage(err, t('collection.failedToLoad'));
+        setError(msg);
         setPendingList([]);
+        showErrorWithRetry(t('common.error'), msg, () => {
+          void fetchUnpaidRef.current?.(1, false, searchTextRef.current, selectedDateRef.current);
+        }, { ok: t('common.ok'), retry: t('common.retry') });
       }
     } finally {
       if (page === 1 && !append) {
@@ -311,6 +319,7 @@ const CollectionScreen = ({ navigation }) => {
       }
     }
   }, [buildSearchParams, t]);
+  fetchUnpaidRef.current = fetchUnpaidCollections;
 
   const fetchPaidCollections = useCallback(async (page = 1, append = false, searchQuery = '', collectionDate = null, skipPageLoader = false) => {
     const requestedLoanType = loanTypeTabRef.current;
@@ -330,6 +339,7 @@ const CollectionScreen = ({ navigation }) => {
         loan_type: loanTypeIdsRef.current[requestedLoanType],
         ...buildSearchParams(searchQuery),
       });
+      throwIfApiFailed(response, t('collection.failedToLoad'));
       const list = parseCollectionsFromResponse(response);
       const models = Collection.fromApiResponseArray(list);
       const pag = response?.pagination || {};
@@ -348,11 +358,15 @@ const CollectionScreen = ({ navigation }) => {
           paid: { ...prev.paid, [requestedLoanType]: count },
         }));
       }
+      if (page === 1 && !append) setPaidError(null);
     } catch (err) {
       if (page === 1 && !append) {
-        showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
-        setPaidError(null);
+        const msg = getApiErrorMessage(err, t('collection.failedToLoad'));
+        setPaidError(msg);
         setPaidList([]);
+        showErrorWithRetry(t('common.error'), msg, () => {
+          void fetchPaidRef.current?.(1, false, searchTextRef.current, selectedDateRef.current);
+        }, { ok: t('common.ok'), retry: t('common.retry') });
       }
     } finally {
       if (page === 1 && !append) {
@@ -363,6 +377,7 @@ const CollectionScreen = ({ navigation }) => {
       }
     }
   }, [buildSearchParams, t]);
+  fetchPaidRef.current = fetchPaidCollections;
 
   const fetchOtherLoanTypeCounts = useCallback(async (searchQuery = '', collectionDate = null) => {
     const currentType = loanTypeTabRef.current;
@@ -507,15 +522,13 @@ const CollectionScreen = ({ navigation }) => {
     }
   }, [loadingPaid, paidList.length, paidPagination.hasNextPage, maybeLoadMorePaidIfShort]);
 
-  // Let Weekly / Daily colors paint through the system navigation bar on this screen.
+  // Keep Android system nav bar clear (do not paint Weekly/Daily colors behind it).
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== 'android') return undefined;
-      NativeModules.AppNavigationBar?.setTabColorBehindNavigation?.(true);
-      return () => {
-        NativeModules.AppNavigationBar?.setTabColorBehindNavigation?.(false);
-      };
-    }, [])
+      NativeModules.AppNavigationBar?.setTabColorBehindNavigation?.(false);
+      return undefined;
+    }, []),
   );
 
   // Initial load: fetch loan type IDs, then unpaid + paid lists
@@ -578,12 +591,31 @@ const CollectionScreen = ({ navigation }) => {
     }
   };
 
-  const isSelectedDateToday = formatDateForAPI(selectedDate) === getCurrentDateString();
+  const selectedDateKey = formatDateForAPI(selectedDate);
+  const todayDateKey = getCurrentDateString();
+  /** Past dates: no Collection entry — pay via Edai Varavu. Today + future: allow. */
+  const isSelectedDatePast = Boolean(selectedDateKey && todayDateKey && selectedDateKey < todayDateKey);
   const dailyLoanTypeCount = loanTypeCounts[activeTab].daily;
   const weeklyLoanTypeCount = loanTypeCounts[activeTab].weekly;
   const showListOverlay = tabSwitchLoading || loading || loadingPaid;
 
+  const showPastDateEdaiVaravuAlert = (collection) => {
+    const name =
+      collection?.customerName ||
+      collection?.customer_name ||
+      t('collection.customerName');
+    showWarning(
+      t('collection.submitPayment'),
+      t('collection.pastDatePayInEdaiVaravu', { name }),
+    );
+  };
+
   const openPaymentModal = (collection) => {
+    if (!guardAttendanceGatedEntry(t)) return;
+    if (isSelectedDatePast) {
+      showPastDateEdaiVaravuAlert(collection);
+      return;
+    }
     setSelectedCollection(collection);
     setPaymentMode('Cash');
     setCollectedAmount('');
@@ -597,13 +629,10 @@ const CollectionScreen = ({ navigation }) => {
 
     const collection = item instanceof Collection ? item : new Collection(item);
 
-    // if (!isSelectedDateToday) {
-    //   showWarning(
-    //     'Collection payment',
-    //     "Collection payment can only be recorded for the current date. Please select today's date to collect payment."
-    //   );
-    //   return;
-    // }
+    if (isSelectedDatePast) {
+      showPastDateEdaiVaravuAlert(collection);
+      return;
+    }
 
     const balanceAmount = parseFloat(collection.balanceAmount) || 0;
     if (balanceAmount <= 0) {
@@ -837,6 +866,11 @@ const CollectionScreen = ({ navigation }) => {
   const handleSubmitPayment = async () => {
     if (!guardAttendanceGatedEntry(t)) return;
 
+    if (isSelectedDatePast) {
+      showPastDateEdaiVaravuAlert(selectedCollection);
+      return;
+    }
+
     if (!validatePaymentForm()) {
       return;
     }
@@ -914,7 +948,9 @@ const CollectionScreen = ({ navigation }) => {
       if (!success) {
         showError(
           t('common.error'),
-          message || t('errors.somethingWentWrong'),
+          message ||
+            response?.error ||
+            t('errors.somethingWentWrong'),
         );
         return;
       }
@@ -1035,6 +1071,11 @@ const CollectionScreen = ({ navigation }) => {
         </View>
       );
     }
+    if (error) {
+      return (
+        <ListLoadError message={error} />
+      );
+    }
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.emptyText}>{t('collection.noPendingCollections')}</Text>
@@ -1048,6 +1089,11 @@ const CollectionScreen = ({ navigation }) => {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
+      );
+    }
+    if (paidError) {
+      return (
+        <ListLoadError message={paidError} />
       );
     }
     return (
@@ -1315,7 +1361,9 @@ const CollectionScreen = ({ navigation }) => {
             loadingMore={loadingMoreUnpaid}
             hasNextPage={unpaidPagination.hasNextPage}
             renderItem={renderCollectionItem}
-            keyExtractor={(item, index) => `p-${item.id || index}`}
+            keyExtractor={(item, index) =>
+              `p-${item?.id != null ? item.id : 'x'}-${index}`
+            }
             ListEmptyComponent={renderPendingEmpty}
             ListFooterComponent={pendingList.length > 0 ? renderUnpaidFooter : null}
             refreshing={refreshing}
@@ -1342,7 +1390,9 @@ const CollectionScreen = ({ navigation }) => {
             loadingMore={loadingMorePaid}
             hasNextPage={paidPagination.hasNextPage}
             renderItem={renderCollectionItem}
-            keyExtractor={(item, index) => `d-${item.id || index}`}
+            keyExtractor={(item, index) =>
+              `d-${item?.id != null ? item.id : 'x'}-${index}`
+            }
             ListEmptyComponent={renderPaidEmpty}
             ListFooterComponent={paidList.length > 0 ? renderPaidFooter : null}
             refreshing={refreshing}
@@ -1363,12 +1413,11 @@ const CollectionScreen = ({ navigation }) => {
           />
         </View>
 
-        <View style={styles.loanTypeFooter}>
+        <View style={[styles.loanTypeFooter, { paddingBottom: insets.bottom }]}>
           <Pressable
             style={[
               styles.loanTypeTab,
               loanTypeTab === 'weekly' && styles.loanTypeTabActive,
-              { paddingBottom: insets.bottom },
             ]}
             onPress={() => handleLoanTypeTabPress('weekly')}
             android_ripple={{ color: loanTypeTab === 'weekly' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)' }}
@@ -1388,7 +1437,6 @@ const CollectionScreen = ({ navigation }) => {
             style={[
               styles.loanTypeTab,
               loanTypeTab === 'daily' && styles.loanTypeTabActive,
-              { paddingBottom: insets.bottom },
             ]}
             onPress={() => handleLoanTypeTabPress('daily')}
             android_ripple={{ color: loanTypeTab === 'daily' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)' }}

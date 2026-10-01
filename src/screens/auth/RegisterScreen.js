@@ -7,6 +7,7 @@ import ScreenWrapper from '../../components/layout/ScreenWrapper';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useAuthContext } from '../../store/AuthContext';
 import { useLanguage } from '../../store/LanguageContext';
+import { getApiErrorMessage } from '../../utils/alertService';
 
 const RegisterScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -55,7 +56,9 @@ const RegisterScreen = ({ navigation }) => {
       });
       // Navigation will be handled automatically by AuthContext state change
     } catch (error) {
-      setErrors({ general: error.message });
+      setErrors({
+        general: getApiErrorMessage(error, t('errors.somethingWentWrong')),
+      });
     }
   };
 

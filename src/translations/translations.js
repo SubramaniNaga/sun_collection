@@ -107,10 +107,10 @@ const translations = {
     home: {
       title: "Home",
       collection: "Collection",
-      loanManagement: "Loan \nManagement",
+      loanManagement: "Loan\nManagement",
       expenses: "Expenses",
       upfrontCash: "Up-front Cash",
-      collectionHistory: "Collection History",
+      collectionHistory: "Collection\nHistory",
       nip: "NIP",
       delayedCollection: "Delayed Collection",
       delayedCollectionWithCount: "Delayed Collection ({count})",
@@ -139,6 +139,9 @@ const translations = {
       entryBlockedTitle: "Check-in required",
       entryBlockedMessage:
         "Check-in has not been done. Please ensure check-in and try again.",
+      accountClosedTitle: "Account closed",
+      accountClosedMessage:
+        "Today's account is closed. You cannot add entries or create loans.",
       locationPermissionDenied:
         "Location permission is required for attendance",
       cameraPermissionDenied:
@@ -276,6 +279,8 @@ const translations = {
       noBalanceToCollect: "No balance to collect. Balance amount is zero.",
       alreadyCollectedToday:
         "Collection already recorded for this customer today.",
+      pastDatePayInEdaiVaravu:
+        'Amount for this person "{name}" can be paid in the Edai Varavu.',
       loadingCollections: "Loading collections...",
       failedToLoad: "Failed to load collections. Please try again.",
       locationServicesDisabled: "Location services are disabled",
@@ -386,7 +391,7 @@ const translations = {
       viewOnMap: "View on Map",
       noLoans: "No loans found",
       loadingLoans: "Loading loans...",
-      failedToLoad: "Loans not found. Please try again.",
+      failedToLoad: "Failed to load loans. Please try again.",
       requested: "Requested",
       approved: "Approved",
       rejected: "Rejected",
@@ -461,6 +466,8 @@ const translations = {
       enterAmountPaid: "Enter amount paid",
       enterNotes: "Enter notes for this collection",
       loadingLoanDetails: "Loading loan details...",
+      failedToSubmit: "Failed to create NIP collection. Please try again.",
+      createdSuccess: "NIP collection created successfully",
       locationPermissionDenied:
         "Location permission is required to capture your current location.",
       permissionDenied: "Permission Denied",
@@ -486,6 +493,7 @@ const translations = {
       cityNameRequired: "City name is required",
       cityAdded: "City added successfully",
       loadingCities: "Loading cities...",
+      failedToLoadCities: "Failed to load cities. Please try again.",
       noCitiesFound: "No cities found",
       customerNo: "Customer No",
       nameRequired: "Customer name is required",
@@ -945,6 +953,9 @@ const translations = {
       entryBlockedTitle: "வருகை பதிவு தேவை",
       entryBlockedMessage:
         "வருகை பதிவு செய்யப்படவில்லை. தயவுசெய்து வருகை பதிவு செய்து மீண்டும் முயற்சிக்கவும்.",
+      accountClosedTitle: "கணக்கு மூடப்பட்டது",
+      accountClosedMessage:
+        "இன்றைய கணக்கு மூடப்பட்டுள்ளது. உள்ளீடுகள் அல்லது கடன் உருவாக்க முடியாது.",
       locationPermissionDenied: "வருகைக்கு இருப்பிட அனுமதி தேவை",
       cameraPermissionDenied: "கேமரா அனுமதி தேவை",
     },
@@ -1082,6 +1093,8 @@ const translations = {
       noBalanceToCollect: "வசூலிக்க இருப்பு இல்லை. இருப்பு தொகை பூஜ்ஜியம்.",
       alreadyCollectedToday:
         "இந்த வாடிக்கையருக்கு இன்று வசூல் ஏற்கனவே பதிவு செய்யப்பட்டது.",
+      pastDatePayInEdaiVaravu:
+        '"{name}" அவர்களுக்கான தொகையை இடை வரவு திரையில் செலுத்தலாம்.',
       loadingCollections: "வசூல்களை ஏற்றுகிறது...",
       failedToLoad: "வசூல்களை ஏற்ற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
       locationServicesDisabled: "இருப்பிட சேவைகள் முடக்கப்பட்டுள்ளன",
@@ -1271,6 +1284,8 @@ const translations = {
       enterAmountPaid: "செலுத்திய தொகையை உள்ளிடு",
       enterNotes: "இந்த வசூலுக்கான குறிப்புகளை உள்ளிடு",
       loadingLoanDetails: "கடன் விவரங்களை ஏற்றுகிறது...",
+      failedToSubmit: "NIP வசூலை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
+      createdSuccess: "NIP வசூல் வெற்றிகரமாக உருவாக்கப்பட்டது",
       locationPermissionDenied:
         "உங்கள் தற்போதைய இருப்பிடத்தை பதிவு செய்ய இருப்பிட அனுமதி தேவை.",
       permissionDenied: "அனுமதி மறுக்கப்பட்டது",
@@ -1296,6 +1311,7 @@ const translations = {
       cityNameRequired: "நகரத்தின் பெயர் தேவையானது",
       cityAdded: "நகரம் வெற்றிகரமாக சேர்க்கப்பட்டது",
       loadingCities: "நகரங்கள் ஏற்றப்படுகின்றன...",
+      failedToLoadCities: "நகரங்களை ஏற்ற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
       noCitiesFound: "நகரங்கள் இல்லை",
       customerNo: "வாடிக்கையாளர் எண்",
       nameRequired: "வாடிக்கையாளர் பெயர் தேவையானது",

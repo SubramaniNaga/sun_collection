@@ -42,7 +42,14 @@ import NIPLoan from "../../models/NIPLoan";
 
 import { useLanguage } from "../../store/LanguageContext";
 
-import { getApiErrorMessage, showError } from "../../utils/alertService";
+import ListLoadError from "../../components/common/ListLoadError";
+import {
+  getApiErrorMessage,
+  showError,
+  showErrorWithRetry,
+  throwIfApiFailed,
+} from "../../utils/alertService";
+import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
 import { safeGoBack } from "../../utils/navigationHelpers";
 
 import { formatCurrency } from "../../utils/amountFormatters";
@@ -108,6 +115,9 @@ const NIPScreen = ({ navigation }) => {
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
 
   const headerSearchInputRef = useRef(null);
+  const fetchNIPLoansRef = useRef(async () => {});
+  /** Ignore stale responses when switching NIP 1 / NIP 2 quickly. */
+  const fetchRequestIdRef = useRef(0);
 
   const [nipTypeTab, setNipTypeTab] = useState(1);
 
@@ -183,8 +193,12 @@ const NIPScreen = ({ navigation }) => {
   const handleNipTabChange = useCallback(
     (tab) => {
       if (tab === nipTypeTab) return;
+      // Invalidate in-flight NIP 1/2 request so its finally cannot clear the new loader
+      fetchRequestIdRef.current += 1;
       setNipList([]);
+      setError(null);
       setLoading(true);
+      setPagination({ currentPage: 1, hasNextPage: false, totalPages: 1 });
       setNipTypeTab(tab);
     },
     [nipTypeTab],
@@ -195,11 +209,11 @@ const NIPScreen = ({ navigation }) => {
       const { skipFullScreenLoader = false } = options;
 
       const nipTypeForApi = nipTypeTab === 2 ? "nip2" : "nip1";
+      const requestId = ++fetchRequestIdRef.current;
 
       try {
         if (page === 1 && !append && !skipFullScreenLoader) {
           setLoading(true);
-
           setError(null);
         } else if (page === 1 && !append && skipFullScreenLoader) {
           setError(null);
@@ -209,13 +223,13 @@ const NIPScreen = ({ navigation }) => {
 
         const response = await apiServices.loan.getNIPList({
           search: debouncedSearchQuery.trim(),
-
           page,
-
           limit: LIMIT,
-
           nip_type: nipTypeForApi,
         });
+        if (requestId !== fetchRequestIdRef.current) return;
+
+        throwIfApiFailed(response, t("nip.failedToLoad"));
 
         const list = Array.isArray(response?.data) ? response.data : [];
 
@@ -231,28 +245,35 @@ const NIPScreen = ({ navigation }) => {
 
         setPagination({
           currentPage: pag.currentPage ?? page,
-
           hasNextPage: Boolean(pag.hasNextPage),
-
           totalPages: pag.totalPages ?? 1,
         });
+        if (page === 1) setError(null);
       } catch (err) {
+        if (requestId !== fetchRequestIdRef.current) return;
         if (page === 1) {
+          const msg = getApiErrorMessage(err, t("nip.failedToLoad"));
           setNipList([]);
-          setError(null);
-          showError(
+          setError(msg);
+          showErrorWithRetry(
             t("common.error"),
-            getApiErrorMessage(err, t("nip.failedToLoad")),
+            msg,
+            () => {
+              void fetchNIPLoansRef.current?.(1, false);
+            },
+            { ok: t("common.ok"), retry: t("common.retry") },
           );
         }
       } finally {
-        setLoading(false);
-
-        setLoadingMore(false);
+        if (requestId === fetchRequestIdRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [debouncedSearchQuery, nipTypeTab, t],
   );
+  fetchNIPLoansRef.current = fetchNIPLoans;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -267,11 +288,20 @@ const NIPScreen = ({ navigation }) => {
     }
   }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]);
 
+  // Load list when tab or search changes (keeps loader for NIP 1 and NIP 2)
+  useEffect(() => {
+    void fetchNIPLoans(1, false);
+    void fetchNipTabCounts(debouncedSearchQuery);
+  }, [nipTypeTab, debouncedSearchQuery, fetchNIPLoans, fetchNipTabCounts]);
+
+  // Soft refresh when returning to this screen (skip first mount — useEffect handles it)
   useFocusEffect(
     useCallback(() => {
-      const skipLoader = !isFirstFocusRef.current;
-      isFirstFocusRef.current = false;
-      fetchNIPLoans(1, false, { skipFullScreenLoader: skipLoader });
+      if (isFirstFocusRef.current) {
+        isFirstFocusRef.current = false;
+        return;
+      }
+      fetchNIPLoans(1, false, { skipFullScreenLoader: true });
       fetchNipTabCounts(debouncedSearchQuery);
     }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]),
   );
@@ -290,6 +320,8 @@ const NIPScreen = ({ navigation }) => {
   ]);
 
   const handleCustomerSelect = (loan) => {
+    // List stays visible; block opening collection when account closed / not checked in
+    if (!guardAttendanceGatedEntry(t)) return;
     navigation.navigate("NIPCollectionDetails", { loan });
   };
 
@@ -584,6 +616,12 @@ const NIPScreen = ({ navigation }) => {
       );
     }
 
+    if (error) {
+      return (
+        <ListLoadError message={error} />
+      );
+    }
+
     if (debouncedSearchQuery.trim() && nipList.length === 0) {
       return (
         <View style={styles.emptyState}>
@@ -728,7 +766,9 @@ const NIPScreen = ({ navigation }) => {
       <FlatList
         style={styles.nipList}
         data={nipList}
-        keyExtractor={(item) => String(item?.id ?? Math.random())}
+        keyExtractor={(item, index) =>
+          `nip-${item?.id != null ? item.id : 'x'}-${index}`
+        }
         renderItem={renderNIPItem}
         contentContainerStyle={
           nipList.length === 0
@@ -963,7 +1003,7 @@ function createNipScreenStyles(language) {
     },
 
     nipListContainerEmpty: {
-      flex: 1,
+      flexGrow: 1,
     },
 
     nipCard: {
@@ -1153,31 +1193,28 @@ function createNipScreenStyles(language) {
     },
 
     centerWrap: {
+      flexGrow: 1,
       flex: 1,
-
       justifyContent: "center",
-
       alignItems: "center",
-
       padding: SIZES.padding * 2,
+      minHeight: 280,
     },
 
     loadingText: {
       marginTop: SIZES.margin,
-
       fontSize: font(SIZES.body2),
-
       color: COLORS.text.secondary,
+      textAlign: "center",
     },
 
     emptyState: {
+      flexGrow: 1,
       flex: 1,
-
       justifyContent: "center",
-
       alignItems: "center",
-
       padding: SIZES.padding * 2,
+      minHeight: 280,
     },
 
     emptyStateText: {

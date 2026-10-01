@@ -24,7 +24,12 @@ import { COLORS, SIZES } from "../../constants/theme";
 import { useAppVersionCheck } from "../../hooks/useAppVersionCheck";
 import { useAuthContext } from "../../store/AuthContext";
 import { useLanguage } from "../../store/LanguageContext";
-import { showError, showInfo, showWarning } from "../../utils/alertService";
+import {
+  getApiErrorMessage,
+  showError,
+  showInfo,
+  showWarning,
+} from "../../utils/alertService";
 import { getDeviceId } from "../../utils/deviceId";
 import { registerForPushNotificationsAsync } from "../../utils/notifications";
 const LoginScreen = ({ navigation }) => {
@@ -179,8 +184,11 @@ const LoginScreen = ({ navigation }) => {
       };
     }
 
-    const apiMessage = error.response?.data?.message;
-    const normalizedMessage = apiMessage?.toLowerCase() || "";
+    const apiMessage =
+      error.response?.data?.message ||
+      error.details?.message ||
+      null;
+    const normalizedMessage = String(apiMessage || "").toLowerCase();
 
     if (
       normalizedMessage.includes("device id mismatch") ||
@@ -193,30 +201,9 @@ const LoginScreen = ({ navigation }) => {
       };
     }
 
-    if (
-      typeof error.message === "string" &&
-      error.message &&
-      !error.message.startsWith("API Error:")
-    ) {
-      return { title: t("auth.loginFailedTitle"), message: error.message };
-    }
-
-    if (apiMessage) {
-      return { title: t("auth.loginFailedTitle"), message: apiMessage };
-    }
-
-    if (typeof error.message === "string") {
-      try {
-        const parsed = JSON.parse(error.message.replace(/^API Error:\s*/, ""));
-        if (parsed?.message) {
-          return { title: t("auth.loginFailedTitle"), message: parsed.message };
-        }
-      } catch (_) {}
-    }
-
     return {
       title: t("auth.loginFailedTitle"),
-      message: error.message || t("auth.loginError"),
+      message: getApiErrorMessage(error, t("auth.loginError")),
     };
   };
 

@@ -4,6 +4,13 @@
  * API error messages are shown when passed as message or via getApiErrorMessage().
  */
 
+import translations from "../translations/translations";
+import { getCurrentAppLanguage } from "../store/LanguageContext";
+import ErrorHandler, {
+  ERROR_MESSAGES,
+  ERROR_TYPES,
+} from "./errorHandler";
+
 let _show = null;
 
 export const ALERT_TYPES = {
@@ -21,8 +28,93 @@ export function setAlertRenderer(fn) {
   _show = fn;
 }
 
+/** Localized single copy for offline / network failure (all screens). */
+function getLocalizedNetworkErrorMessage() {
+  const lang = getCurrentAppLanguage();
+  return (
+    translations?.[lang]?.errors?.networkError ||
+    translations?.en?.errors?.networkError ||
+    ERROR_MESSAGES[ERROR_TYPES.NETWORK_ERROR]
+  );
+}
+
+/**
+ * True for no-network / unreachable host (not HTTP 4xx/5xx).
+ * Timeout is treated the same so users always see one network message.
+ */
+function looksLikeNetworkMessage(msg) {
+  return (
+    msg === "Network Error" ||
+    /network error|failed to fetch|network request failed|no internet|check your connection|turn on mobile data|timed?\s*out/i.test(
+      msg,
+    )
+  );
+}
+
+function isConnectivityFailure(error) {
+  if (!error) return false;
+  if (
+    error.type === ERROR_TYPES.NETWORK_ERROR ||
+    error.type === ERROR_TYPES.TIMEOUT_ERROR
+  ) {
+    return true;
+  }
+  // HTTP responses (4xx/5xx) are not "no internet"
+  if (error.response || error.statusCode) {
+    // Except: APIError network type already handled above; statusCode alone on
+    // non-network APIError means server/client HTTP — not connectivity.
+    if (error.statusCode != null && error.type && error.type !== ERROR_TYPES.NETWORK_ERROR) {
+      return false;
+    }
+    if (error.response) return false;
+  }
+
+  const code = String(error.code || error.details?.code || "");
+  const msg = String(error.message || "");
+  if (
+    [
+      "ERR_NETWORK",
+      "NETWORK_ERROR",
+      "ECONNREFUSED",
+      "ECONNRESET",
+      "ENOTFOUND",
+      "EAI_AGAIN",
+      "EHOSTUNREACH",
+      "ENETUNREACH",
+      "ECONNABORTED",
+    ].includes(code)
+  ) {
+    return true;
+  }
+  if (looksLikeNetworkMessage(msg)) {
+    return true;
+  }
+  // Unwrap original axios error stored on APIError.details
+  const nested = error.details;
+  if (nested && nested !== error && typeof nested === "object") {
+    if (!nested.response && looksLikeNetworkMessage(String(nested.message || ""))) {
+      return true;
+    }
+    if (
+      [
+        "ERR_NETWORK",
+        "NETWORK_ERROR",
+        "ECONNABORTED",
+      ].includes(String(nested.code || ""))
+    ) {
+      return true;
+    }
+  }
+  try {
+    return ErrorHandler.isNetworkError(error);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Extract message from API error for display in alert.
+ * Network / offline failures always use errors.networkError (same text everywhere).
  * @param {*} error - Axios error or Error object
  * @param {string} [fallback] - Fallback message if none found
  * @returns {string}
@@ -32,12 +124,26 @@ export function getApiErrorMessage(
   fallback = "Something went wrong. Please try again.",
 ) {
   if (!error) return fallback;
+
+  if (isConnectivityFailure(error)) {
+    return getLocalizedNetworkErrorMessage();
+  }
+
+  const details =
+    error?.details && typeof error.details === "object" ? error.details : null;
+  const detailsMsg = details
+    ? details.message || details.error || null
+    : null;
+
   const msg =
     error?.response?.data?.message ??
     error?.response?.data?.error ??
     (typeof error?.response?.data === "string" ? error.response.data : null) ??
+    detailsMsg ??
     error?.message;
-  return msg && String(msg).trim() ? String(msg) : fallback;
+  // Prefer real API text; use fallback only when nothing usable is present
+  if (msg && String(msg).trim()) return String(msg).trim();
+  return fallback;
 }
 
 /**
@@ -99,6 +205,49 @@ export function showSuccess(title, message, buttons) {
  */
 export function showError(title, message, buttons) {
   showAlert({ type: ALERT_TYPES.ERROR, title, message, buttons });
+}
+
+/**
+ * Error alert with OK (dismiss) + Retry.
+ * @param {string} title
+ * @param {string} message
+ * @param {() => void} onRetry
+ * @param {{ ok?: string, retry?: string }} [labels]
+ */
+export function showErrorWithRetry(title, message, onRetry, labels = {}) {
+  showError(title, message, [
+    { text: labels.ok || "OK", style: "cancel" },
+    {
+      text: labels.retry || "Retry",
+      onPress: () => {
+        if (typeof onRetry === "function") onRetry();
+      },
+    },
+  ]);
+}
+
+/**
+ * Throw when API body says success: false (HTTP may still be 2xx).
+ * @param {*} response
+ * @param {string} [fallbackMessage]
+ */
+export function throwIfApiFailed(response, fallbackMessage = "Request failed") {
+  if (
+    response &&
+    typeof response === "object" &&
+    response.success === false
+  ) {
+    const err = new Error(
+      String(response.message || response.error || fallbackMessage).trim() ||
+        fallbackMessage,
+    );
+    err.response = {
+      data: response,
+      status: response.status ?? response.statusCode ?? 500,
+    };
+    throw err;
+  }
+  return response;
 }
 
 /**

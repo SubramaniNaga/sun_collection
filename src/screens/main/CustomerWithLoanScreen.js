@@ -1052,7 +1052,12 @@ const CustomerWithLoanScreen = ({ navigation }) => {
           { text: 'OK', onPress: () => safeGoBack(navigation) },
         ]);
       } else {
-        showError(t('common.error'), response?.message || message || t('errors.somethingWentWrong'));
+        showError(
+          t('common.error'),
+          response?.message ||
+            response?.error ||
+            t('errors.somethingWentWrong'),
+        );
       }
     } catch (error) {
       showError(t('common.error'), getApiErrorMessage(error, t('errors.somethingWentWrong')));
@@ -1474,13 +1479,7 @@ const CustomerWithLoanScreen = ({ navigation }) => {
                       placeholder={t('customer.selectRegisterDay')}
                       error={errors.registerDay}
                       style={styles.existingPickerCompact}
-                      visible={registerDayPickerOpen}
-                      onVisibleChange={(open) => {
-                        setRegisterDayPickerOpen(open);
-                        if (!open && navOpenedRef.current === 'registerDay' && !navContextRef.current.registerDay) {
-                          navOpenedRef.current = null;
-                        }
-                      }}
+                      editable={false}
                       required
                     />
                   </View>

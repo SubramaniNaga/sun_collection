@@ -32,7 +32,8 @@ import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT, useDebouncedValue } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showAlert, showError, showInfo, showSuccess } from '../../utils/alertService';
+import ListLoadError from '../../components/common/ListLoadError';
+import { getApiErrorMessage, showAlert, showError, showErrorWithRetry, showInfo, showSuccess, throwIfApiFailed } from '../../utils/alertService';
 import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
 import { getRegisterDayNameFromDate } from '../../utils/dateFormatter';
@@ -174,6 +175,9 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState('');
+  const fetchListRef = useRef(async () => {});
   const [refreshing, setRefreshing] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -264,6 +268,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         registered_day: registerDayFilter,
         ...buildSearchParams(debouncedSearchQuery),
       });
+      throwIfApiFailed(response, t('collection.failedToLoad'));
 
       if (requestId !== fetchRequestIdRef.current) return;
 
@@ -277,11 +282,20 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         hasNextPage: Boolean(pag.hasNextPage),
         totalPages: pag.totalPages ?? 1,
       });
+      if (isPageOne) {
+        setLoadFailed(false);
+        setLoadErrorMessage('');
+      }
     } catch (err) {
       if (requestId !== fetchRequestIdRef.current) return;
       if (isPageOne) {
-        showError(t('common.error'), getApiErrorMessage(err, t('collection.failedToLoad')));
+        const msg = getApiErrorMessage(err, t('collection.failedToLoad'));
         setList([]);
+        setLoadFailed(true);
+        setLoadErrorMessage(msg);
+        showErrorWithRetry(t('common.error'), msg, () => {
+          void fetchListRef.current?.(1, false);
+        }, { ok: t('common.ok'), retry: t('common.retry') });
       }
     } finally {
       if (requestId !== fetchRequestIdRef.current) return;
@@ -291,6 +305,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       loadMoreLockRef.current = false;
     }
   }, [registerDayFilter, debouncedSearchQuery, buildSearchParams, t]);
+  fetchListRef.current = fetchList;
 
   useEffect(() => {
     fetchRequestIdRef.current += 1;
@@ -376,6 +391,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   };
 
   const openPaymentModal = (collection) => {
+    if (!guardAttendanceGatedEntry(t)) return;
     setSelectedCollection(collection);
     setPaymentMode('Cash');
     setCollectedAmount('');
@@ -970,9 +986,15 @@ const IntermediateIncomeScreen = ({ navigation }) => {
           onEndReached={loadMore}
           onEndReachedThreshold={0.2}
           ListEmptyComponent={
-            <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>{t('collection.noCollections')}</Text>
-            </View>
+            loadFailed ? (
+              <ListLoadError
+                message={loadErrorMessage || t('collection.failedToLoad')}
+              />
+            ) : (
+              <View style={styles.centerContainer}>
+                <Text style={styles.emptyText}>{t('collection.noCollections')}</Text>
+              </View>
+            )
           }
           ListFooterComponent={
             list.length > 0 ? (

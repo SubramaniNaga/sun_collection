@@ -135,7 +135,10 @@ const ProfileScreen = ({ navigation }) => {
       showAlert({
         type: 'error',
         title: t('common.error'),
-        message: error?.response?.data?.message || 'Failed to change language. Please try again.',
+        message: getApiErrorMessage(
+          error,
+          t('profile.updateFailed') || 'Failed to change language. Please try again.',
+        ),
       });
     }
   };

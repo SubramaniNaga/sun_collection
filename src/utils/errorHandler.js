@@ -12,7 +12,9 @@ export const ERROR_TYPES = {
 };
 
 export const ERROR_MESSAGES = {
-  [ERROR_TYPES.NETWORK_ERROR]: 'No internet connection. Please check your network.',
+  // Single offline / network-failure copy (match translations.errors.networkError)
+  [ERROR_TYPES.NETWORK_ERROR]:
+    'Network error. Please check your connection.',
   [ERROR_TYPES.SERVER_ERROR]: 'Server error occurred. Please try again later.',
   [ERROR_TYPES.VALIDATION_ERROR]: 'Invalid data provided. Please check your input.',
   [ERROR_TYPES.AUTHENTICATION_ERROR]: 'Authentication failed. Please login again.',
@@ -44,17 +46,32 @@ export const ErrorHandler = {
     // Timeout errors — must be checked BEFORE the network branch, because a
     // timed-out request also has no `error.response`.
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      // Same user-facing copy as offline — avoid a second “timeout” wording
       return new APIError(
-        ERROR_MESSAGES.TIMEOUT_ERROR,
-        ERROR_TYPES.TIMEOUT_ERROR,
+        ERROR_MESSAGES.NETWORK_ERROR,
+        ERROR_TYPES.NETWORK_ERROR,
+        null,
+        error
+      );
+    }
+
+    // Cancelled requests — not a connectivity failure
+    if (
+      error.code === 'ERR_CANCELED' ||
+      error.name === 'CanceledError' ||
+      String(error.message || '').toLowerCase() === 'canceled'
+    ) {
+      return new APIError(
+        error.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+        ERROR_TYPES.UNKNOWN_ERROR,
         null,
         error
       );
     }
 
     // Network errors — no response was received (DNS, refused, reset, CORS,
-    // unreachable host). Axios 1.x sets code 'ERR_NETWORK'; React Native's
-    // XHR adapter often sets no code and only says "Network Error".
+    // unreachable host, Wi‑Fi/data off). Axios 1.x: ERR_NETWORK; RN XHR often
+    // only "Network Error". Any other request-without-response is treated the same.
     const NETWORK_CODES = [
       'ERR_NETWORK',
       'NETWORK_ERROR',
@@ -65,10 +82,12 @@ export const ErrorHandler = {
       'EHOSTUNREACH',
       'ENETUNREACH',
     ];
-    if (
-      !error.response &&
-      (NETWORK_CODES.includes(error.code) || error.message === 'Network Error')
-    ) {
+    const msg = String(error.message || '');
+    const looksLikeNetwork =
+      NETWORK_CODES.includes(error.code) ||
+      msg === 'Network Error' ||
+      /network error|failed to fetch|network request failed/i.test(msg);
+    if (!error.response && (looksLikeNetwork || error.request != null)) {
       return new APIError(
         ERROR_MESSAGES.NETWORK_ERROR,
         ERROR_TYPES.NETWORK_ERROR,
@@ -173,8 +192,12 @@ export const ErrorHandler = {
    */
   isNetworkError: (error) => {
     const type = ErrorHandler.getErrorType(error);
+    // Offline / unreachable + timeout → same user-facing network treatment
     return type === ERROR_TYPES.NETWORK_ERROR || type === ERROR_TYPES.TIMEOUT_ERROR;
   },
+
+  /** Message used for all connectivity failures (match translations.errors.networkError). */
+  getNetworkErrorMessage: () => ERROR_MESSAGES[ERROR_TYPES.NETWORK_ERROR],
 
   /**
    * Check if error is server related

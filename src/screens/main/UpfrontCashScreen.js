@@ -1,14 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiServices from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import ListLoadError from '../../components/common/ListLoadError';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
-import { getApiErrorMessage, showError } from '../../utils/alertService';
+import {
+  getApiErrorMessage,
+  showErrorWithRetry,
+  throwIfApiFailed,
+} from '../../utils/alertService';
 import { formatCurrency } from '../../utils/amountFormatters';
 import { formatDisplayDate, getCalendarDate } from '../../utils/dateFormatter';
 import { safeGoBack } from '../../utils/navigationHelpers';
@@ -18,6 +23,9 @@ const UpfrontCashScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [records, setRecords] = useState([]);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState('');
+  const fetchOpeningBalanceRef = useRef(async () => {});
   const [fromDate, setFromDate] = useState(getCalendarDate());
   const [toDate, setToDate] = useState(getCalendarDate());
   const [showFromDatePicker, setShowFromDatePicker] = useState(false);
@@ -53,18 +61,26 @@ const UpfrontCashScreen = ({ navigation }) => {
       };
 
       const response = await apiServices.upfrontCash.getOpeningBalance(requestParams);
+      throwIfApiFailed(response, t('upfrontCash.failedToLoad'));
 
       const responseData = response?.data || [];
       console.log('📊 API Response - Records count:', responseData.length);
       setRecords(responseData);
-
+      setLoadFailed(false);
+      setLoadErrorMessage('');
     } catch (error) {
-      showError(t('common.error'), getApiErrorMessage(error, t('upfrontCash.failedToLoad')));
+      const msg = getApiErrorMessage(error, t('upfrontCash.failedToLoad'));
       setRecords([]);
+      setLoadFailed(true);
+      setLoadErrorMessage(msg);
+      showErrorWithRetry(t('common.error'), msg, () => {
+        void fetchOpeningBalanceRef.current?.(fromDateParam, toDateParam);
+      }, { ok: t('common.ok'), retry: t('common.retry') });
     } finally {
       if (!skipPageLoader) setLoading(false);
     }
   }, [t]);
+  fetchOpeningBalanceRef.current = fetchOpeningBalance;
 
   const onRefresh = useCallback(async () => {
     if (refreshing || !fromDate || !toDate || fromDateStatus === 'error') return;
@@ -174,6 +190,13 @@ const UpfrontCashScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>{t('upfrontCash.loadingUpfrontCash')}</Text>
         </View>
+      );
+    }
+    if (loadFailed) {
+      return (
+        <ListLoadError
+          message={loadErrorMessage || t('upfrontCash.failedToLoad')}
+        />
       );
     }
     return (

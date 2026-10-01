@@ -16,6 +16,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -41,6 +42,8 @@ import {
   getApiErrorMessage,
   showAlert,
   showError,
+  showErrorWithRetry,
+  throwIfApiFailed,
 } from "../../utils/alertService";
 import { formatCurrency } from "../../utils/amountFormatters";
 import { getServerDateTimeISO } from "../../utils/dateFormatter";
@@ -85,6 +88,15 @@ const formatRupee = (value) => formatCurrency(value);
 
 const HomeScreen = ({ navigation }) => {
   const { t, language, changeLanguage } = useLanguage();
+  const { width: windowWidth } = useWindowDimensions();
+  /** Compact horizontal padding on narrow phones so card titles get more width. */
+  const isNarrowPhone = windowWidth < 360;
+  const isCompactPhone = windowWidth < 400;
+  const pagePadH = isNarrowPhone ? 10 : isCompactPhone ? 12 : SIZES.padding;
+  const cardPadH = isNarrowPhone ? 8 : isCompactPhone ? 9 : 10;
+  const cardPadV = isNarrowPhone ? 12 : SIZES.padding;
+  /** Same title size for all home grid cards (action + amount cards). */
+  const cardTitleSize = isNarrowPhone ? SIZES.body3 : SIZES.body2;
   const taFont = (size) => (language === "ta" ? size - 2 : size);
   const { user, updateUser } = useAuthContext();
   const { runCheck, updatePayload, clearUpdate } = useAppVersionCheck();
@@ -159,19 +171,14 @@ const HomeScreen = ({ navigation }) => {
         return;
       }
       dashboardAlertShownRef.current = true;
-      showError(
+      showErrorWithRetry(
         t("common.error"),
         getApiErrorMessage(error, t("home.failedToLoadDashboard")),
-        [
-          {
-            text: t("common.retry"),
-            onPress: () => {
-              dashboardAlertShownRef.current = false;
-              loadHomeDataRef.current?.();
-            },
-          },
-          { text: t("common.ok") },
-        ],
+        () => {
+          dashboardAlertShownRef.current = false;
+          loadHomeDataRef.current?.();
+        },
+        { ok: t("common.ok"), retry: t("common.retry") },
       );
     },
     [t],
@@ -204,6 +211,13 @@ const HomeScreen = ({ navigation }) => {
       ]);
 
       if (res != null) {
+        try {
+          throwIfApiFailed(res, "Failed to load dashboard data");
+        } catch (apiFailErr) {
+          setDashboardData(null);
+          showDashboardLoadErrorRef.current?.(apiFailErr);
+          return;
+        }
         applyAppBlockFromResponse(res);
         applyAttendanceFromResponse(res);
         syncAttendanceUiRef.current?.();
@@ -666,8 +680,11 @@ const HomeScreen = ({ navigation }) => {
         error?.code === "NO_AUTH"
           ? t("profile.updateFailed") ||
             "Unable to update language. Please login again."
-          : error?.response?.data?.message ||
-            "Failed to change language. Please try again.";
+          : getApiErrorMessage(
+              error,
+              t("profile.updateFailed") ||
+                "Failed to change language. Please try again.",
+            );
       showAlert({
         type: "error",
         title: t("common.error"),
@@ -702,6 +719,10 @@ const HomeScreen = ({ navigation }) => {
           !isOutlined && backgroundColor ? { backgroundColor } : null,
           isDanger && styles.amountCardFilledDanger,
           hideDetails && styles.amountCardCentered,
+          {
+            paddingHorizontal: cardPadH,
+            paddingVertical: cardPadV,
+          },
         ]}
         onPress={onPress}
         activeOpacity={0.88}
@@ -717,11 +738,12 @@ const HomeScreen = ({ navigation }) => {
               styles.amountCardIconWrap,
               isOutlined && styles.amountCardIconWrapOutlined,
               isDanger && styles.amountCardIconWrapDanger,
+              hideDetails && styles.amountCardIconWrapLarge,
             ]}
           >
             <Ionicons
               name={iconName}
-              size={hideDetails ? 28 : 20}
+              size={hideDetails ? (isNarrowPhone ? 24 : 28) : 16}
               color={iconColor}
             />
           </View>
@@ -729,11 +751,14 @@ const HomeScreen = ({ navigation }) => {
             style={[
               styles.amountCardHeaderText,
               isOutlined && styles.amountCardHeaderTextOutlined,
-              hideDetails && styles.amountCardHeaderTextLarge,
+              hideDetails && styles.amountCardHeaderTextCentered,
               isDanger && styles.amountCardHeaderTextDanger,
-              { fontSize: taFont(SIZES.body1) },
+              { fontSize: taFont(cardTitleSize) },
             ]}
             numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            ellipsizeMode="tail"
           >
             {title}
           </Text>
@@ -823,7 +848,13 @@ const HomeScreen = ({ navigation }) => {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingHorizontal: pagePadH,
+              paddingTop: pagePadH,
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -1212,10 +1243,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   amountCard: {
-    width: "48%",
-    minHeight: 132,
-    borderRadius: SIZES.radius * 1.75,
-    padding: SIZES.padding,
+    width: "48.5%",
+    minHeight: 120,
+    borderRadius: SIZES.radius * 1.5,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     marginBottom: SIZES.margin,
     backgroundColor: COLORS.white,
     ...Platform.select({
@@ -1275,12 +1307,18 @@ const styles = StyleSheet.create({
     }),
   },
   amountCardIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(29, 126, 226, 0.1)",
+    flexShrink: 0,
+  },
+  amountCardIconWrapLarge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   amountCardIconWrapOutlined: {
     backgroundColor: "rgba(29, 126, 226, 0.08)",
@@ -1292,31 +1330,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: SIZES.base,
-    gap: SIZES.base,
+    gap: 6,
   },
   amountCardCentered: {
     justifyContent: "center",
     alignItems: "center",
   },
   amountCardHeaderCentered: {
+    flexDirection: "column",
+    alignItems: "center",
     justifyContent: "center",
     marginBottom: 0,
-    flex: 1,
+    gap: SIZES.base,
+    width: "100%",
   },
-  amountCardHeaderTextLarge: {
-    fontSize: SIZES.body1,
-    fontWeight: "700",
+  amountCardHeaderTextCentered: {
     textAlign: "center",
-    color: COLORS.primary,
+    flex: 0,
+    width: "100%",
+    flexShrink: 1,
   },
   amountCardHeaderTextDanger: {
     color: COLORS.white,
   },
   amountCardHeaderText: {
     flex: 1,
-    fontSize: SIZES.body1,
-    fontWeight: "600",
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: SIZES.body2,
+    fontWeight: "700",
     color: COLORS.primary,
+    lineHeight: 20,
   },
   amountCardHeaderTextOutlined: {
     color: COLORS.primary,

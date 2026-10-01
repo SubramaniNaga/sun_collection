@@ -173,14 +173,24 @@ const AddCustomerScreen = ({ navigation }) => {
       });
 
       if (response.data.success) {
-        showSuccess('Success', 'Customer created successfully!', [
-          { text: 'OK', onPress: () => safeGoBack(navigation) },
-        ]);
+        showSuccess(
+          t('common.success'),
+          response.data.message || t('success.customerCreated') || 'Customer created successfully!',
+          [{ text: t('common.ok'), onPress: () => safeGoBack(navigation) }],
+        );
       } else {
-        showError('Error', response.data.message || 'Failed to create customer');
+        showError(
+          t('common.error'),
+          response.data.message ||
+            response.data.error ||
+            t('errors.somethingWentWrong'),
+        );
       }
     } catch (error) {
-      showError('Error', getApiErrorMessage(error, 'Failed to create customer. Please try again.'));
+      showError(
+        t('common.error'),
+        getApiErrorMessage(error, t('errors.somethingWentWrong')),
+      );
     } finally {
       setLoading(false);
     }

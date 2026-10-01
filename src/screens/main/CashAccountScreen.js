@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -21,13 +21,19 @@ import DatePicker from "../../components/common/DatePicker";
 import Header from "../../components/common/Header";
 import { COLORS, SIZES } from "../../constants/theme";
 // import Collection from "../../models/Collection";
+import {
+  applyAccountClosedFromResponse,
+  setAccountClosed,
+} from "../../config/appToggles";
 import Dashboard from "../../models/Dashboard";
 import { useLanguage } from "../../store/LanguageContext";
 import {
   getApiErrorMessage,
   showError,
+  showErrorWithRetry,
   showSuccess,
   showWarning,
+  throwIfApiFailed,
 } from "../../utils/alertService";
 import { formatCurrency } from "../../utils/amountFormatters";
 import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
@@ -201,6 +207,9 @@ const CashAccountScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  /** True when close-account-view / related fetch failed (HTTP or empty payload). */
+  const [summaryLoadFailed, setSummaryLoadFailed] = useState(false);
+  const [summaryLoadErrorMessage, setSummaryLoadErrorMessage] = useState("");
   const [startDate, setStartDate] = useState(getCalendarDateISO());
   const [endDate, setEndDate] = useState(getCalendarDateISO());
   /** GET /close-account-view `data` */
@@ -287,6 +296,7 @@ const CashAccountScreen = ({ navigation }) => {
   const applyTodayDashboardResponse = useCallback((todayDashRes) => {
     if (todayDashRes == null) return;
     try {
+      applyAccountClosedFromResponse(todayDashRes);
       const raw = dashboardDataFromTodayApi(todayDashRes);
       const dash = Dashboard.fromApiResponse(raw);
       setTodayDashboard(dash);
@@ -296,9 +306,28 @@ const CashAccountScreen = ({ navigation }) => {
     }
   }, []);
 
+  const fetchSummaryRef = useRef(async () => {});
+
+  /** Error alert: OK dismisses; Retry reloads summary (no Home navigation). */
+  const showLoadErrorAlert = useCallback(
+    (message) => {
+      showErrorWithRetry(
+        t("common.error"),
+        message,
+        () => {
+          void fetchSummaryRef.current?.();
+        },
+        { ok: t("common.ok"), retry: t("common.retry") },
+      );
+    },
+    [t],
+  );
+
   const fetchSummary = useCallback(async () => {
     if (!validateDates()) return;
     setLoading(true);
+    setSummaryLoadFailed(false);
+    setSummaryLoadErrorMessage("");
     try {
       const fromDate = formatDateForAPI(startDate);
       const toDate = formatDateForAPI(endDate);
@@ -318,13 +347,29 @@ const CashAccountScreen = ({ navigation }) => {
           : Promise.resolve(null),
       ]);
 
+      throwIfApiFailed(viewRes, t("errors.somethingWentWrong"));
+
       const viewData =
         viewRes?.data && typeof viewRes.data === "object"
           ? viewRes.data
           : viewRes && typeof viewRes === "object" && viewRes.amounts
             ? viewRes
             : null;
+
+      if (!viewData) {
+        const msg = t("errors.somethingWentWrong");
+        setSummaryLoadFailed(true);
+        setSummaryLoadErrorMessage(msg);
+        setCloseAccountView(null);
+        setTodayDashboard(null);
+        setCollectionPaymentSplit({ cash: 0, online: 0 });
+        showLoadErrorAlert(msg);
+        return;
+      }
+
       setCloseAccountView(viewData);
+      setSummaryLoadFailed(false);
+      setSummaryLoadErrorMessage("");
 
       if (isTodayRange && todayDashRes != null) {
         applyTodayDashboardResponse(todayDashRes);
@@ -333,17 +378,26 @@ const CashAccountScreen = ({ navigation }) => {
         setCollectionPaymentSplit({ cash: 0, online: 0 });
       }
     } catch (err) {
-      showError(
-        t("common.error"),
-        getApiErrorMessage(err, t("errors.somethingWentWrong")),
-      );
+      const msg = getApiErrorMessage(err, t("errors.somethingWentWrong"));
+      setSummaryLoadFailed(true);
+      setSummaryLoadErrorMessage(msg);
       setCloseAccountView(null);
       setTodayDashboard(null);
       setCollectionPaymentSplit({ cash: 0, online: 0 });
+      showLoadErrorAlert(msg);
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, validateDates, applyTodayDashboardResponse, t]);
+  }, [
+    startDate,
+    endDate,
+    validateDates,
+    applyTodayDashboardResponse,
+    t,
+    showLoadErrorAlert,
+  ]);
+
+  fetchSummaryRef.current = fetchSummary;
 
   useFocusEffect(
     useCallback(() => {
@@ -424,7 +478,12 @@ const CashAccountScreen = ({ navigation }) => {
     return Number(s) === 1;
   }, [todayDashboard]);
 
+  /** Hide summary table + Close Account when HTTP/load failed or no view data. */
+  const hasSummaryData =
+    !summaryLoadFailed && closeAccountView != null;
+
   const showCloseAccountButton =
+    hasSummaryData &&
     isCurrentDaySelectedForClose &&
     !accountClosingBlocked &&
     !isTableClosedInserted &&
@@ -692,6 +751,7 @@ const CashAccountScreen = ({ navigation }) => {
                   ...prev,
                   [markDate]: true,
                 }));
+                setAccountClosed(true);
                 console.log(
                   "[CloseAccount] data.inserted true — marked closed for",
                   markDate,
@@ -747,6 +807,7 @@ const CashAccountScreen = ({ navigation }) => {
               onValueChange={handleStartDateChange}
               error={errors.startDate}
               maximumDate={new Date()}
+              style={styles.datePickerTight}
             />
           </View>
 
@@ -758,6 +819,7 @@ const CashAccountScreen = ({ navigation }) => {
               error={errors.endDate}
               minimumDate={startDate ? new Date(startDate) : undefined}
               maximumDate={new Date()}
+              style={styles.datePickerTight}
             />
           </View>
         </View>
@@ -771,6 +833,17 @@ const CashAccountScreen = ({ navigation }) => {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>{t("common.loading")}</Text>
+        </View>
+      ) : !hasSummaryData ? (
+        <View style={styles.center}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={40}
+            color={COLORS.text.tertiary}
+          />
+          <Text style={styles.loadingText}>
+            {summaryLoadErrorMessage || t("errors.somethingWentWrong")}
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -1130,6 +1203,7 @@ const styles = StyleSheet.create({
     marginTop: SIZES.margin,
     color: COLORS.text.tertiary,
     fontSize: SIZES.body3,
+    textAlign: "center",
   },
   contentBody: {
     flex: 1,
@@ -1137,7 +1211,7 @@ const styles = StyleSheet.create({
   filterSection: {
     backgroundColor: COLORS.white,
     paddingHorizontal: SIZES.padding,
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#E6EBF2",
@@ -1145,21 +1219,25 @@ const styles = StyleSheet.create({
   dateRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: SIZES.margin,
+    marginBottom: 0,
   },
   datePickerContainer: {
     flex: 1,
     marginHorizontal: SIZES.base / 2,
   },
+  datePickerTight: {
+    marginBottom: 0,
+  },
   errorText: {
     fontSize: SIZES.body3,
     color: COLORS.error,
     textAlign: "center",
-    marginBottom: SIZES.margin,
+    marginBottom: 4,
+    marginTop: 2,
   },
   statementCard: {
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 8,
     backgroundColor: COLORS.white,
     borderRadius: 14,
     borderWidth: 1,

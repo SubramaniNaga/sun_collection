@@ -162,6 +162,7 @@ export function applyAttendanceFromResponse(res) {
   }
 
   applyCalendarTimezoneFromResponse(res);
+  applyAccountClosedFromResponse(res);
 }
 
 /** Local check-in / checkout — UI + tracking follow attendance_status. */
@@ -212,6 +213,96 @@ export const FEATURE_FLAGS = {
 };
 
 const STORAGE_DELAY_PROXIMITY_OVERLAY = 'feature_enable_delay_proximity_overlay';
+
+/**
+ * Runtime flag that gates collections / loan create / renewals.
+ * Driven by dashboard `closing_status` (same as Close Account button):
+ *   closing_status === 0 → ACCOUNT.isAccountClosed = false → entries allowed
+ *   closing_status === 1 → ACCOUNT.isAccountClosed = true  → entries blocked
+ *
+ * Close Account success also calls setAccountClosed(true) until next dashboard refresh.
+ *
+ * Legacy API field `isAccountClosed` mapping is kept below but commented out.
+ */
+export const ACCOUNT = {
+  isAccountClosed: false,
+};
+
+/** AsyncStorage: '1' = blocked. (Legacy keys cleared on restore.) */
+const STORAGE_ACCOUNT_CLOSED = 'account_is_closed_v3';
+const STORAGE_ACCOUNT_CLOSED_LEGACY = [
+  'account_is_closed',
+  'account_is_closed_v2',
+];
+
+/** Parse API boolean-ish / 0|1 flag → true/false, or null if absent/unknown. */
+function parseClosedFlag(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  if (typeof value === 'string') {
+    const s = value.trim().toLowerCase();
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+  }
+  return null;
+}
+
+/** True when entry must be blocked (collections, loans, renewals). */
+export function isAccountClosed() {
+  return ACCOUNT.isAccountClosed === true;
+}
+
+/**
+ * Set block flag + persist.
+ * true → blocked (storage '1'); false → unblocked (storage '0').
+ */
+export function setAccountClosed(closed) {
+  const next = Boolean(closed);
+  const changed = ACCOUNT.isAccountClosed !== next;
+  ACCOUNT.isAccountClosed = next;
+  AsyncStorage.setItem(STORAGE_ACCOUNT_CLOSED, next ? '1' : '0').catch(() => {});
+  if (changed) notifyAttendanceEntryChange();
+}
+
+/**
+ * Dashboard/today (HomeScreen getTodayStats): map `closing_status` → entry gate.
+ * 0 = allow entries, 1 = block entries (and Close Account button stays hidden).
+ */
+export function applyAccountClosedFromResponse(res) {
+  const d = getAppResponsePayload(res);
+  if (!d) return;
+
+  // Primary: closing_status from /frontcash/dashboard/today
+  const fromClosingStatus = parseClosedFlag(d.closing_status ?? d.closingStatus);
+  if (fromClosingStatus !== null) {
+    setAccountClosed(fromClosingStatus);
+    return;
+  }
+
+  // Legacy: isAccountClosed / is_account_closed — kept for later, currently unused.
+  // const fromApi = parseClosedFlag(d.isAccountClosed ?? d.is_account_closed);
+  // if (fromApi !== null) {
+  //   setAccountClosed(fromApi);
+  // }
+}
+
+/**
+ * Restore blocked state from storage ('1' only).
+ * Never force-unblock from storage '0' — that overwrote testing/API true and opened entries.
+ */
+export async function restoreAccountClosedFromStorage() {
+  try {
+    AsyncStorage.multiRemove(STORAGE_ACCOUNT_CLOSED_LEGACY).catch(() => {});
+    const v = await AsyncStorage.getItem(STORAGE_ACCOUNT_CLOSED);
+    if (v === '1') {
+      ACCOUNT.isAccountClosed = true;
+      notifyAttendanceEntryChange();
+    }
+  } catch (e) {
+    // ignore — use in-memory default
+  }
+}
 
 function getAppResponsePayload(res) {
   if (!res || typeof res !== 'object') return null;

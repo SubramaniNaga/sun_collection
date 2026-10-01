@@ -79,10 +79,18 @@ const CollectionDetailsScreen = ({ route, navigation }) => {
           ]
         );
       } else {
-        showError('Error', response?.message || 'Failed to update collection amount.');
+        showError(
+          t('common.error'),
+          response?.message ||
+            response?.error ||
+            t('errors.somethingWentWrong'),
+        );
       }
     } catch (err) {
-      showError('Error', getApiErrorMessage(err, 'Failed to update collection amount.'));
+      showError(
+        t('common.error'),
+        getApiErrorMessage(err, t('errors.somethingWentWrong')),
+      );
     } finally {
       setSubmitting(false);
     }
