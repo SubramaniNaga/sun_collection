@@ -66,7 +66,11 @@ class Collection {
     this.loanPeriod = data.loan_period ?? null;
     this.loanTypeName = data.loan_type_name || null;
     this.loanTypeId = data.loantype_id ?? data.loan_type_id ?? null;
-    this.registerDay = data.registered_day ?? data.register_day ?? null;
+    this.registerDay =
+      data.customer_registered_day ??
+      data.registered_day ??
+      data.register_day ??
+      null;
     this.approvalStatus = data.approval_status || null;
     this.extraAmount = data.extra_amount ?? null;
     this.isPending = isPendingBorder(data.is_pending ?? data.isPending ?? data.ispending);

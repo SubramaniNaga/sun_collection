@@ -35,14 +35,15 @@ Backend team: to allow this app to call the API from the browser (web build), pl
 //   ? 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1'
 //   : 'https://r2j2j5xx-6005.inc1.devtunnels.ms/api/v1';
 
-// export const API_BASE_URL = __DEV__
-//   ? "http://13.206.98.152:6005/api/v1"
-//   : "http://13.206.98.152:6005/api/v1";
- 
 export const API_BASE_URL = __DEV__
-  ? "https://sun-enterprises.co.in/api/v1"
-  : "https://sun-enterprises.co.in/api/v1";
+  ? "http://13.206.98.152:6005/api/v1"
+  : "http://13.206.98.152:6005/api/v1";
+ 
+// export const API_BASE_URL = __DEV__
+//   ? "https://sun-enterprises.co.in/api/v1"
+//   : "https://sun-enterprises.co.in/api/v1";
 
+ /** Production API URL */
 /** Host root for media paths (no /api/v1 suffix). */
 export const API_HOST_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
 

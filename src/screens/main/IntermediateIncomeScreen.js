@@ -532,13 +532,17 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       setLoanAmount(collection?.loanAmount != null ? formatAmountPlain(collection.loanAmount) : '');
       setAathayamAmount(collection?.processingFees != null ? formatAmountPlain(collection.processingFees) : '');
       setMagimaiAmount(collection?.intrestAmount != null ? formatAmountPlain(collection.intrestAmount) : '');
-      setRenewalDay(registerDayFilter || collection?.registerDay || '');
     } else {
       setLoanAmount('');
       setAathayamAmount('');
       setMagimaiAmount('');
-      setRenewalDay('');
     }
+    // Always prefill Loan Day from list row / filter (customer_registered_day || registered_day)
+    setRenewalDay(
+      collection?.registerDay ||
+        registerDayFilter ||
+        '',
+    );
     setShowRenewalForm(true);
   };
 
@@ -894,14 +898,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
               placeholder={t('customer.registerDay')}
               error={renewalErrors.renewalDay}
               fitSheetToContent
+              editable={false}
               required
-              visible={renewalDayPickerOpen}
-              onVisibleChange={(open) => {
-                setRenewalDayPickerOpen(open);
-                if (!open && navOpenedRef.current === 'renewalDay' && !renewalDay) {
-                  navOpenedRef.current = null;
-                }
-              }}
             />
           ) : null}
         </KeyboardAwareScrollView>
