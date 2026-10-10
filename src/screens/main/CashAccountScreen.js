@@ -196,9 +196,12 @@ function debitSideValue(view, key) {
   return (Number(row.debit) || 0) || fromAmounts || (Number(row.credit) || 0);
 }
 
-/** Format amount for a table cell. */
+/** Format amount for a table cell. 0 / null / empty → hyphen. */
 function formatCellAmount(n) {
-  return formatCurrency(String(Number(n) || 0));
+  if (n === null || n === undefined || n === "") return "—";
+  const num = Number(n);
+  if (!Number.isFinite(num) || num === 0) return "—";
+  return formatCurrency(String(num));
 }
 
 const CashAccountScreen = ({ navigation }) => {
@@ -1021,7 +1024,7 @@ const CashAccountScreen = ({ navigation }) => {
                   ]}
                   numberOfLines={1}
                 >
-                  {formatCurrency(String(totalReceived))}
+                  {formatCellAmount(totalReceived)}
                 </Text>
               </View>
               <View
@@ -1039,7 +1042,7 @@ const CashAccountScreen = ({ navigation }) => {
                   ]}
                   numberOfLines={1}
                 >
-                  {formatCurrency(String(totalSpent))}
+                  {formatCellAmount(totalSpent)}
                 </Text>
               </View>
             </View>
@@ -1063,7 +1066,7 @@ const CashAccountScreen = ({ navigation }) => {
                 ]}
                 numberOfLines={1}
               >
-                {formatCurrency(String(totalBalance))}
+                {formatCellAmount(totalBalance)}
               </Text>
             </View>
           </View>
@@ -1178,7 +1181,7 @@ const CashAccountScreen = ({ navigation }) => {
                       ]}
                       numberOfLines={1}
                     >
-                      {formatCurrency(String(row.amount ?? 0))}
+                      {formatCellAmount(row.amount)}
                     </Text>
                   </View>
                 ))}
