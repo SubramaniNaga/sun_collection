@@ -19,6 +19,11 @@ class CollectionOverlayModule(reactContext: ReactApplicationContext) :
   override fun getName(): String = "CollectionOverlay"
 
   @ReactMethod
+  fun setLoggingEnabled(enabled: Boolean) {
+    OverlayApiLogger.setEnabled(enabled)
+  }
+
+  @ReactMethod
   fun addListener(eventName: String) {
     // Required for NativeEventEmitter
   }

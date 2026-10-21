@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeEventEmitter, NativeModules, Platform } from "react-native";
 import { API_BASE_URL } from "../api/apiClient";
+import { isAppLoggingEnabled } from "../config/logConfig";
 import {
   FEATURE_FLAGS,
   persistDelayProximityOverlayFlag,
@@ -57,7 +58,12 @@ function logOverlayApiEvent(event = {}) {
 
 /** Mirror native overlay HTTP logs into Metro console. */
 export function setupOverlayApiLogListener() {
-  if (overlayLogListenerAttached || !overlayEmitter) return () => {};
+  if (Platform.OS === "android" && CollectionOverlay?.setLoggingEnabled) {
+    CollectionOverlay.setLoggingEnabled(isAppLoggingEnabled());
+  }
+  if (!isAppLoggingEnabled() || overlayLogListenerAttached || !overlayEmitter) {
+    return () => {};
+  }
   overlayLogListenerAttached = true;
   const sub = overlayEmitter.addListener("OverlayApiLog", logOverlayApiEvent);
   return () => {

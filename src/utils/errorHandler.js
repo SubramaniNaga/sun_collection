@@ -44,12 +44,17 @@ export const ErrorHandler = {
     }
 
     // Timeout errors — must be checked BEFORE the network branch, because a
-    // timed-out request also has no `error.response`.
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      // Same user-facing copy as offline — avoid a second “timeout” wording
+    // timed-out request also has no `error.response`. React Native XHR reports
+    // this as message "Network Error" with request._response === "timeout".
+    const xhrBody = error?.request?._response;
+    const isTimeout =
+      error.code === 'ECONNABORTED' ||
+      /timeout/i.test(String(error?.message || '')) ||
+      String(xhrBody || '').trim().toLowerCase() === 'timeout';
+    if (isTimeout) {
       return new APIError(
-        ERROR_MESSAGES.NETWORK_ERROR,
-        ERROR_TYPES.NETWORK_ERROR,
+        ERROR_MESSAGES.TIMEOUT_ERROR,
+        ERROR_TYPES.TIMEOUT_ERROR,
         null,
         error
       );

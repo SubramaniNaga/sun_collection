@@ -13,6 +13,8 @@ import { clearSession } from "../../utils/sessionManager";
 import apiClient from "../apiClient";
 import ENDPOINTS from "../endpoints";
 
+const unpaidCollectionsInflight = new Map();
+
 // Helper function to read and format line_id and branch_id for API calls
 const getLineAndBranchIds = async () => {
   try {
@@ -1394,15 +1396,28 @@ export const apiServices = {
           ...(customer_id && { customer_id }),
           ...(loan_type && { loan_type }),
         };
+        const inflightKey = JSON.stringify(requestParams);
+        const existingRequest = unpaidCollectionsInflight.get(inflightKey);
+        if (existingRequest) return existingRequest;
+
         console.log(
           "📋 API: getUnpaidCollections - GET",
           ENDPOINTS.COLLECTION.UNPAID_LIST,
           "| params:",
           requestParams,
         );
-        const response = await apiClient.get(ENDPOINTS.COLLECTION.UNPAID_LIST, {
+        const request = apiClient.get(ENDPOINTS.COLLECTION.UNPAID_LIST, {
           params: requestParams,
+          timeout: 30000,
+        }).finally(() => {
+          unpaidCollectionsInflight.delete(inflightKey);
         });
+        const shared = request.then((response) => response.data);
+        shared.catch(() => {});
+        unpaidCollectionsInflight.set(inflightKey, shared);
+        const response = await request;
+
+        console.log('📋 API: getUnpaidCollections - response:', response.data);
         const collections = response.data?.data?.collections ?? [];
         const list = Array.isArray(collections) ? collections : [];
         console.log(
@@ -1413,6 +1428,13 @@ export const apiServices = {
         );
         return response.data;
       } catch (error) {
+        const apiResponse =
+          error?.response?.data ??
+          error?.details?.response?.data ??
+          error?.details?.request?._response ??
+          error?.request?._response ??
+          null;
+        console.log("📋 API: getUnpaidCollections - response:", apiResponse);
         if (__DEV__) console.warn("Get unpaid collections error:", error);
         throw error;
       }

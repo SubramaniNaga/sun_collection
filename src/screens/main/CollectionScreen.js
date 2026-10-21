@@ -303,7 +303,9 @@ const CollectionScreen = ({ navigation }) => {
       if (page === 1 && !append) setError(null);
     } catch (err) {
       if (page === 1 && !append) {
-        const msg = getApiErrorMessage(err, t('collection.failedToLoad'));
+        const msg = err?.type === 'TIMEOUT_ERROR'
+          ? t('errors.timeout')
+          : getApiErrorMessage(err, t('collection.failedToLoad'));
         setError(msg);
         setPendingList([]);
         showErrorWithRetry(t('common.error'), msg, () => {
@@ -361,7 +363,9 @@ const CollectionScreen = ({ navigation }) => {
       if (page === 1 && !append) setPaidError(null);
     } catch (err) {
       if (page === 1 && !append) {
-        const msg = getApiErrorMessage(err, t('collection.failedToLoad'));
+        const msg = err?.type === 'TIMEOUT_ERROR'
+          ? t('errors.timeout')
+          : getApiErrorMessage(err, t('collection.failedToLoad'));
         setPaidError(msg);
         setPaidList([]);
         showErrorWithRetry(t('common.error'), msg, () => {
@@ -417,9 +421,11 @@ const CollectionScreen = ({ navigation }) => {
 
   const loadBothCollections = useCallback(
     (searchQuery = '', collectionDate = null) => {
-      fetchUnpaidCollections(1, false, searchQuery, collectionDate);
+      const unpaid = fetchUnpaidCollections(1, false, searchQuery, collectionDate);
       fetchPaidCollections(1, false, searchQuery, collectionDate);
-      fetchOtherLoanTypeCounts(searchQuery, collectionDate);
+      unpaid.finally(() => {
+        fetchOtherLoanTypeCounts(searchQuery, collectionDate);
+      });
     },
     [fetchUnpaidCollections, fetchPaidCollections, fetchOtherLoanTypeCounts]
   );
@@ -440,8 +446,8 @@ const CollectionScreen = ({ navigation }) => {
       await Promise.all([
         fetchUnpaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true),
         fetchPaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true),
-        fetchOtherLoanTypeCounts(searchTextRef.current, selectedDateRef.current),
       ]);
+      await fetchOtherLoanTypeCounts(searchTextRef.current, selectedDateRef.current);
     } finally {
       setRefreshing(false);
     }

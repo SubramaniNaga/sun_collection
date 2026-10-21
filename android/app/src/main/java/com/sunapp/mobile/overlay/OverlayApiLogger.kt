@@ -5,6 +5,7 @@ import android.os.Looper
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactApplicationContext
+import com.sunapp.mobile.BuildConfig
 
 object OverlayApiLogger {
   private const val TAG = "ReactNativeJS"
@@ -13,6 +14,14 @@ object OverlayApiLogger {
 
   @Volatile
   private var reactContext: ReactApplicationContext? = null
+
+  /** JS sets this from ENABLE_APP_LOGS. Release builds stay off. */
+  @Volatile
+  private var enabled: Boolean = false
+
+  fun setEnabled(value: Boolean) {
+    enabled = BuildConfig.DEBUG && value
+  }
 
   fun init(context: ReactApplicationContext) {
     reactContext = context
@@ -56,6 +65,7 @@ object OverlayApiLogger {
   }
 
   private fun logLine(message: String) {
+    if (!enabled) return
     Log.i(TAG, message)
   }
 
@@ -67,6 +77,7 @@ object OverlayApiLogger {
     status: Int?,
     responseBody: String?,
   ) {
+    if (!enabled) return
     mainHandler.post {
       val ctx = reactContext ?: return@post
       if (!ctx.hasActiveReactInstance()) return@post
