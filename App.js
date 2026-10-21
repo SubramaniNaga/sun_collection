@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { setLoadingContext } from './src/api/apiClient';
 import { AppBlockGate } from './src/components/common/AppBlockOverlay';
+import { DeveloperModeGate } from './src/components/common/DeveloperModeGate';
 import GlobalLoader from './src/components/common/GlobalLoader';
 import { COLORS } from './src/constants/theme';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -73,6 +74,7 @@ const AppContent = () => {
 export default function App() {
   return (
     <LanguageProvider>
+      <DeveloperModeGate>
       <LoadingProvider>
         <AuthProvider>
           <AlertProvider>
@@ -82,6 +84,7 @@ export default function App() {
           </AlertProvider>
         </AuthProvider>
       </LoadingProvider>
+      </DeveloperModeGate>
     </LanguageProvider>
   );
 }

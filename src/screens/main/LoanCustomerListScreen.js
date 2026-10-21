@@ -17,9 +17,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getImageUrl } from "../../api/apiClient";
 import { apiServices } from "../../api/services/apiServices";
 import FormPicker from "../../components/common/FormPicker";
 import Header from "../../components/common/Header";
+import ListLoadError from "../../components/common/ListLoadError";
 import LoanCollectionsModal from "../../components/common/LoanCollectionsModal";
 import PaginationListFooter from "../../components/common/PaginationListFooter";
 import VoiceMicButton from "../../components/common/VoiceMicButton";
@@ -31,7 +33,6 @@ import {
 } from "../../hooks/useDebouncedValue";
 import { isHighPendingCount, isPendingBorder } from "../../models/Collection";
 import { useLanguage } from "../../store/LanguageContext";
-import ListLoadError from "../../components/common/ListLoadError";
 import {
   getApiErrorMessage,
   showErrorWithRetry,
@@ -47,9 +48,7 @@ import {
   getRegisterDayNameFromDate,
 } from "../../utils/dateFormatter";
 import { safeGoBack } from "../../utils/navigationHelpers";
-
 const LIMIT = 10;
-const API_BASE_URL = "https://sun-enterprises.co.in";
 
 const REGISTER_DAY_VALUES = [
   "Monday",
@@ -60,15 +59,6 @@ const REGISTER_DAY_VALUES = [
   "Saturday",
   "Sunday",
 ];
-
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://"))
-    return imagePath;
-  if (imagePath.startsWith("/api")) return `${API_BASE_URL}${imagePath}`;
-  const cleanPath = imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
-  return `${API_BASE_URL}/api/v1${cleanPath}`;
-};
 
 const formatAmountOrDash = (value) => {
   if (value === null || value === undefined || value === "") return "—";

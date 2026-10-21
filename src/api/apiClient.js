@@ -39,9 +39,12 @@ Backend team: to allow this app to call the API from the browser (web build), pl
 //   ? "http://13.206.98.152:6005/api/v1"
 //   : "http://13.206.98.152:6005/api/v1";
  
-export const API_BASE_URL = __DEV__
-  ? "https://sun-enterprises.co.in/api/v1"
-  : "https://sun-enterprises.co.in/api/v1";
+
+export const BASE_URL = __DEV__
+  ? "http://13.206.98.152:6005/"
+  : "https://sun-enterprises.co.in/";
+
+export const API_BASE_URL = BASE_URL+"api/v1";
 
  /** Production API URL */
 /** Host root for media paths (no /api/v1 suffix). */
@@ -183,6 +186,24 @@ apiClient.interceptors.request.use(
             : "");
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ $token: ", token);
         console.log(`📤 API REQUEST [${method}]`, fullUrl);
+        const clientHeaderNames = [
+          "X-Client",
+          "X-Platform",
+          "X-App-Version",
+          "X-Device-Id",
+          "X-Client-Public-Ip",
+        ];
+        const loggedHeaders = {};
+        clientHeaderNames.forEach((name) => {
+          const value =
+            typeof config.headers?.get === "function"
+              ? config.headers.get(name)
+              : config.headers?.[name];
+          if (value != null && value !== "") loggedHeaders[name] = value;
+        });
+        if (Object.keys(loggedHeaders).length > 0) {
+          console.log("📤 Request headers:", JSON.stringify(loggedHeaders));
+        }
         if (config.params && Object.keys(config.params).length > 0) {
           console.log(
             "📤 Request params:",

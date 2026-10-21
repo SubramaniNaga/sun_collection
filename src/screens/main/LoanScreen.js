@@ -4,19 +4,20 @@ import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getImageUrl } from "../../api/apiClient";
 import { apiServices } from "../../api/services/apiServices";
 import Header from "../../components/common/Header";
 import ImagePreviewModal from "../../components/common/ImagePreviewModal";
@@ -24,20 +25,18 @@ import ImageProcessingLoader from "../../components/common/ImageProcessingLoader
 import { COLORS, SIZES } from "../../constants/theme";
 import { useLanguage } from "../../store/LanguageContext";
 import {
-    getApiErrorMessage,
-    showError,
-    showSuccess,
+  getApiErrorMessage,
+  showError,
+  showSuccess,
 } from "../../utils/alertService";
 import {
-    formatAmountPlain,
-    formatCurrency,
+  formatAmountPlain,
+  formatCurrency,
 } from "../../utils/amountFormatters";
 import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
 import { formatDisplayDate } from "../../utils/dateFormatter";
 import { pickFromCamera, pickFromLibrary } from "../../utils/imagePickerHelper";
 import { safeGoBack } from "../../utils/navigationHelpers";
-
-const API_BASE_URL = "https://sun-enterprises.co.in";
 
 const formatLoanAmount = (val) => {
   if (val == null || val === "") return "—";
@@ -361,22 +360,6 @@ const LoanScreen = ({ navigation, route }) => {
       return paymentType.trim().length > 0 && loanGivenPhoto != null;
     }
     return customerPhoto && aadharNumber.trim().length === 12;
-  };
-
-  // Get full image URL
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    // If it's already a full URL, return as is
-    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-      return imagePath;
-    }
-    // If it starts with /api, it's already a full path
-    if (imagePath.startsWith("/api")) {
-      return `${API_BASE_URL}${imagePath}`;
-    }
-    // Otherwise, construct full URL (assuming images are in /api/v1/uploads or similar)
-    const cleanPath = imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
-    return `${API_BASE_URL}/api/v1${cleanPath}`;
   };
 
   const fetchLoanDetails = useCallback(

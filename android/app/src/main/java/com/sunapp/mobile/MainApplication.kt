@@ -25,6 +25,7 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               add(com.sunapp.mobile.overlay.CollectionOverlayPackage())
               add(AppNavigationBarPackage())
+              add(DeveloperModePackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

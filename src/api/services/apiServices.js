@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
 import {
   ATTENDANCE,
   applyAttendanceFromResponse,
@@ -11,6 +12,7 @@ import { notifyLocationSendResult } from "../../utils/locationTrackingNotificati
 import { registerForPushNotificationsAsync } from "../../utils/notifications";
 import { clearSession } from "../../utils/sessionManager";
 import apiClient from "../apiClient";
+import { getClientHeaders } from "../clientHeaders";
 import ENDPOINTS from "../endpoints";
 
 const unpaidCollectionsInflight = new Map();
@@ -682,6 +684,9 @@ export const apiServices = {
         // );
         const response = await apiClient.get(ENDPOINTS.LOAN.NIP, {
           params: requestParams,
+          // Home and NIP tab counts request up to 500 rows. The shared client
+          // timeout is 10s, which aborts a slow mobile response that Postman still receives.
+          timeout: 60000,
         });
         const list = response.data?.data ?? response.data;
         // console.log(
@@ -1263,9 +1268,16 @@ export const apiServices = {
       try {
         const deviceId = await AsyncStorage.getItem("deviceId");
         const params = deviceId ? { device_id: deviceId } : {};
-        // console.log('📊 API: getTodayStats - GET', ENDPOINTS.DASHBOARD.TODAY, '| params:', params);
+        const clientHeaders = await getClientHeaders();
+        console.log(
+          "📊 API: getTodayStats - client headers:",
+          JSON.stringify(clientHeaders),
+          "| params:",
+          JSON.stringify(params),
+        );
         const response = await apiClient.get(ENDPOINTS.DASHBOARD.TODAY, {
           params,
+          headers: clientHeaders,
           skipGlobalLoader: Boolean(options.skipGlobalLoader),
         });
         // console.log('📊 API: getTodayStats - Response:', JSON.stringify(response.data, null, 2));
@@ -1761,15 +1773,54 @@ export const apiServices = {
 
     closeOpeningAccount: async (payload = {}) => {
       try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          throw new Error("Location permission is required to close the account.");
+        }
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const latitude = position?.coords?.latitude;
+        const longitude = position?.coords?.longitude;
+        let address = "";
+        try {
+          const places = await Location.reverseGeocodeAsync({
+            latitude,
+            longitude,
+          });
+          const place = places?.[0];
+          if (place) {
+            address = [
+              place.name,
+              place.street,
+              place.district,
+              place.city,
+              place.region,
+              place.postalCode,
+              place.country,
+            ]
+              .filter(Boolean)
+              .join(", ");
+          }
+        } catch (geoError) {
+          if (__DEV__) console.warn("Close account reverse geocode:", geoError);
+        }
+
+        const body = {
+          ...payload,
+          latitude,
+          longitude,
+          address,
+        };
         console.log(
           "💰 API: closeOpeningAccount - POST",
           ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT,
           "| body:",
-          JSON.stringify(payload, null, 2),
+          JSON.stringify(body, null, 2),
         );
         const response = await apiClient.post(
           ENDPOINTS.UPFRONT_CASH.CLOSE_ACCOUNT,
-          payload,
+          body,
         );
         console.log(
           "💰 API: closeOpeningAccount - Response:",

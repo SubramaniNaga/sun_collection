@@ -6,7 +6,6 @@ import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   AppState,
   Easing,
@@ -147,6 +146,7 @@ const HomeScreen = ({ navigation }) => {
 
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [loadingNip, setLoadingNip] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const dashboardAlertShownRef = useRef(false);
 
@@ -189,25 +189,33 @@ const HomeScreen = ({ navigation }) => {
   const loadHomeData = useCallback(async (options = {}) => {
     const skipPageLoader = Boolean(options.skipPageLoader);
     if (!skipPageLoader) setLoadingDashboard(true);
+    setLoadingNip(true);
+
+    // NIP list is large. Do not hold the home cards until it returns.
+    apiServices.loan
+      .getNIPList({ page: 1, limit: 500 })
+      .then((nipRes) => {
+        const nipRaw = Array.isArray(nipRes?.data) ? nipRes.data : [];
+        const nips = NIPLoan.fromApiResponseArray(nipRaw);
+        const totalNipBalance = nips.reduce(
+          (sum, n) => sum + (parseFloat(n.balanceAmount) || 0),
+          0,
+        );
+        setNipSummary({ totalBalance: totalNipBalance, count: nips.length });
+      })
+      .catch(() => {
+        setNipSummary({ totalBalance: 0, count: 0 });
+      })
+      .finally(() => setLoadingNip(false));
 
     let dashboardFetchError = null;
-    const dashPromise = apiServices.dashboard
-      .getTodayStats({ skipGlobalLoader: true })
-      .catch((err) => {
-        dashboardFetchError = err;
-        return null;
-      });
-
-    const summaryPromise = Promise.all([
-      Promise.resolve(null),
-      apiServices.loan.getNIPList({ page: 1, limit: 500 }).catch(() => null),
-    ]);
-
     try {
-      const [res, [colRes, nipRes]] = await Promise.all([
-        dashPromise,
-        summaryPromise,
-      ]);
+      const res = await apiServices.dashboard
+        .getTodayStats({ skipGlobalLoader: true })
+        .catch((err) => {
+          dashboardFetchError = err;
+          return null;
+        });
 
       if (res != null) {
         try {
@@ -242,18 +250,6 @@ const HomeScreen = ({ navigation }) => {
       } else {
         setDashboardData(null);
         showDashboardLoadErrorRef.current?.(dashboardFetchError);
-      }
-
-      if (nipRes) {
-        const nipRaw = Array.isArray(nipRes?.data) ? nipRes.data : [];
-        const nips = NIPLoan.fromApiResponseArray(nipRaw);
-        const totalNipBalance = nips.reduce(
-          (sum, n) => sum + (parseFloat(n.balanceAmount) || 0),
-          0,
-        );
-        setNipSummary({ totalBalance: totalNipBalance, count: nips.length });
-      } else {
-        setNipSummary({ totalBalance: 0, count: 0 });
       }
     } finally {
       if (!skipPageLoader) setLoadingDashboard(false);
@@ -845,6 +841,7 @@ const HomeScreen = ({ navigation }) => {
           }
         />
 
+        <View style={styles.homeBody}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
@@ -875,7 +872,7 @@ const HomeScreen = ({ navigation }) => {
               {user?.line ?? ""} {t("home.todaysStatistics")}
                 {user?.id != null ? ` (${user.id})` : ""} 
               </Text>
-              {showAttendance && (
+              {showAttendance&&attendanceStatus !== "present" && (
                 <TouchableOpacity
                   style={[
                     styles.attendanceSwitchTrack,
@@ -1036,19 +1033,7 @@ const HomeScreen = ({ navigation }) => {
                     hideDetails: true,
                     filledDanger: true,
                   })} */}
-            {loadingDashboard ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text
-                  style={[
-                    styles.loadingText,
-                    { fontSize: taFont(SIZES.body3) },
-                  ]}
-                >
-                  {t("home.loadingDashboard")}
-                </Text>
-              </View>
-            ) : (
+            {loadingDashboard ? null : (
               <>
                 <View style={styles.homeGrid}>
                   {renderAmountCard({
@@ -1128,8 +1113,12 @@ const HomeScreen = ({ navigation }) => {
                     backgroundColor: "#5856D6",
                     iconName: "link-outline",
                     title: t("home.nip"),
-                    amountText: formatRupee(nipSummary.totalBalance),
-                    subText: `${nipSummary.count} ${t("home.loans")}`,
+                    amountText: loadingNip
+                      ? "..."
+                      : formatRupee(nipSummary.totalBalance),
+                    subText: loadingNip
+                      ? t("common.loading")
+                      : `${nipSummary.count} ${t("home.loans")}`,
                     onPress: () => navigation.navigate("NIP"),
                     outlined: true,
                   })}
@@ -1158,6 +1147,17 @@ const HomeScreen = ({ navigation }) => {
             )}
           </View>
         </ScrollView>
+        {loadingDashboard ? (
+          <View style={styles.loadingContainer} pointerEvents="none">
+            <MoneyCollectionLoader />
+            <Text
+              style={[styles.loadingText, { fontSize: taFont(SIZES.body3) }]}
+            >
+              {t("home.loadingDashboard")}
+            </Text>
+          </View>
+        ) : null}
+        </View>
 
         <View
           style={[
@@ -1166,7 +1166,7 @@ const HomeScreen = ({ navigation }) => {
           ]}
           pointerEvents={isAttendanceBusy ? "auto" : "none"}
         >
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <MoneyCollectionLoader />
         </View>
       </SafeAreaView>
       {updatePayload && (
@@ -1183,6 +1183,144 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
+function MoneyCollectionLoader() {
+  const bob = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0)).current;
+  const riseA = useRef(new Animated.Value(0)).current;
+  const riseB = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const native = { useNativeDriver: true };
+    const bobLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, {
+          toValue: 1,
+          duration: 650,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+        Animated.timing(bob, {
+          toValue: 0,
+          duration: 650,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+      ]),
+    );
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+        Animated.timing(glow, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          ...native,
+        }),
+      ]),
+    );
+    const floatLoop = (anim, delay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 1100,
+            easing: Easing.out(Easing.cubic),
+            ...native,
+          }),
+          Animated.timing(anim, { toValue: 0, duration: 0, ...native }),
+        ]),
+      );
+    const riseALoop = floatLoop(riseA, 0);
+    const riseBLoop = floatLoop(riseB, 550);
+    bobLoop.start();
+    glowLoop.start();
+    riseALoop.start();
+    riseBLoop.start();
+    return () => {
+      bobLoop.stop();
+      glowLoop.stop();
+      riseALoop.stop();
+      riseBLoop.stop();
+    };
+  }, [bob, glow, riseA, riseB]);
+
+  const floatStyle = (anim, x) => ({
+    opacity: anim.interpolate({
+      inputRange: [0, 0.15, 0.75, 1],
+      outputRange: [0, 1, 1, 0],
+    }),
+    transform: [
+      {
+        translateY: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [10, -34],
+        }),
+      },
+      { translateX: x },
+    ],
+  });
+
+  return (
+    <View style={styles.moneyLoader}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.moneyGlow,
+          {
+            opacity: glow.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.35, 0.85],
+            }),
+            transform: [
+              {
+                scale: glow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.92, 1.08],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
+      <Animated.View style={[styles.floatCoin, floatStyle(riseA, -26)]}>
+        <Ionicons name="cash" size={18} color="#2E9B4F" />
+      </Animated.View>
+      <Animated.View style={[styles.floatCoin, floatStyle(riseB, 26)]}>
+        <Ionicons name="cash-outline" size={16} color={COLORS.primary} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.rupeeCoin,
+          {
+            transform: [
+              {
+                translateY: bob.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -8],
+                }),
+              },
+              {
+                scale: bob.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 1.06],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Text style={styles.rupeeMark}>₹</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1197,6 +1335,9 @@ const styles = StyleSheet.create({
   },
   attendanceLoadingOverlayHidden: {
     opacity: 0,
+  },
+  homeBody: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -1399,9 +1540,47 @@ const styles = StyleSheet.create({
     marginRight: SIZES.base,
   },
   loadingContainer: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: SIZES.padding * 2,
+  },
+  moneyLoader: {
+    width: 96,
+    height: 96,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  moneyGlow: {
+    position: "absolute",
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: "rgba(246, 196, 69, 0.35)",
+  },
+  floatCoin: {
+    position: "absolute",
+    bottom: 28,
+  },
+  rupeeCoin: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F6C445",
+    borderWidth: 3,
+    borderColor: "#E0A82E",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#C8962E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  rupeeMark: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#8A5A00",
+    marginTop: -2,
   },
   loadingText: {
     marginTop: SIZES.margin,

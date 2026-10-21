@@ -7,19 +7,19 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    Keyboard,
-    Linking,
-    Modal,
-    Platform,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Keyboard,
+  Linking,
+  Modal,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -30,47 +30,31 @@ import Header from "../../components/common/Header";
 
 import ListSkeleton from "../../components/common/ListSkeleton";
 
+import { getImageUrl } from "../../api/apiClient";
+import ListLoadError from "../../components/common/ListLoadError";
 import VoiceMicButton from "../../components/common/VoiceMicButton";
 
 import { COLORS, SIZES } from "../../constants/theme";
 import {
-    DEBOUNCE_MS_DEFAULT,
-    useDebouncedValue,
+  DEBOUNCE_MS_DEFAULT,
+  useDebouncedValue,
 } from "../../hooks/useDebouncedValue";
 
 import NIPLoan from "../../models/NIPLoan";
-
 import { useLanguage } from "../../store/LanguageContext";
 
-import ListLoadError from "../../components/common/ListLoadError";
 import {
-    getApiErrorMessage,
-    showError,
-    showErrorWithRetry,
-    throwIfApiFailed,
+  getApiErrorMessage,
+  showError,
+  showErrorWithRetry,
+  throwIfApiFailed,
 } from "../../utils/alertService";
 import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
 import { safeGoBack } from "../../utils/navigationHelpers";
 
 import { formatCurrency } from "../../utils/amountFormatters";
 import { formatDisplayDate } from "../../utils/dateFormatter";
-
 const LIMIT = 20;
-
-const API_BASE_URL = "https://sun-enterprises.co.in";
-
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://"))
-    return imagePath;
-
-  if (imagePath.startsWith("/api")) return `${API_BASE_URL}${imagePath}`;
-
-  const cleanPath = imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
-
-  return `${API_BASE_URL}/api/v1${cleanPath}`;
-};
 
 const formatAmountOrDash = (value) => {
   if (value === null || value === undefined || value === "") return "—";

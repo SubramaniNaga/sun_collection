@@ -80,6 +80,10 @@ const translations = {
       appBlockedTitle: "App Unavailable",
       appBlockedMessage:
         "This app is temporarily blocked. Please try again later.",
+      developerModeTitle: "Developer mode is on",
+      developerModeMessage:
+        "Turn off Developer options to use this app.",
+      developerModeOpenSettings: "Open Developer settings",
       updateRequired: "Update Required",
       newVersionAvailable:
         "A new version ({version}) is available. Current version: {currentVersion}",
@@ -893,6 +897,10 @@ const translations = {
       appBlockedTitle: "செயலி தற்போது செயல்பாட்டில் இல்லை",
       appBlockedMessage:
         "இந்த ஆப் தற்காலிகமாக தடுக்கப்பட்டுள்ளது. பின்னர் மீண்டும் முயற்சிக்கவும்.",
+      developerModeTitle: "டெவலப்பர் மோட் இயக்கத்தில் உள்ளது",
+      developerModeMessage:
+        "இந்த செயலியைப் பயன்படுத்த டெவலப்பர் விருப்பங்களை அணைக்கவும்.",
+      developerModeOpenSettings: "டெவலப்பர் அமைப்புகளைத் திறக்கவும்",
       updateRequired: "புதுப்பிப்பு தேவை",
       newVersionAvailable:
         "புதிய பதிப்பு ({version}) கிடைக்கிறது. தற்போதைய பதிப்பு: {currentVersion}",

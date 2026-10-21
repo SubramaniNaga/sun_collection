@@ -21,6 +21,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { getImageUrl } from "../../api/apiClient";
 import { apiServices } from "../../api/services/apiServices";
 import Header from "../../components/common/Header";
 import VoiceMicButton from "../../components/common/VoiceMicButton";
@@ -40,8 +41,6 @@ import { guardAttendanceGatedEntry } from "../../utils/attendanceEntryGate";
 import { formatDisplayDate } from "../../utils/dateFormatter";
 import { safeGoBack } from "../../utils/navigationHelpers";
 
-const API_BASE_URL = "https://sun-enterprises.co.in";
-
 /** Android edge-to-edge often reports 0 bottom inset — reserve space for 3-button nav bar */
 const ANDROID_NAV_BAR_HEIGHT = 56;
 
@@ -49,15 +48,6 @@ const getBottomInset = (insets) =>
   Platform.OS === "android"
     ? Math.max(insets.bottom, ANDROID_NAV_BAR_HEIGHT)
     : Math.max(insets.bottom, SIZES.base);
-
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://"))
-    return imagePath;
-  if (imagePath.startsWith("/api")) return `${API_BASE_URL}${imagePath}`;
-  const cleanPath = imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
-  return `${API_BASE_URL}/api/v1${cleanPath}`;
-};
 
 const NIPCollectionDetailsScreen = ({ navigation, route }) => {
   const { t } = useLanguage();
