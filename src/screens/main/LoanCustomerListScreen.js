@@ -676,7 +676,7 @@ const LoanCustomerListScreen = ({ navigation }) => {
           color={COLORS.text.tertiary}
         />
         <Text style={styles.emptyStateText}>{t("loan.noLoans")}</Text>
-        <Text style={styles.emptyStateSubText}>{t("common.search")}</Text>
+        {/* <Text style={styles.emptyStateSubText}>{t("common.search")}</Text> */}
       </View>
     );
   };

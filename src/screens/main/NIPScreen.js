@@ -129,36 +129,7 @@ const NIPScreen = ({ navigation }) => {
 
   const isFirstFocusRef = useRef(true);
 
-  const [nipTabCounts, setNipTabCounts] = useState({ nip1: 0, nip2: 0 });
-
-  const countNipRowsForTab = useCallback((list, nipTypeForApi) => {
-    if (!Array.isArray(list)) return 0;
-    return list.filter(
-      (row) => String(row.nip_type ?? "").toLowerCase() === nipTypeForApi,
-    ).length;
-  }, []);
-
-  const fetchNipTabCounts = useCallback(
-    async (search = debouncedSearchQuery) => {
-      try {
-        const trimmedSearch = search.trim();
-        const response = await apiServices.loan.getNIPList({
-          search: trimmedSearch,
-          page: 1,
-          limit: 500,
-        });
-
-        const list = Array.isArray(response?.data) ? response.data : [];
-        setNipTabCounts({
-          nip1: countNipRowsForTab(list, "nip1"),
-          nip2: countNipRowsForTab(list, "nip2"),
-        });
-      } catch {
-        // Keep existing counts if the count request fails.
-      }
-    },
-    [debouncedSearchQuery, countNipRowsForTab],
-  );
+  const [nipTabCounts, setNipTabCounts] = useState({ nip1: null, nip2: null });
 
   useEffect(() => {
     if (!headerSearchOpen) return undefined;
@@ -222,6 +193,20 @@ const NIPScreen = ({ navigation }) => {
         );
 
         const pag = response?.pagination || {};
+        const toCount = (value) => {
+          if (value == null || value === "" || Number.isNaN(Number(value))) {
+            return null;
+          }
+          return Number(value);
+        };
+        const nip1Count = toCount(response?.nip1_count);
+        const nip2Count = toCount(response?.nip2_count);
+        if (nip1Count != null || nip2Count != null) {
+          setNipTabCounts((prev) => ({
+            nip1: nip1Count != null ? nip1Count : prev.nip1,
+            nip2: nip2Count != null ? nip2Count : prev.nip2,
+          }));
+        }
 
         const nipLoans = NIPLoan.fromApiResponseArray(listForTab);
 
@@ -263,31 +248,26 @@ const NIPScreen = ({ navigation }) => {
     setRefreshing(true);
 
     try {
-      await Promise.all([
-        fetchNIPLoans(1, false, { skipFullScreenLoader: true }),
-        fetchNipTabCounts(debouncedSearchQuery),
-      ]);
+      await fetchNIPLoans(1, false, { skipFullScreenLoader: true });
     } finally {
       setRefreshing(false);
     }
-  }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]);
+  }, [fetchNIPLoans]);
 
-  // Load list when tab or search changes (keeps loader for NIP 1 and NIP 2)
+  // One call per tab or search. nip1_count and nip2_count come back on that same response.
   useEffect(() => {
-    void fetchNIPLoans(1, false);
-    void fetchNipTabCounts(debouncedSearchQuery);
-  }, [nipTypeTab, debouncedSearchQuery, fetchNIPLoans, fetchNipTabCounts]);
+    void fetchNIPLoansRef.current(1, false);
+  }, [nipTypeTab, debouncedSearchQuery]);
 
-  // Soft refresh when returning to this screen (skip first mount — useEffect handles it)
+  // Soft refresh when returning to this screen (skip first mount — the effect above handles it).
   useFocusEffect(
     useCallback(() => {
       if (isFirstFocusRef.current) {
         isFirstFocusRef.current = false;
         return;
       }
-      fetchNIPLoans(1, false, { skipFullScreenLoader: true });
-      fetchNipTabCounts(debouncedSearchQuery);
-    }, [fetchNIPLoans, fetchNipTabCounts, debouncedSearchQuery]),
+      fetchNIPLoansRef.current(1, false, { skipFullScreenLoader: true });
+    }, []),
   );
 
   const loadMore = useCallback(() => {
@@ -723,7 +703,8 @@ const NIPScreen = ({ navigation }) => {
               adjustsFontSizeToFit
               minimumFontScale={0.85}
             >
-              {t("nip.tabNIP1")} ({nipTabCounts.nip1})
+              {t("nip.tabNIP1")}
+              {nipTabCounts.nip1 != null ? ` (${nipTabCounts.nip1})` : ""}
             </Text>
           </TouchableOpacity>
 
@@ -741,7 +722,8 @@ const NIPScreen = ({ navigation }) => {
               adjustsFontSizeToFit
               minimumFontScale={0.85}
             >
-              {t("nip.tabNIP2")} ({nipTabCounts.nip2})
+              {t("nip.tabNIP2")}
+              {nipTabCounts.nip2 != null ? ` (${nipTabCounts.nip2})` : ""}
             </Text>
           </TouchableOpacity>
         </View>

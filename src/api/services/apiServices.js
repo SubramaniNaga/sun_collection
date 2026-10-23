@@ -688,13 +688,7 @@ export const apiServices = {
           // timeout is 10s, which aborts a slow mobile response that Postman still receives.
           timeout: 60000,
         });
-        const list = response.data?.data ?? response.data;
-        // console.log(
-        //   "🔗 API: getNIPList - Response: data length:",
-        //   Array.isArray(list) ? list.length : "N/A",
-        //   "| pagination:",
-        //   JSON.stringify(response.data?.pagination ?? {}),
-        // );
+       
         return response.data;
       } catch (error) {
         if (__DEV__) console.warn("Get NIP list error:", error);
