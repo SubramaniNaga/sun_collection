@@ -1440,7 +1440,7 @@ export const apiServices = {
           error?.details?.request?._response ??
           error?.request?._response ??
           null;
-        console.log("📋 API: getUnpaidCollections - response:", apiResponse);
+        //console.log("📋 API: getUnpaidCollections - response:", apiResponse);
         if (__DEV__) console.warn("Get unpaid collections error:", error);
         throw error;
       }

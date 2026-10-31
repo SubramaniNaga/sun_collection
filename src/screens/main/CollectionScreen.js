@@ -9,13 +9,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { getImageUrl } from '../../api/apiClient';
 import { apiServices } from '../../api/services/apiServices';
 import Header from '../../components/common/Header';
+import ListLoadError from '../../components/common/ListLoadError';
 import PaginationListFooter from '../../components/common/PaginationListFooter';
 import VoiceMicButton from '../../components/common/VoiceMicButton';
 import { COLORS, SIZES } from '../../constants/theme';
 import { DEBOUNCE_MS_DEFAULT } from '../../hooks/useDebouncedValue';
 import Collection from '../../models/Collection';
 import { useLanguage } from '../../store/LanguageContext';
-import ListLoadError from '../../components/common/ListLoadError';
 import { getApiErrorMessage, showAlert, showError, showErrorWithRetry, showInfo, showSuccess, showWarning, throwIfApiFailed } from '../../utils/alertService';
 import { formatAmountPlain, formatCurrency } from '../../utils/amountFormatters';
 import { guardAttendanceGatedEntry } from '../../utils/attendanceEntryGate';
@@ -153,7 +153,7 @@ const CollectionScreen = ({ navigation }) => {
   const [paidList, setPaidList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMoreUnpaid, setLoadingMoreUnpaid] = useState(false);
-  const [loadingPaid, setLoadingPaid] = useState(true);
+  const [loadingPaid, setLoadingPaid] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMorePaid, setLoadingMorePaid] = useState(false);
   const [error, setError] = useState(null);
@@ -168,10 +168,6 @@ const CollectionScreen = ({ navigation }) => {
   loanTypeTabRef.current = loanTypeTab;
   /** loan_type IDs from GET /loan-type/active/list — Daily=2, Weekly=1 */
   const loanTypeIdsRef = useRef({ daily: 2, weekly: 1 });
-  const [loanTypeCounts, setLoanTypeCounts] = useState({
-    pending: { daily: 0, weekly: 0 },
-    paid: { daily: 0, weekly: 0 },
-  });
   const [unpaidPagination, setUnpaidPagination] = useState({
     currentPage: 1,
     hasNextPage: false,
@@ -293,13 +289,6 @@ const CollectionScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
         totalRecords: pag.totalRecords != null ? pag.totalRecords : (append ? prev.totalRecords : models.length),
       }));
-      if (page === 1 && !append && !skipPageLoader) {
-        const count = Number(pag.totalRecords ?? models.length) || 0;
-        setLoanTypeCounts((prev) => ({
-          ...prev,
-          pending: { ...prev.pending, [requestedLoanType]: count },
-        }));
-      }
       if (page === 1 && !append) setError(null);
     } catch (err) {
       if (page === 1 && !append) {
@@ -353,13 +342,6 @@ const CollectionScreen = ({ navigation }) => {
         totalPages: pag.totalPages ?? 1,
         totalRecords: pag.totalRecords != null ? pag.totalRecords : (append ? prev.totalRecords : models.length),
       }));
-      if (page === 1 && !append && !skipPageLoader) {
-        const count = Number(pag.totalRecords ?? models.length) || 0;
-        setLoanTypeCounts((prev) => ({
-          ...prev,
-          paid: { ...prev.paid, [requestedLoanType]: count },
-        }));
-      }
       if (page === 1 && !append) setPaidError(null);
     } catch (err) {
       if (page === 1 && !append) {
@@ -383,75 +365,43 @@ const CollectionScreen = ({ navigation }) => {
   }, [buildSearchParams, t]);
   fetchPaidRef.current = fetchPaidCollections;
 
-  const fetchOtherLoanTypeCounts = useCallback(async (searchQuery = '', collectionDate = null) => {
-    const currentType = loanTypeTabRef.current;
-    const otherType = currentType === 'daily' ? 'weekly' : 'daily';
-    const dateString = formatDateForAPI(collectionDate || selectedDateRef.current);
-    const params = {
-      page: 1,
-      limit: 1,
-      collection_date: dateString,
-      loan_type: loanTypeIdsRef.current[otherType],
-      ...buildSearchParams(searchQuery),
-    };
-
-    const [pendingResult, paidResult] = await Promise.allSettled([
-      apiServices.collection.getUnpaidCollections(params),
-      apiServices.collection.getPaidCollections(params),
-    ]);
-
-    setLoanTypeCounts((prev) => {
-      const next = {
-        pending: { ...prev.pending },
-        paid: { ...prev.paid },
-      };
-      if (pendingResult.status === 'fulfilled') {
-        const list = parseCollectionsFromResponse(pendingResult.value);
-        next.pending[otherType] =
-          Number(pendingResult.value?.pagination?.totalRecords ?? list.length) || 0;
-      }
-      if (paidResult.status === 'fulfilled') {
-        const list = parseCollectionsFromResponse(paidResult.value);
-        next.paid[otherType] =
-          Number(paidResult.value?.pagination?.totalRecords ?? list.length) || 0;
-      }
-      return next;
-    });
-  }, [buildSearchParams]);
-
-  const loadBothCollections = useCallback(
+  const loadActiveCollections = useCallback(
     (searchQuery = '', collectionDate = null) => {
-      const unpaid = fetchUnpaidCollections(1, false, searchQuery, collectionDate);
-      fetchPaidCollections(1, false, searchQuery, collectionDate);
-      unpaid.finally(() => {
-        fetchOtherLoanTypeCounts(searchQuery, collectionDate);
-      });
+      if (activeTabRef.current === 'paid') {
+        return fetchPaidCollections(1, false, searchQuery, collectionDate);
+      }
+      return fetchUnpaidCollections(1, false, searchQuery, collectionDate);
     },
-    [fetchUnpaidCollections, fetchPaidCollections, fetchOtherLoanTypeCounts]
+    [fetchUnpaidCollections, fetchPaidCollections]
   );
+  const loadActiveCollectionsRef = useRef(loadActiveCollections);
+  loadActiveCollectionsRef.current = loadActiveCollections;
 
   const refreshListsForFilters = useCallback(
     (searchQuery = '', collectionDate = null) => {
-      setLoading(true);
-      setLoadingPaid(true);
-      loadBothCollections(searchQuery, collectionDate);
+      if (activeTabRef.current === 'paid') {
+        setLoadingPaid(true);
+      } else {
+        setLoading(true);
+      }
+      loadActiveCollections(searchQuery, collectionDate);
     },
-    [loadBothCollections]
+    [loadActiveCollections]
   );
 
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await Promise.all([
-        fetchUnpaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true),
-        fetchPaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true),
-      ]);
-      await fetchOtherLoanTypeCounts(searchTextRef.current, selectedDateRef.current);
+      if (activeTabRef.current === 'paid') {
+        await fetchPaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true);
+      } else {
+        await fetchUnpaidCollections(1, false, searchTextRef.current, selectedDateRef.current, true);
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing, fetchUnpaidCollections, fetchPaidCollections, fetchOtherLoanTypeCounts]);
+  }, [refreshing, fetchUnpaidCollections, fetchPaidCollections]);
 
   const loadMoreUnpaid = useCallback(() => {
     if (activeTab !== 'pending') return;
@@ -537,7 +487,7 @@ const CollectionScreen = ({ navigation }) => {
     }, []),
   );
 
-  // Initial load: fetch loan type IDs, then unpaid + paid lists
+  // Initial load: loan type IDs, then only the open Pending or Paid tab.
   useFocusEffect(
     useCallback(() => {
       const load = async () => {
@@ -555,10 +505,10 @@ const CollectionScreen = ({ navigation }) => {
         } catch (e) {
           // keep defaults daily=2, weekly=1
         }
-        loadBothCollections(searchTextRef.current, selectedDate);
+        loadActiveCollectionsRef.current(searchTextRef.current, selectedDateRef.current);
       };
       load();
-    }, [loadBothCollections, selectedDate])
+    }, [])
   );
 
   const isFirstMountRef = useRef(true);
@@ -601,9 +551,7 @@ const CollectionScreen = ({ navigation }) => {
   const todayDateKey = getCurrentDateString();
   /** Past dates: no Collection entry — pay via Edai Varavu. Today + future: allow. */
   const isSelectedDatePast = Boolean(selectedDateKey && todayDateKey && selectedDateKey < todayDateKey);
-  const dailyLoanTypeCount = loanTypeCounts[activeTab].daily;
-  const weeklyLoanTypeCount = loanTypeCounts[activeTab].weekly;
-  const showListOverlay = tabSwitchLoading || loading || loadingPaid;
+  const showListOverlay = tabSwitchLoading || (activeTab === 'paid' ? loadingPaid : loading);
 
   const showPastDateEdaiVaravuAlert = (collection) => {
     const name =
@@ -966,7 +914,7 @@ const CollectionScreen = ({ navigation }) => {
           text: t('common.ok'),
           onPress: () => {
             setShowPaymentModal(false);
-            loadBothCollections(searchText, selectedDate);
+            loadActiveCollections(searchText, selectedDate);
           },
         },
       ]);
@@ -1031,16 +979,22 @@ const CollectionScreen = ({ navigation }) => {
 
   const handleTabPress = useCallback((tab) => {
     if (activeTabRef.current === tab) return;
+    activeTabRef.current = tab;
     setActiveTab(tab);
     setTabSwitchLoading(true);
-  }, []);
+    if (tab === 'paid') {
+      fetchPaidCollections(1, false, searchTextRef.current, selectedDateRef.current);
+    } else {
+      fetchUnpaidCollections(1, false, searchTextRef.current, selectedDateRef.current);
+    }
+  }, [fetchPaidCollections, fetchUnpaidCollections]);
 
   const handleLoanTypeTabPress = useCallback((tab) => {
     if (loanTypeTabRef.current === tab) return;
     setLoanTypeTab(tab);
     loanTypeTabRef.current = tab;
-    loadBothCollections(searchTextRef.current, selectedDateRef.current);
-  }, [loadBothCollections]);
+    loadActiveCollections(searchTextRef.current, selectedDateRef.current);
+  }, [loadActiveCollections]);
 
   useEffect(() => {
     if (!tabSwitchLoading || activeTab !== deferredTab) return;
@@ -1432,11 +1386,6 @@ const CollectionScreen = ({ navigation }) => {
               <Text style={[styles.loanTypeTabText, loanTypeTab === 'weekly' && styles.loanTypeTabTextActive]}>
                 {t('collection.weeklyTab')}
               </Text>
-              <View style={[styles.loanTypeBadge, loanTypeTab === 'weekly' && styles.loanTypeBadgeActive]}>
-                <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'weekly' && styles.loanTypeBadgeTextActive]}>
-                  {weeklyLoanTypeCount}
-                </Text>
-              </View>
             </View>
           </Pressable>
           <Pressable
@@ -1451,11 +1400,6 @@ const CollectionScreen = ({ navigation }) => {
               <Text style={[styles.loanTypeTabText, loanTypeTab === 'daily' && styles.loanTypeTabTextActive]}>
                 {t('collection.dailyTab')}
               </Text>
-              <View style={[styles.loanTypeBadge, loanTypeTab === 'daily' && styles.loanTypeBadgeActive]}>
-                <Text style={[styles.loanTypeBadgeText, loanTypeTab === 'daily' && styles.loanTypeBadgeTextActive]}>
-                  {dailyLoanTypeCount}
-                </Text>
-              </View>
             </View>
           </Pressable>
         </View>
@@ -1822,26 +1766,6 @@ const styles = StyleSheet.create({
   },
   loanTypeTabTextActive: {
     color: COLORS.white,
-  },
-  loanTypeBadge: {
-    minWidth: 26,
-    height: 26,
-    paddingHorizontal: 8,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.lightGray,
-  },
-  loanTypeBadgeActive: {
-    backgroundColor: COLORS.white,
-  },
-  loanTypeBadgeText: {
-    fontSize: SIZES.body4,
-    fontWeight: '700',
-    color: COLORS.text.secondary,
-  },
-  loanTypeBadgeTextActive: {
-    color: COLORS.primary,
   },
   tabSwitchOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -15,14 +15,44 @@ export const ERROR_MESSAGES = {
   // Single offline / network-failure copy (match translations.errors.networkError)
   [ERROR_TYPES.NETWORK_ERROR]:
     'Network error. Please check your connection.',
-  [ERROR_TYPES.SERVER_ERROR]: 'Server error occurred. Please try again later.',
-  [ERROR_TYPES.VALIDATION_ERROR]: 'Invalid data provided. Please check your input.',
-  [ERROR_TYPES.AUTHENTICATION_ERROR]: 'Authentication failed. Please login again.',
-  [ERROR_TYPES.AUTHORIZATION_ERROR]: 'You don\'t have permission to perform this action.',
-  [ERROR_TYPES.NOT_FOUND_ERROR]: 'The requested resource was not found.',
+  [ERROR_TYPES.SERVER_ERROR]: 'Something went wrong on the server. Please try again later.',
+  [ERROR_TYPES.VALIDATION_ERROR]: 'Please check the details and try again.',
+  [ERROR_TYPES.AUTHENTICATION_ERROR]: 'Your session has expired. Please login again.',
+  [ERROR_TYPES.AUTHORIZATION_ERROR]: 'You don\'t have permission to do this.',
+  [ERROR_TYPES.NOT_FOUND_ERROR]: 'The requested details were not found.',
   [ERROR_TYPES.TIMEOUT_ERROR]: 'Request timed out. Please try again.',
-  [ERROR_TYPES.UNKNOWN_ERROR]: 'An unexpected error occurred. Please try again.',
+  [ERROR_TYPES.UNKNOWN_ERROR]: 'Something went wrong. Please try again.',
+  CONFLICT: 'This record already exists or conflicts with current data.',
+  TOO_MANY_REQUESTS: 'Too many requests. Please wait and try again.',
+  SERVER_UNAVAILABLE: 'Server is temporarily unavailable. Please try again later.',
 };
+
+const GENERIC_SERVER_MESSAGES = new Set([
+  'error',
+  'bad request',
+  'unauthorized',
+  'forbidden',
+  'not found',
+  'conflict',
+  'internal server error',
+  'server error',
+  'server error occurred. please try again later.',
+  'request failed',
+  'something went wrong',
+  'something went wrong. please try again.',
+]);
+
+/** True when the API sentence is worth showing instead of the status message. */
+export function isSpecificServerMessage(message) {
+  const text = String(message || '').trim().toLowerCase();
+  if (!text) return false;
+  return !GENERIC_SERVER_MESSAGES.has(text);
+}
+
+function serverText(data) {
+  const message = typeof data?.message === 'string' ? data.message.trim() : '';
+  return isSpecificServerMessage(message) ? message : '';
+}
 
 export class APIError extends Error {
   constructor(message, type, statusCode, details = null) {
@@ -107,51 +137,75 @@ export const ErrorHandler = {
       
       switch (status) {
         case 400:
+        case 422:
           return new APIError(
-            data?.message || ERROR_MESSAGES.VALIDATION_ERROR,
+            serverText(data) || ERROR_MESSAGES.VALIDATION_ERROR,
             ERROR_TYPES.VALIDATION_ERROR,
             status,
             data
           );
-        
+
         case 401:
           return new APIError(
-            data?.message || ERROR_MESSAGES.AUTHENTICATION_ERROR,
+            ERROR_MESSAGES.AUTHENTICATION_ERROR,
             ERROR_TYPES.AUTHENTICATION_ERROR,
             status,
             data
           );
-        
+
         case 403:
           return new APIError(
-            data?.message || ERROR_MESSAGES.AUTHORIZATION_ERROR,
+            ERROR_MESSAGES.AUTHORIZATION_ERROR,
             ERROR_TYPES.AUTHORIZATION_ERROR,
             status,
             data
           );
-        
+
         case 404:
           return new APIError(
-            data?.message || ERROR_MESSAGES.NOT_FOUND_ERROR,
+            ERROR_MESSAGES.NOT_FOUND_ERROR,
             ERROR_TYPES.NOT_FOUND_ERROR,
             status,
             data
           );
-        
-        case 500:
-        case 502:
-        case 503:
-        case 504:
+
+        case 409:
           return new APIError(
-            data?.message || ERROR_MESSAGES.SERVER_ERROR,
+            ERROR_MESSAGES.CONFLICT,
+            ERROR_TYPES.VALIDATION_ERROR,
+            status,
+            data
+          );
+
+        case 429:
+          return new APIError(
+            ERROR_MESSAGES.TOO_MANY_REQUESTS,
+            ERROR_TYPES.UNKNOWN_ERROR,
+            status,
+            data
+          );
+
+        case 500:
+          return new APIError(
+            ERROR_MESSAGES.SERVER_ERROR,
             ERROR_TYPES.SERVER_ERROR,
             status,
             data
           );
-        
+
+        case 502:
+        case 503:
+        case 504:
+          return new APIError(
+            ERROR_MESSAGES.SERVER_UNAVAILABLE,
+            ERROR_TYPES.SERVER_ERROR,
+            status,
+            data
+          );
+
         default:
           return new APIError(
-            data?.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+            serverText(data) || ERROR_MESSAGES.UNKNOWN_ERROR,
             ERROR_TYPES.UNKNOWN_ERROR,
             status,
             data

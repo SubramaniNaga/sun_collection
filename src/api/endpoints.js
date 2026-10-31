@@ -24,8 +24,8 @@ export const ENDPOINTS = {
   COLLECTION: {
     LIST: "/collection",
     REGISTERED_DAY: "/collection/registered-day",
-    UNPAID_LIST: "/collection/list/unpaid",
-    PAID_LIST: "/collection/list/paid",
+    UNPAID_LIST: "/collection/list/unpaid", // This api called two time for fetch the counts to Paid and Unpaid badge count
+    PAID_LIST: "/collection/list/paid",// This api called two time for fetch the counts to Paid and Unpaid badge count
     DELAY_LIST: "/collection/list/delay",
     DELAY_REMARKS_SUBMIT: "/collection/delay-remarks/submit",
     UPDATE_AMOUNT: (id) => `/collection/payment/${id}`,

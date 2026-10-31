@@ -45,7 +45,7 @@ import {
 } from "../../utils/alertService";
 import { formatCurrency } from "../../utils/amountFormatters";
 import { getServerDateTimeISO } from "../../utils/dateFormatter";
-import ErrorHandler from "../../utils/errorHandler";
+import ErrorHandler, { ERROR_TYPES } from "../../utils/errorHandler";
 import { compressImageAssetIfNeeded } from "../../utils/imageCompression";
 import { syncLocationTracking } from "../../utils/locationTracker";
 import { syncUserLanguageWithApi } from "../../utils/syncUserLanguageWithApi";
@@ -161,6 +161,16 @@ const HomeScreen = ({ navigation }) => {
   const ensureLocationTrackingRef = useRef(ensureLocationTracking);
   ensureLocationTrackingRef.current = ensureLocationTracking;
 
+  const messageForHomeError = useCallback(
+    (error, fallback) => {
+      if (ErrorHandler.getErrorType(error) === ERROR_TYPES.NETWORK_ERROR) {
+        return t("home.noInternet");
+      }
+      return getApiErrorMessage(error, fallback);
+    },
+    [t],
+  );
+
   const showDashboardLoadError = useCallback(
     (error) => {
       if (error && ErrorHandler.isAuthError(error)) {
@@ -172,7 +182,7 @@ const HomeScreen = ({ navigation }) => {
       dashboardAlertShownRef.current = true;
       showErrorWithRetry(
         t("common.error"),
-        getApiErrorMessage(error, t("home.failedToLoadDashboard")),
+        messageForHomeError(error, t("home.failedToLoadDashboard")),
         () => {
           dashboardAlertShownRef.current = false;
           loadHomeDataRef.current?.();
@@ -180,7 +190,7 @@ const HomeScreen = ({ navigation }) => {
         { ok: t("common.ok"), retry: t("common.retry") },
       );
     },
-    [t],
+    [t, messageForHomeError],
   );
 
   const showDashboardLoadErrorRef = useRef(showDashboardLoadError);
@@ -352,7 +362,7 @@ const HomeScreen = ({ navigation }) => {
       showAlert({
         type: "error",
         title: t("common.error"),
-        message: getApiErrorMessage(error, t("home.attendanceFailed")),
+        message: messageForHomeError(error, t("home.attendanceFailed")),
         buttons: [
           {
             text: t("common.retry"),
@@ -506,7 +516,7 @@ const HomeScreen = ({ navigation }) => {
       showAlert({
         type: "error",
         title: t("common.error"),
-        message: getApiErrorMessage(error, t("home.attendanceFailed")),
+        message: messageForHomeError(error, t("home.attendanceFailed")),
       });
     } finally {
       setFetchingLocation(false);
@@ -675,7 +685,7 @@ const HomeScreen = ({ navigation }) => {
         error?.code === "NO_AUTH"
           ? t("profile.updateFailed") ||
             "Unable to update language. Please login again."
-          : getApiErrorMessage(
+          : messageForHomeError(
               error,
               t("profile.updateFailed") ||
                 "Failed to change language. Please try again.",

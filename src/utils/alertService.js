@@ -9,6 +9,7 @@ import { getCurrentAppLanguage } from "../store/LanguageContext";
 import ErrorHandler, {
   ERROR_MESSAGES,
   ERROR_TYPES,
+  isSpecificServerMessage,
 } from "./errorHandler";
 
 let _show = null;
@@ -29,14 +30,58 @@ export function setAlertRenderer(fn) {
 }
 
 /** Localized single copy for offline / network failure (all screens). */
-function getLocalizedNetworkErrorMessage() {
+function getLocalizedErrorText(key, englishFallback) {
   const lang = getCurrentAppLanguage();
   return (
-    translations?.[lang]?.errors?.networkError ||
-    translations?.en?.errors?.networkError ||
-    ERROR_MESSAGES[ERROR_TYPES.NETWORK_ERROR]
+    translations?.[lang]?.errors?.[key] ||
+    translations?.en?.errors?.[key] ||
+    englishFallback
   );
 }
+
+function getLocalizedNetworkErrorMessage() {
+  return getLocalizedErrorText(
+    "networkError",
+    ERROR_MESSAGES[ERROR_TYPES.NETWORK_ERROR],
+  );
+}
+
+function statusCodeOf(error) {
+  const code =
+    error?.statusCode ??
+    error?.response?.status ??
+    error?.response?.data?.status ??
+    null;
+  const numeric = Number(code);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function serverMessageOf(error) {
+  const details =
+    error?.details && typeof error.details === "object" ? error.details : null;
+  const raw =
+    error?.response?.data?.message ??
+    error?.response?.data?.error ??
+    (typeof error?.response?.data === "string" ? error.response.data : null) ??
+    details?.message ??
+    details?.error ??
+    null;
+  const text = raw != null ? String(raw).trim() : "";
+  return text;
+}
+
+/** Statuses whose alert text comes from the code, not the server sentence. */
+const STATUS_MESSAGE_KEYS = {
+  401: ["sessionExpired", ERROR_MESSAGES[ERROR_TYPES.AUTHENTICATION_ERROR]],
+  403: ["forbidden", ERROR_MESSAGES[ERROR_TYPES.AUTHORIZATION_ERROR]],
+  404: ["notFound", ERROR_MESSAGES[ERROR_TYPES.NOT_FOUND_ERROR]],
+  409: ["conflict", ERROR_MESSAGES.CONFLICT],
+  429: ["tooManyRequests", ERROR_MESSAGES.TOO_MANY_REQUESTS],
+  500: ["serverError", ERROR_MESSAGES[ERROR_TYPES.SERVER_ERROR]],
+  502: ["serverUnavailable", ERROR_MESSAGES.SERVER_UNAVAILABLE],
+  503: ["serverUnavailable", ERROR_MESSAGES.SERVER_UNAVAILABLE],
+  504: ["serverUnavailable", ERROR_MESSAGES.SERVER_UNAVAILABLE],
+};
 
 /**
  * True for no-network / unreachable host (not HTTP 4xx/5xx).
@@ -129,21 +174,32 @@ export function getApiErrorMessage(
     return getLocalizedNetworkErrorMessage();
   }
 
-  const details =
-    error?.details && typeof error.details === "object" ? error.details : null;
-  const detailsMsg = details
-    ? details.message || details.error || null
-    : null;
+  const status = statusCodeOf(error);
+  const serverMessage = serverMessageOf(error);
+  const specificServerMessage = isSpecificServerMessage(serverMessage)
+    ? serverMessage
+    : "";
 
-  const msg =
-    error?.response?.data?.message ??
-    error?.response?.data?.error ??
-    (typeof error?.response?.data === "string" ? error.response.data : null) ??
-    detailsMsg ??
-    error?.message;
-  // Prefer real API text; use fallback only when nothing usable is present
-  if (msg && String(msg).trim()) return String(msg).trim();
-  return fallback;
+  if ((status === 400 || status === 422) && specificServerMessage) {
+    return specificServerMessage;
+  }
+  if (status === 400 || status === 422) {
+    return getLocalizedErrorText(
+      "invalidInput",
+      ERROR_MESSAGES[ERROR_TYPES.VALIDATION_ERROR],
+    );
+  }
+
+  const statusMessage = STATUS_MESSAGE_KEYS[status];
+  if (statusMessage) {
+    return getLocalizedErrorText(statusMessage[0], statusMessage[1]);
+  }
+
+  if (specificServerMessage) return specificServerMessage;
+  if (error?.message && isSpecificServerMessage(error.message)) {
+    return String(error.message).trim();
+  }
+  return fallback || getLocalizedErrorText("somethingWentWrong", "Something went wrong. Please try again.");
 }
 
 /**
@@ -243,7 +299,7 @@ export function throwIfApiFailed(response, fallbackMessage = "Request failed") {
     );
     err.response = {
       data: response,
-      status: response.status ?? response.statusCode ?? 500,
+      status: response.status ?? response.statusCode,
     };
     throw err;
   }

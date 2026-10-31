@@ -570,7 +570,9 @@ const CollectionHistoryScreen = ({ navigation }) => {
         <FlatList
           style={styles.mainBodyList}
           data={filteredCollectionHistory}
-          keyExtractor={(item) => String(item?.id ?? Math.random())}
+          keyExtractor={(item, index) =>
+            `ch-${item?.id ?? 'x'}-${item?.loanId ?? 'x'}-${item?.paymentDate ?? 'x'}-${index}`
+          }
           renderItem={renderHistoryItem}
           contentContainerStyle={[
             styles.content,
@@ -685,22 +687,9 @@ const CollectionHistoryScreen = ({ navigation }) => {
                   </View>
 
                   <View style={styles.summaryCard}>
-                    <View style={styles.summaryRow}>
-                      <View style={styles.summaryItem}>
-                        <Text style={styles.summaryLabel}>
-                          {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
-                        </Text>
-                        <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
-                      </View>
-                      <View style={styles.summaryColumnDivider} />
-                      <View style={styles.summaryItem}>
-                        <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
-                        <Text style={[styles.summaryValue, styles.summaryValueAmount]}>{formatCurrency(filteredStats.total_amount)}</Text>
-                      </View>
-                    </View>
-                    {selectedPaymentType === 'cash' && (
-                      <>
-                        <View style={styles.summaryDivider} />
+                    {/* {selectedPaymentType === 'cash' && (
+                      <> */}
+                        
                         <View style={styles.cashStatsHorizontalRow}>
                           <View style={styles.cashStatsColumn}>
                             <View style={styles.cashStatsLabelWrap}>
@@ -723,8 +712,23 @@ const CollectionHistoryScreen = ({ navigation }) => {
                             <Text style={styles.cashStatValue}>{formatCurrency(stats.loan_given_amount)}</Text>
                           </View>
                         </View>
-                      </>
-                    )}
+                      {/* </>
+                    )} */}
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryRow}>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>
+                          {selectedPaymentType === null ? t('collectionHistory.totalReceipts') : selectedPaymentType === 'cash' ? t('collectionHistory.cashReceipts') : t('collectionHistory.onlineReceipts')}
+                        </Text>
+                        <Text style={styles.summaryValue}>{filteredStats.total_count || 0}</Text>
+                      </View>
+                      <View style={styles.summaryColumnDivider} />
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>{t('collectionHistory.totalAmount')}</Text>
+                        <Text style={[styles.summaryValue, styles.summaryValueAmount]}>{formatCurrency(filteredStats.total_amount)}</Text>
+                      </View>
+                    </View>
+                    
                     {selectedPaymentType === null && (stats.cash_count > 0 || stats.non_cash_count > 0) && (
                       <View style={styles.summaryRow}>
                         <View style={styles.summaryItem}>
