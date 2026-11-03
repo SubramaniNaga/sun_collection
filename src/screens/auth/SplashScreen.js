@@ -2,8 +2,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, BackHandler, Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
 import AppBlockOverlay from '../../components/common/AppBlockOverlay';
+import AppUpdateBottomSheet from '../../components/common/AppUpdateBottomSheet';
 import {
   ATTENDANCE,
   applyAppBlockFromResponse,
@@ -49,7 +49,7 @@ const SplashScreen = ({ navigation }) => {
         setLoading(false);
         return;
       }
-
+//console.log("resultsdfdsfds", result.kind);
       if (result.kind === 'maintenance') {
         setLoading(false);
         setMaintenanceMode(true);

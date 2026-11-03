@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Linking, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BackHandler, Modal, Platform, Pressable, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useLanguage } from '../../store/LanguageContext';
@@ -15,8 +15,14 @@ const AppUpdateBottomSheet = ({
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
-  const openStore = () => {
-    if (storeUrl) Linking.openURL(storeUrl);
+  const closeAppAfterToast = () => {
+    const message = t('auth.updateClosingApp');
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(message, ToastAndroid.LONG);
+      setTimeout(() => BackHandler.exitApp(), 1800);
+      return;
+    }
+    BackHandler.exitApp();
   };
 
   return (
@@ -56,7 +62,7 @@ const AppUpdateBottomSheet = ({
             </View>
           </View>
           <Text style={styles.hint}>{t('auth.updateFromStoreHint')}</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={openStore} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={closeAppAfterToast} activeOpacity={0.85}>
             <Text style={styles.primaryBtnText}>{t('auth.updateNow')}</Text>
           </TouchableOpacity>
           {!forceUpdate && onContinue && (

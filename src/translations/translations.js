@@ -92,7 +92,9 @@ const translations = {
       updateSheetTitle: "Update available",
       currentVersionLabel: "Installed",
       latestVersionLabel: "Latest",
-      updateFromStoreHint: "Install the latest version from your app store.",
+      updateFromStoreHint: "Install the latest version from Shared Link.",
+      updateClosingApp:
+        "Closing the app. Install the latest version from the shared link.",
       loggedOutTitle: "Logged Out",
       sessionExpiredLoggedOutMessage:
         "Your session expired, so you were logged out. Please sign in again.",
@@ -916,7 +918,9 @@ const translations = {
       updateSheetTitle: "புதுப்பிப்பு கிடைக்கிறது",
       currentVersionLabel: "நிறுவப்பட்டது",
       latestVersionLabel: "சமீபத்தியது",
-      updateFromStoreHint: "சமீபத்திய பதிப்பை ஆப் ஸ்டோரில் இருந்து நிறுவவும்.",
+      updateFromStoreHint: "பகிரப்பட்ட இணைப்பிலிருந்து சமீபத்திய பதிப்பை நிறுவவும்.",
+      updateClosingApp:
+        "செயலி மூடப்படுகிறது. பகிரப்பட்ட இணைப்பிலிருந்து சமீபத்திய பதிப்பை நிறுவவும்.",
       loggedOutTitle: "வெளியேற்றப்பட்டது",
       sessionExpiredLoggedOutMessage:
         "உங்கள் அமர்வு காலாவதியானதால் நீங்கள் வெளியேற்றப்பட்டுள்ளீர்கள். தயவுசெய்து மீண்டும் உள்நுழையவும்.",

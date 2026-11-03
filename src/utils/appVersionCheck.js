@@ -3,7 +3,7 @@ import { apiServices } from '../api/services/apiServices';
 import { APP_VERSION } from '../constants/appVersion';
 
 /** Set true to show store-update bottom sheet when app version is behind API. */
-export const ENABLE_APP_UPDATE_PROMPT = false;
+export const ENABLE_APP_UPDATE_PROMPT = true;
 
 export function compareVersions(version1, version2) {
   if (!version1 || !version2) {
@@ -50,6 +50,7 @@ export async function evaluateAppVersion() {
     const forceUpdate = platform === 'ios' ? versionData.iOSForceUpdate : versionData.androidForceUpdate;
 
     if (compareVersions(currentVersion, apiVersion) < 0) {
+      
       if (!ENABLE_APP_UPDATE_PROMPT) {
         return { kind: 'ok', payload: raw };
       }
