@@ -41,7 +41,7 @@ Backend team: to allow this app to call the API from the browser (web build), pl
  
 
 export const BASE_URL = __DEV__
-  ? "http://13.206.98.152:6005/"
+  ? "https://sun-enterprises.co.in/"
   : "https://sun-enterprises.co.in/";
 
 export const API_BASE_URL = BASE_URL+"api/v1";
@@ -192,6 +192,9 @@ apiClient.interceptors.request.use(
           "X-App-Version",
           "X-Device-Id",
           "X-Client-Public-Ip",
+          "X-Device-Manufacturer",
+          "X-Device-Model",
+          "X-Os-Version",
         ];
         const loggedHeaders = {};
         clientHeaderNames.forEach((name) => {

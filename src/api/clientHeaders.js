@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 import { APP_VERSION } from '../constants/appVersion';
 import { getDeviceId } from '../utils/deviceId';
 
@@ -48,6 +49,14 @@ export async function getPublicInternetIp() {
  */
 export async function getClientHeaders() {
   const storedDeviceId = await AsyncStorage.getItem('deviceId');
+  const manufacturer = Device?.manufacturer ? String(Device.manufacturer).trim() : '';
+  const model = Device?.modelName ? String(Device.modelName).trim() : '';
+  const osVersion = Device?.osVersion
+    ? String(Device.osVersion).trim()
+    : Platform.Version != null
+      ? String(Platform.Version)
+      : '';
+
   const deviceId =
     storedDeviceId && String(storedDeviceId).trim()
       ? String(storedDeviceId).trim()
@@ -63,5 +72,8 @@ export async function getClientHeaders() {
   if (publicIp) {
     headers['X-Client-Public-Ip'] = publicIp;
   }
+  if (manufacturer) headers['X-Device-Manufacturer'] = manufacturer;
+  if (model) headers['X-Device-Model'] = model;
+  if (osVersion) headers['X-Os-Version'] = osVersion;
   return headers;
 }

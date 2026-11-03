@@ -98,9 +98,14 @@ export const apiServices = {
           requestPayload.firebase_token = firebaseToken;
         }
 
+        const clientHeaders = await getClientHeaders();
         console.log(
           "🔔 AUTH LOGIN - Firebase token:",
           firebaseToken || "NOT AVAILABLE",
+        );
+        console.log(
+          "🔑 AUTH LOGIN - client headers:",
+          JSON.stringify(clientHeaders),
         );
         console.log(
           "🔑 AUTH LOGIN - Request Payload:",
@@ -111,6 +116,7 @@ export const apiServices = {
         const response = await apiClient.post(
           ENDPOINTS.AUTH.LOGIN,
           requestPayload,
+          { headers: clientHeaders },
         );
 
         console.log(
@@ -1240,8 +1246,15 @@ export const apiServices = {
   app: {
     getVersion: async (options = {}) => {
       try {
-        console.log("📱 API: getVersion - GET", ENDPOINTS.APP.VERSION);
+        const clientHeaders = await getClientHeaders();
+        console.log(
+          "📱 API: getVersion - GET",
+          ENDPOINTS.APP.VERSION,
+          "| client headers:",
+          JSON.stringify(clientHeaders),
+        );
         const response = await apiClient.get(ENDPOINTS.APP.VERSION, {
+          headers: clientHeaders,
           skipGlobalLoader: Boolean(options.skipGlobalLoader),
         });
         console.log(
