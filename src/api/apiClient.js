@@ -41,6 +41,7 @@ Backend team: to allow this app to call the API from the browser (web build), pl
  
 
 export const BASE_URL = __DEV__
+  //? "http://13.206.98.152:6005/"
   ? "https://sun-enterprises.co.in/"
   : "https://sun-enterprises.co.in/";
 

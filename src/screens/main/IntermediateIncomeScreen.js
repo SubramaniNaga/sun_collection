@@ -67,9 +67,11 @@ const parseCollectionsFromResponse = (response) => {
   const data = response?.data ?? response;
   if (Array.isArray(data?.collections)) return data.collections;
   if (Array.isArray(data?.response)) return data.response;
+  if (Array.isArray(data?.data)) return data.data;
   if (Array.isArray(data)) return data;
   if (Array.isArray(response?.collections)) return response.collections;
   if (Array.isArray(response?.response)) return response.response;
+  if (Array.isArray(response?.data)) return response.data;
   return [];
 };
 
@@ -177,12 +179,13 @@ const IntermediateIncomeScreen = ({ navigation }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadErrorMessage, setLoadErrorMessage] = useState('');
-  const fetchListRef = useRef(async () => {});
+  const fetchListRef = useRef(async () => { });
   const [refreshing, setRefreshing] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     hasNextPage: false,
     totalPages: 1,
+    totalRecords: 0,
   });
   const fetchRequestIdRef = useRef(0);
   const loadMoreLockRef = useRef(false);
@@ -276,11 +279,27 @@ const IntermediateIncomeScreen = ({ navigation }) => {
       const models = Collection.fromApiResponseArray(raw);
       const pag = response?.pagination || response?.data?.pagination || {};
 
-      setList((prev) => (append ? [...prev, ...models] : models));
+      const currentPage = Number(pag.page ?? pag.currentPage ?? page);
+      const totalPages = Number(
+        pag.totalPages ?? (pag.totalRecords && pag.limit ? Math.ceil(pag.totalRecords / pag.limit) : 1)
+      );
+      const hasNextPage =
+        pag.hasNextPage != null
+          ? Boolean(pag.hasNextPage)
+          : currentPage < totalPages;
+
+      setList((prev) => {
+        if (!append) return models;
+        const existingIds = new Set(prev.map((item) => item.id));
+        const newItems = models.filter((item) => !existingIds.has(item.id));
+        return [...prev, ...newItems];
+      });
+
       setPagination({
-        currentPage: pag.currentPage ?? page,
-        hasNextPage: Boolean(pag.hasNextPage),
-        totalPages: pag.totalPages ?? 1,
+        currentPage,
+        hasNextPage,
+        totalPages,
+        totalRecords: pag.totalRecords != null ? Number(pag.totalRecords) : 0,
       });
       if (isPageOne) {
         setLoadFailed(false);
@@ -313,7 +332,7 @@ const IntermediateIncomeScreen = ({ navigation }) => {
     setLoading(true);
     setLoadingMore(false);
     loadMoreLockRef.current = false;
-    setPagination({ currentPage: 1, hasNextPage: false, totalPages: 1 });
+    setPagination({ currentPage: 1, hasNextPage: false, totalPages: 1, totalRecords: 0 });
   }, [registerDayFilter, debouncedSearchQuery]);
 
   useEffect(() => {
@@ -540,8 +559,8 @@ const IntermediateIncomeScreen = ({ navigation }) => {
     // Always prefill Loan Day from list row / filter (customer_registered_day || registered_day)
     setRenewalDay(
       collection?.registerDay ||
-        registerDayFilter ||
-        '',
+      registerDayFilter ||
+      '',
     );
     setShowRenewalForm(true);
   };
@@ -753,6 +772,23 @@ const IntermediateIncomeScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.itemDivider} />
+        <View style={styles.amountFooter}>
+          <View style={styles.date}>
+            <Text style={styles.amountChipLabel}>{t('common.collectionDate')}</Text>
+            <Text style={styles.amountChipValue} numberOfLines={1}>
+              {collection.formatDate(collection.collection_date)}
+            </Text>
+          </View>
+          {/* <View style={[styles.date, styles.date]}>
+            <Text style={styles.amountChipLabel}>{t('common.collectedDate')}</Text>
+            <Text
+              style={[styles.amountChipValue, styles.amountChipBalanceValue]}
+              numberOfLines={1}
+            >
+              {collection.formatDate(collection.collected_date)}
+            </Text>
+          </View> */}
+        </View>
         <View style={styles.amountFooter}>
           <View style={styles.amountChip}>
             <Text style={styles.amountChipLabel}>{t('loan.paid')}</Text>
@@ -1098,67 +1134,67 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                   >
                     <Text style={styles.fieldLabel}>{t('collection.collectedAmount')} *</Text>
                     <View style={styles.voiceFieldRow}>
-                    <TextInput
-                      ref={collectedAmountRef}
-                      style={[styles.inputField, styles.voiceFieldInput, paymentErrors.collectedAmount && styles.inputFieldError]}
-                      placeholder={t('collection.enterAmount')}
-                      placeholderTextColor={COLORS.text.tertiary}
-                      value={collectedAmount}
-                      keyboardType="numeric"
-                      returnKeyType="next"
-                      blurOnSubmit={false}
-                      submitBehavior="submit"
-                      onFocus={() => {
-                        ensurePaymentScrollRoom();
-                        scrollPaymentToField(amountFieldYRef.current);
-                      }}
-                      onSubmitEditing={() => remarksRef.current?.focus()}
-                      onChangeText={(text) => {
-                        const digitsOnly = text.replace(/[^0-9]/g, '');
-                        if (selectedCollection && digitsOnly) {
-                          const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
-                          const enteredAmount = parseFloat(digitsOnly);
-                          const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
-                          const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
-                          if (!isInitialZeroBalance && !Number.isNaN(enteredAmount) && enteredAmount > balanceAmount) {
-                            setCollectedAmount(String(Math.trunc(balanceAmount)));
-                            setPaymentErrors((prev) => ({
-                              ...prev,
-                              collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
-                            }));
-                            return;
+                      <TextInput
+                        ref={collectedAmountRef}
+                        style={[styles.inputField, styles.voiceFieldInput, paymentErrors.collectedAmount && styles.inputFieldError]}
+                        placeholder={t('collection.enterAmount')}
+                        placeholderTextColor={COLORS.text.tertiary}
+                        value={collectedAmount}
+                        keyboardType="numeric"
+                        returnKeyType="next"
+                        blurOnSubmit={false}
+                        submitBehavior="submit"
+                        onFocus={() => {
+                          ensurePaymentScrollRoom();
+                          scrollPaymentToField(amountFieldYRef.current);
+                        }}
+                        onSubmitEditing={() => remarksRef.current?.focus()}
+                        onChangeText={(text) => {
+                          const digitsOnly = text.replace(/[^0-9]/g, '');
+                          if (selectedCollection && digitsOnly) {
+                            const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
+                            const enteredAmount = parseFloat(digitsOnly);
+                            const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
+                            const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
+                            if (!isInitialZeroBalance && !Number.isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                              setCollectedAmount(String(Math.trunc(balanceAmount)));
+                              setPaymentErrors((prev) => ({
+                                ...prev,
+                                collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
+                              }));
+                              return;
+                            }
                           }
-                        }
-                        setCollectedAmount(digitsOnly);
-                        if (paymentErrors.collectedAmount) {
-                          setPaymentErrors((prev) => ({ ...prev, collectedAmount: '' }));
-                        }
-                      }}
-                    />
-                    <VoiceMicButton
-                      value={collectedAmount}
-                      onChangeText={(text) => {
-                        const digitsOnly = String(text).replace(/[^0-9]/g, '');
-                        if (selectedCollection && digitsOnly) {
-                          const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
-                          const enteredAmount = parseFloat(digitsOnly);
-                          const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
-                          const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
-                          if (!isInitialZeroBalance && !Number.isNaN(enteredAmount) && enteredAmount > balanceAmount) {
-                            setCollectedAmount(String(Math.trunc(balanceAmount)));
-                            setPaymentErrors((prev) => ({
-                              ...prev,
-                              collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
-                            }));
-                            return;
+                          setCollectedAmount(digitsOnly);
+                          if (paymentErrors.collectedAmount) {
+                            setPaymentErrors((prev) => ({ ...prev, collectedAmount: '' }));
                           }
-                        }
-                        setCollectedAmount(digitsOnly);
-                        if (paymentErrors.collectedAmount) {
-                          setPaymentErrors((prev) => ({ ...prev, collectedAmount: '' }));
-                        }
-                      }}
-                    />
+                        }}
+                      />
+                      <VoiceMicButton
+                        value={collectedAmount}
+                        onChangeText={(text) => {
+                          const digitsOnly = String(text).replace(/[^0-9]/g, '');
+                          if (selectedCollection && digitsOnly) {
+                            const balanceAmount = parseFloat(selectedCollection.balanceAmount) || 0;
+                            const enteredAmount = parseFloat(digitsOnly);
+                            const completedCount = parseInt(selectedCollection.completedCount, 10) || 0;
+                            const isInitialZeroBalance = balanceAmount === 0 && completedCount === 0;
+                            if (!isInitialZeroBalance && !Number.isNaN(enteredAmount) && enteredAmount > balanceAmount) {
+                              setCollectedAmount(String(Math.trunc(balanceAmount)));
+                              setPaymentErrors((prev) => ({
+                                ...prev,
+                                collectedAmount: `${t('collection.amountCannotExceed')} (${selectedCollection.getFormattedBalanceAmount()})`,
+                              }));
+                              return;
+                            }
+                          }
+                          setCollectedAmount(digitsOnly);
+                          if (paymentErrors.collectedAmount) {
+                            setPaymentErrors((prev) => ({ ...prev, collectedAmount: '' }));
+                          }
+                        }}
+                      />
                     </View>
                     {paymentErrors.collectedAmount ? (
                       <Text style={styles.errorTextSmall}>{paymentErrors.collectedAmount}</Text>
@@ -1172,28 +1208,28 @@ const IntermediateIncomeScreen = ({ navigation }) => {
                   >
                     <Text style={styles.fieldLabel}>{t('common.remarks')}</Text>
                     <View style={styles.voiceFieldRow}>
-                    <TextInput
-                      ref={remarksRef}
-                      style={[styles.inputField, styles.textArea, styles.voiceFieldInput]}
-                      placeholder={t('collection.enterRemarks')}
-                      placeholderTextColor={COLORS.text.tertiary}
-                      value={remarks}
-                      onChangeText={setRemarks}
-                      multiline
-                      numberOfLines={3}
-                      textAlignVertical="top"
-                      returnKeyType="next"
-                      blurOnSubmit
-                      onFocus={() => {
-                        ensurePaymentScrollRoom();
-                        scrollPaymentToField(remarksFieldYRef.current);
-                      }}
-                      onSubmitEditing={() => {
-                        remarksRef.current?.blur();
-                        paymentScrollRef.current?.scrollToEnd?.({ animated: true });
-                      }}
-                    />
-                    <VoiceMicButton value={remarks} onChangeText={setRemarks} />
+                      <TextInput
+                        ref={remarksRef}
+                        style={[styles.inputField, styles.textArea, styles.voiceFieldInput]}
+                        placeholder={t('collection.enterRemarks')}
+                        placeholderTextColor={COLORS.text.tertiary}
+                        value={remarks}
+                        onChangeText={setRemarks}
+                        multiline
+                        numberOfLines={3}
+                        textAlignVertical="top"
+                        returnKeyType="next"
+                        blurOnSubmit
+                        onFocus={() => {
+                          ensurePaymentScrollRoom();
+                          scrollPaymentToField(remarksFieldYRef.current);
+                        }}
+                        onSubmitEditing={() => {
+                          remarksRef.current?.blur();
+                          paymentScrollRef.current?.scrollToEnd?.({ animated: true });
+                        }}
+                      />
+                      <VoiceMicButton value={remarks} onChangeText={setRemarks} />
                     </View>
                   </View>
                   <View style={styles.submitButtonInScroll}>
@@ -1422,6 +1458,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+  date: {
+    flex: 1,
+
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   amountChipBalance: {
     backgroundColor: '#EAF3FC',
   },
@@ -1533,7 +1576,7 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
-  
+
   },
   customerInfoName: {
     fontSize: SIZES.body1,

@@ -60,6 +60,8 @@ class Collection {
 
     // Loan fields
     this.loanAmount = data.loan_amount || '0';
+    this.collection_date = data.collection_date || null;
+    this.collected_date = data.payment_date || null;
     this.processingFees = data.processing_fees ?? null;
     this.intrestAmount = data.intrest_amount ?? null;
     this.approvedAmount = data.approved_amount || '0';
@@ -115,6 +117,18 @@ class Collection {
     return formatCurrency(this.balanceAmount);
   }
 
+  formatDate(dateString) {
+    if (dateString == null) {
+      return "-";
+    }
+    const date = new Date(dateString);
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+
+    return `${day}-${month}-${year}`;
+  };
   /**
    * Get formatted extra amount (null stays dash via screen helpers)
    * @returns {string}

@@ -6,6 +6,8 @@ const translations = {
     // Common
     common: {
       save: "Save",
+      collectionDate: "Loan Date",
+      collectedDate: "Collected Date",
       cancel: "Cancel",
       delete: "Delete",
       edit: "Edit",
@@ -830,6 +832,8 @@ const translations = {
     // Common
     common: {
       save: "சேமி",
+      collectionDate: "கடன் தேதி",
+      collectedDate: "சேகரிக்கப்பட்ட தேதி",
       cancel: "ரத்துசெய்",
       delete: "நீக்கு",
       edit: "திருத்து",
